@@ -487,7 +487,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
         autoRegInProgress = true
-        showAutoOverlay("Đang mở trang đăng ký\u2026")
+        showAutoOverlay("Đang dọn dẹp session cũ\u2026")
+
+        // Xóa cookie + cache WebView để tránh auto-login OAuth cũ
+        android.webkit.CookieManager.getInstance().removeAllCookies(null)
+        android.webkit.CookieManager.getInstance().flush()
+        binding.mainWebView.clearCache(true)
+        binding.mainWebView.clearHistory()
 
         val email    = mailEmail
         val username = "user" + (10000..99999).random()
@@ -559,19 +565,25 @@ class MainActivity : AppCompatActivity() {
         webView: WebView,
         email: String, username: String, password: String, fullName: String
     ) {
-        // CHỈ tìm nút có chữ "email" — KHÔNG có fallback sang "continue/sign up"
-        // vì fallback đó click nhầm "Continue with X / Google / etc."
         val js = listOf(
             "(function(){",
+            // Bước 0: form email đã hiện → điền ngay
             "  var inputs = document.querySelectorAll('input[type=\"email\"],input[name=\"email\"]');",
             "  if (inputs.length > 0) return 'visible';",
-            "  var BLOCK = ['google','github','facebook','apple','microsoft','twitter','x.com',' x ','with x'];",
+            // Bước 1: ẩn/vô hiệu hoá TẤT CẢ nút OAuth trong DOM
+            "  var PROVIDERS = ['google','github',' x','with x','twitter','apple','facebook','microsoft'];",
+            "  document.querySelectorAll('button,a,[role=\"button\"],div[tabindex]').forEach(function(el){",
+            "    var t = ' ' + (el.textContent||el.innerText||'').toLowerCase() + ' ';",
+            "    if (PROVIDERS.some(function(p){ return t.indexOf(p) >= 0; })){",
+            "      el.style.display='none'; el.style.pointerEvents='none';",
+            "    }",
+            "  });",
+            // Bước 2: tìm và click nút có chữ "email" (còn hiển thị)
             "  var els = document.querySelectorAll('button,a,[role=\"button\"]');",
-            "  for (var i = 0; i < els.length; i++) {",
-            "    var raw = (els[i].textContent || els[i].innerText || '').trim();",
-            "    var t = ' ' + raw.toLowerCase() + ' ';",
-            "    var blocked = BLOCK.some(function(k){ return t.indexOf(k) >= 0; });",
-            "    if (!blocked && raw.toLowerCase().indexOf('email') >= 0 && raw.length < 45) {",
+            "  for (var i=0; i<els.length; i++){",
+            "    if (els[i].style.display === 'none') continue;",
+            "    var raw = (els[i].textContent||els[i].innerText||'').trim();",
+            "    if (raw.toLowerCase().indexOf('email') >= 0 && raw.length < 50){",
             "      els[i].click(); return 'clicked:' + raw.substring(0,35);",
             "    }",
             "  }",
