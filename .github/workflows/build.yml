@@ -32,20 +32,20 @@ jobs:
         with:
           gradle-version: '8.2'
 
-      - name: Build debug APK
-        run: cd android && gradle assembleDebug --no-daemon
+      - name: Build release APK (persistent signing key)
+        run: cd android && gradle assembleRelease --no-daemon
         env:
           GRADLE_OPTS: '-Xmx3072m -Dorg.gradle.daemon=false'
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk rem2-v2.0-debug.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk rem2-v2.0-release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rem2-v2.0-debug
-          path: rem2-v2.0-debug.apk
+          name: rem2-v2.0-release
+          path: rem2-v2.0-release.apk
           retention-days: 30
 
       - name: Create GitHub Release
@@ -54,16 +54,16 @@ jobs:
           tag_name: v2.0.${{ github.run_number }}
           name: "rem2 v2.0.${{ github.run_number }}"
           body: |
-            ## rem2 v2.0 - Auto Mail.tm + Dual WebView
+            ## rem2 v2.0.${{ github.run_number }}
 
-            ### New features
-            - **App icon**: custom launcher icon (R + mail badge)
-            - **Mail.tm auto-setup**: creates account on first launch, persists credentials, re-logins automatically
-            - **Dual WebView**: main WebView for Replit + verify WebView inside Mail panel
-            - **Auto Replit registration**: detects homepage without login, auto-fills signup form with Mail.tm address
-            - **Tab switching**: Inbox | Verify Browser tabs inside Mail panel
-            - **Auto email verification**: verify link loads inside the panel WebView, main WebView restored after success
-            - **Skip button**: allows skipping auto-register to use manually
-          files: rem2-v2.0-debug.apk
+            **Cài đè không mất dữ liệu** (cùng chữ ký với mọi bản cũ từ v2.0.73+)
+
+            ### Tính năng
+            - WebView Replit.com giả lập Cốc Cốc
+            - Mail.tm tự tạo + xác thực email tự động
+            - Tìm kiếm / chế độ máy tính / tải file
+            - Vuốt cạnh để quay lại, kéo sâu để tải lại trang
+            - FAB kéo được, tự điền email + mật khẩu
+          files: rem2-v2.0-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
