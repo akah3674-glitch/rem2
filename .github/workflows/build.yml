@@ -35,9 +35,32 @@ jobs:
           GRADLE_OPTS: '-Xmx3072m -Dorg.gradle.daemon=false'
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
-      - name: Upload APK
+      - name: Rename APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk rem2-v2.0-debug.apk
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rem2-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: rem2-v2.0-debug
+          path: rem2-v2.0-debug.apk
           retention-days: 30
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v2.0.${{ github.run_number }}
+          name: "rem2 v2.0.${{ github.run_number }}"
+          body: |
+            ## rem2 v2.0 - Auto Mail.tm + Dual WebView
+
+            ### New features
+            - **App icon**: custom launcher icon (R + mail badge)
+            - **Mail.tm auto-setup**: creates account on first launch, persists credentials, re-logins automatically
+            - **Dual WebView**: main WebView for Replit + verify WebView inside Mail panel
+            - **Auto Replit registration**: detects homepage without login, auto-fills signup form with Mail.tm address
+            - **Tab switching**: Inbox | Verify Browser tabs inside Mail panel
+            - **Auto email verification**: verify link loads inside the panel WebView, main WebView restored after success
+            - **Skip button**: allows skipping auto-register to use manually
+          files: rem2-v2.0-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
