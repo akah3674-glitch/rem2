@@ -5,6 +5,8 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.os.Bundle
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
@@ -14,6 +16,7 @@ import android.webkit.WebViewClient
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.GestureDetectorCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
 import kotlin.coroutines.resume
@@ -142,6 +145,45 @@ class MainActivity : AppCompatActivity() {
             addJavascriptInterface(WebBridge(), "REM2")
             webViewClient = buildMainClient()
             loadUrl("https://replit.com")
+        }
+        attachSwipeBack(binding.mainWebView)
+    }
+
+    /**
+     * Vuốt từ cạnh trái HOẶC cạnh phải → goBack().
+     * Không consume event nên WebView vẫn xử lý scroll/tap bình thường.
+     */
+    @SuppressLint("ClickableViewAccessibility")
+    private fun attachSwipeBack(webView: WebView) {
+        val density    = resources.displayMetrics.density
+        val edgeWidth  = (40 * density).toInt()    // vùng cạnh 40dp
+        val minSwipeX  = (60 * density)             // tối thiểu 60dp ngang
+        val maxSwipeY  = (80 * density)             // tối đa 80dp dọc
+
+        val gesture = GestureDetectorCompat(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onFling(
+                e1: MotionEvent?, e2: MotionEvent,
+                velocityX: Float, velocityY: Float
+            ): Boolean {
+                val x1 = e1?.x ?: return false
+                val y1 = e1.y
+                val dx = e2.x - x1
+                val dy = Math.abs(e2.y - y1)
+                val screenW = resources.displayMetrics.widthPixels
+
+                val fromLeft  = x1 < edgeWidth && dx >  minSwipeX && dy < maxSwipeY
+                val fromRight = x1 > (screenW - edgeWidth) && dx < -minSwipeX && dy < maxSwipeY
+
+                if (fromLeft || fromRight) {
+                    if (webView.canGoBack()) { webView.goBack(); return true }
+                }
+                return false
+            }
+        })
+
+        webView.setOnTouchListener { v, event ->
+            gesture.onTouchEvent(event)
+            false   // không consume → WebView vẫn nhận event
         }
     }
 
@@ -424,24 +466,43 @@ class MainActivity : AppCompatActivity() {
      */
     private fun injectAutoFillWatcher(webView: WebView) {
         if (autoEmail.isEmpty()) return
+        // Poll mỗi 400ms — đáng tin cậy hơn MutationObserver trên React SPA
         val js = """
             (function(){
-              function tryFill(){
-                var inp = document.querySelectorAll(
-                  'input[type="email"],input[name="email"]');
-                if (inp.length > 0 && inp[0].offsetParent !== null) {
-                  window.REM2.readyToFill(); return true;
+              if (window._rem2WatcherActive) return;
+              window._rem2WatcherActive = true;
+              var attempts = 0;
+              var maxAttempts = 450; // 3 phút
+              var tid = setInterval(function(){
+                attempts++;
+                if (attempts > maxAttempts) {
+                  clearInterval(tid);
+                  window._rem2WatcherActive = false;
+                  return;
                 }
-                return false;
-              }
-              if (!tryFill()) {
-                var obs = new MutationObserver(function(){
-                  if (tryFill()) obs.disconnect();
-                });
-                obs.observe(document.body || document.documentElement,
-                  { childList: true, subtree: true });
-                setTimeout(function(){ obs.disconnect(); }, 180000);
-              }
+                // Tìm email input hiện trên màn hình
+                var sel = [
+                  'input[type="email"]',
+                  'input[name="email"]',
+                  'input[placeholder*="mail" i]',
+                  'input[placeholder*="Email"]',
+                  'input[autocomplete="email"]'
+                ];
+                var found = null;
+                for (var i = 0; i < sel.length; i++) {
+                  var els = document.querySelectorAll(sel[i]);
+                  for (var j = 0; j < els.length; j++) {
+                    var r = els[j].getBoundingClientRect();
+                    if (r.width > 0 && r.height > 0) { found = els[j]; break; }
+                  }
+                  if (found) break;
+                }
+                if (found) {
+                  clearInterval(tid);
+                  window._rem2WatcherActive = false;
+                  window.REM2.readyToFill();
+                }
+              }, 400);
             })()
         """.trimIndent()
         webView.evaluateJavascript(js, null)
