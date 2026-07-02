@@ -24,19 +24,16 @@ name: Build Android APK
             java-version: '17'
             distribution: 'temurin'
 
-        - name: Setup Android SDK
-          uses: android-actions/setup-android@v3
-
         - name: Install dependencies
           run: npm install
 
         - name: Install Expo CLI
           run: npm install -g @expo/cli
 
-        - name: Prebuild (generate native Android project)
+        - name: Prebuild Android
           run: npx expo prebuild --platform android --clean
           env:
-            EXPO_NO_TYPESCRIPT_SETUP: 1
+            EXPO_NO_TYPESCRIPT_SETUP: '1'
 
         - name: Make gradlew executable
           run: chmod +x android/gradlew
@@ -46,16 +43,10 @@ name: Build Android APK
           env:
             GRADLE_OPTS: '-Dorg.gradle.daemon=false -Dorg.gradle.jvmargs=-Xmx3072m'
 
-        - name: Upload APK artifact
+        - name: Upload APK
           uses: actions/upload-artifact@v4
           with:
             name: rem2-debug-apk
             path: android/app/build/outputs/apk/debug/app-debug.apk
             retention-days: 30
-
-        - name: Get APK size
-          run: |
-            APK=android/app/build/outputs/apk/debug/app-debug.apk
-            SIZE=$(du -sh $APK | cut -f1)
-            echo "✅ APK size: $SIZE"
-            echo "APK_SIZE=$SIZE" >> $GITHUB_ENV
+  
