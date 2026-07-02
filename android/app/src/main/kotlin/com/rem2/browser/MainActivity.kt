@@ -150,15 +150,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Vuốt từ cạnh trái HOẶC cạnh phải → goBack().
+     * Vuốt từ cạnh trái/phải → goBack().
+     * Vuốt xuống khi đã ở đầu trang → reload.
      * Không consume event nên WebView vẫn xử lý scroll/tap bình thường.
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun attachSwipeBack(webView: WebView) {
         val density    = resources.displayMetrics.density
-        val edgeWidth  = (40 * density).toInt()    // vùng cạnh 40dp
-        val minSwipeX  = (60 * density)             // tối thiểu 60dp ngang
-        val maxSwipeY  = (80 * density)             // tối đa 80dp dọc
+        val edgeWidth  = (40 * density).toInt()
+        val minSwipeX  = (60 * density)
+        val maxSwipeY  = (80 * density)
+        val minSwipeY  = (80 * density)   // tối thiểu kéo xuống để reload
+        val minVelY    = 800f              // vận tốc tối thiểu (dp/s)
 
         val gesture = GestureDetectorCompat(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onFling(
@@ -168,20 +171,28 @@ class MainActivity : AppCompatActivity() {
                 val x1 = e1?.x ?: return false
                 val y1 = e1.y
                 val dx = e2.x - x1
-                val dy = Math.abs(e2.y - y1)
+                val dy = e2.y - y1
+                val adx = Math.abs(dx); val ady = Math.abs(dy)
                 val screenW = resources.displayMetrics.widthPixels
 
-                val fromLeft  = x1 < edgeWidth && dx >  minSwipeX && dy < maxSwipeY
-                val fromRight = x1 > (screenW - edgeWidth) && dx < -minSwipeX && dy < maxSwipeY
-
+                // ── Vuốt cạnh → back ──────────────────────────────────────────
+                val fromLeft  = x1 < edgeWidth && dx >  minSwipeX && ady < maxSwipeY
+                val fromRight = x1 > (screenW - edgeWidth) && dx < -minSwipeX && ady < maxSwipeY
                 if (fromLeft || fromRight) {
                     if (webView.canGoBack()) { webView.goBack(); return true }
+                }
+
+                // ── Kéo xuống khi đầu trang → reload ─────────────────────────
+                if (dy > minSwipeY && velocityY > minVelY && ady > adx * 1.5f && webView.scrollY == 0) {
+                    toast("\u21bb Đang tải lại\u2026")
+                    webView.reload()
+                    return true
                 }
                 return false
             }
         })
 
-        webView.setOnTouchListener { v, event ->
+        webView.setOnTouchListener { _, event ->
             gesture.onTouchEvent(event)
             false   // không consume → WebView vẫn nhận event
         }
