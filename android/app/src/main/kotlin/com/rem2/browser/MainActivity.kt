@@ -7,7 +7,6 @@ package com.rem2.browser
   import android.webkit.WebSettings
   import android.webkit.WebView
   import android.webkit.WebViewClient
-  import android.widget.LinearLayout
   import android.widget.TextView
   import android.widget.Toast
   import androidx.appcompat.app.AppCompatActivity
@@ -22,7 +21,7 @@ package com.rem2.browser
   class MainActivity : AppCompatActivity() {
 
       private lateinit var binding: ActivityMainBinding
-      private val client = OkHttpClient.Builder()
+      private val httpClient = OkHttpClient.Builder()
           .connectTimeout(10, TimeUnit.SECONDS)
           .readTimeout(10, TimeUnit.SECONDS)
           .build()
@@ -37,14 +36,15 @@ package com.rem2.browser
           setContentView(binding.root)
 
           binding.mainWebView.apply {
-              settings.apply {
-                  javaScriptEnabled = true
-                  domStorageEnabled = true
-                  mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                  userAgentString = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"
-              }
+              settings.javaScriptEnabled = true
+              settings.domStorageEnabled = true
+              settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+              settings.userAgentString =
+                  "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"
               webViewClient = object : WebViewClient() {
-                  override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest) = false
+                  override fun shouldOverrideUrlLoading(
+                      view: WebView, request: WebResourceRequest
+                  ) = false
               }
               loadUrl("https://replit.com")
           }
@@ -95,7 +95,10 @@ package com.rem2.browser
           }
       }
 
-      private fun stopPolling() { pollJob?.cancel(); pollJob = null }
+      private fun stopPolling() {
+          pollJob?.cancel()
+          pollJob = null
+      }
 
       private suspend fun fetchMail(forceAll: Boolean = false) {
           if (mailToken.isEmpty()) return
@@ -104,7 +107,7 @@ package com.rem2.browser
                   .url("https://api.mail.tm/messages?page=1")
                   .addHeader("Authorization", "Bearer " + mailToken)
                   .build()
-              val resp = withContext(Dispatchers.IO) { client.newCall(req).execute() }
+              val resp = withContext(Dispatchers.IO) { httpClient.newCall(req).execute() }
               if (!resp.isSuccessful) return
               val body = resp.body?.string() ?: return
               val json = JSONObject(body)
@@ -118,10 +121,10 @@ package com.rem2.browser
                   if (forceAll || !seenIds.contains(id)) {
                       seenIds.add(id)
                       newMsgs.add(id to subject)
-                      val subjectLower = subject.lowercase()
-                      val introLower = intro.lowercase()
-                      if (subjectLower.contains("verify") || subjectLower.contains("confirm") ||
-                          introLower.contains("replit.com/auth")) {
+                      val sl = subject.lowercase()
+                      val il = intro.lowercase()
+                      if (sl.contains("verify") || sl.contains("confirm") ||
+                          il.contains("replit.com")) {
                           fetchAndOpenVerifyLink(id)
                       }
                   }
@@ -129,7 +132,7 @@ package com.rem2.browser
               if (newMsgs.isNotEmpty()) {
                   withContext(Dispatchers.Main) { addMailItems(newMsgs, forceAll) }
               }
-          } catch (e: Exception) { /* ignore */ }
+          } catch (_: Exception) {}
       }
 
       private suspend fun fetchAndOpenVerifyLink(msgId: String) {
@@ -138,22 +141,34 @@ package com.rem2.browser
                   .url("https://api.mail.tm/messages/" + msgId)
                   .addHeader("Authorization", "Bearer " + mailToken)
                   .build()
-              val resp = withContext(Dispatchers.IO) { client.newCall(req).execute() }
+              val resp = withContext(Dispatchers.IO) { httpClient.newCall(req).execute() }
               val bodyText = resp.body?.string() ?: return
               val json = JSONObject(bodyText)
               val html = json.optString("html", "")
               val text = json.optString("text", "")
               val combined = html + " " + text
-              val pattern = "https://replit\.com/\S+verify\S+"
-              val regex = Regex(pattern)
-              val url = regex.find(combined)?.value ?: return
+              val prefix = "https://replit.com/"
+              var url: String? = null
+              var idx = combined.indexOf(prefix)
+              while (idx >= 0) {
+                  val end = combined.indexOfFirst(idx) { c ->
+                      c == '"' || c == ''' || c == ' ' || c == '<' || c == '>'
+                  }
+                  val candidate = combined.substring(idx, if (end < 0) combined.length else end)
+                  if (candidate.contains("verify") || candidate.contains("confirm")) {
+                      url = candidate
+                      break
+                  }
+                  idx = combined.indexOf(prefix, idx + 1)
+              }
+              val finalUrl = url ?: return
               withContext(Dispatchers.Main) {
-                  binding.mainWebView.loadUrl(url)
-                  Toast.makeText(this@MainActivity, "Opening Replit verify link", Toast.LENGTH_SHORT).show()
+                  binding.mainWebView.loadUrl(finalUrl)
+                  Toast.makeText(this@MainActivity, "Opening verify link", Toast.LENGTH_SHORT).show()
                   binding.mailPanel.visibility = View.GONE
                   stopPolling()
               }
-          } catch (e: Exception) { /* ignore */ }
+          } catch (_: Exception) {}
       }
 
       private fun addMailItems(msgs: List<Pair<String, String>>, clear: Boolean) {
@@ -176,5 +191,17 @@ package com.rem2.browser
           else super.onBackPressed()
       }
 
-      override fun onDestroy() { super.onDestroy(); stopPolling() }
+      override fun onDestroy() {
+          super.onDestroy()
+          stopPolling()
+      }
+
+      // Extension: find first char matching predicate starting at offset
+      private fun String.indexOfFirst(startIndex: Int, predicate: (Char) -> Boolean): Int {
+          for (i in startIndex until length) {
+              if (predicate(this[i])) return i
+          }
+          return -1
+      }
   }
+  
