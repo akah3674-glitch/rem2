@@ -158,7 +158,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Vuốt từ cạnh TRÁI → goBack() (giống Cốc Cốc / Chrome Android).
+     * Vuốt từ cạnh trái hoặc phải → goBack() (giống Cốc Cốc / Chrome Android).
      * Vuốt xuống khi đã ở đầu trang → reload.
      * Không consume event nên WebView vẫn xử lý scroll/tap bình thường.
      */
@@ -183,9 +183,10 @@ class MainActivity : AppCompatActivity() {
                 val adx = Math.abs(dx); val ady = Math.abs(dy)
                 val screenW = resources.displayMetrics.widthPixels
 
-                // ── Vuốt từ cạnh TRÁI → back ─────────────────────────────────
-                val fromLeft = x1 < edgeWidth && dx > minSwipeX && ady < maxSwipeY
-                if (fromLeft) {
+                // ── Vuốt cạnh trái hoặc phải → back ─────────────────────────
+                val fromLeft  = x1 < edgeWidth && dx > minSwipeX && ady < maxSwipeY
+                val fromRight = x1 > (screenW - edgeWidth) && dx < -minSwipeX && ady < maxSwipeY
+                if (fromLeft || fromRight) {
                     if (webView.canGoBack()) { webView.goBack(); return true }
                 }
 
