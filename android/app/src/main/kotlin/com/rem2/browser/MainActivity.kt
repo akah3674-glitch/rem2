@@ -1,207 +1,193 @@
 package com.rem2.browser
 
-  import android.annotation.SuppressLint
-  import android.os.Bundle
-  import android.view.View
-  import android.webkit.WebResourceRequest
-  import android.webkit.WebSettings
-  import android.webkit.WebView
-  import android.webkit.WebViewClient
-  import android.widget.TextView
-  import android.widget.Toast
-  import androidx.appcompat.app.AppCompatActivity
-  import androidx.lifecycle.lifecycleScope
-  import kotlinx.coroutines.*
-  import okhttp3.OkHttpClient
-  import okhttp3.Request
-  import org.json.JSONObject
-  import com.rem2.browser.databinding.ActivityMainBinding
-  import java.util.concurrent.TimeUnit
+import android.annotation.SuppressLint
+import android.os.Bundle
+import android.view.View
+import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import org.json.JSONObject
+import com.rem2.browser.databinding.ActivityMainBinding
+import java.util.concurrent.TimeUnit
 
-  class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity() {
 
-      private lateinit var binding: ActivityMainBinding
-      private val httpClient = OkHttpClient.Builder()
-          .connectTimeout(10, TimeUnit.SECONDS)
-          .readTimeout(10, TimeUnit.SECONDS)
-          .build()
-      private var mailToken: String = ""
-      private var pollJob: Job? = null
-      private val seenIds = mutableSetOf<String>()
+    private lateinit var binding: ActivityMainBinding
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .build()
+    private var mailToken: String = ""
+    private var pollJob: Job? = null
+    private val seenIds = mutableSetOf<String>()
 
-      @SuppressLint("SetJavaScriptEnabled")
-      override fun onCreate(savedInstanceState: Bundle?) {
-          super.onCreate(savedInstanceState)
-          binding = ActivityMainBinding.inflate(layoutInflater)
-          setContentView(binding.root)
+    @SuppressLint("SetJavaScriptEnabled")
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(binding.root)
 
-          binding.mainWebView.apply {
-              settings.javaScriptEnabled = true
-              settings.domStorageEnabled = true
-              settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-              settings.userAgentString =
-                  "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"
-              webViewClient = object : WebViewClient() {
-                  override fun shouldOverrideUrlLoading(
-                      view: WebView, request: WebResourceRequest
-                  ) = false
-              }
-              loadUrl("https://replit.com")
-          }
+        binding.mainWebView.apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            settings.userAgentString =
+                "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"
+            webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(
+                    view: WebView, request: WebResourceRequest
+                ) = false
+            }
+            loadUrl("https://replit.com")
+        }
 
-          binding.fabMail.setOnClickListener {
-              if (binding.mailPanel.visibility == View.GONE) {
-                  binding.mailPanel.visibility = View.VISIBLE
-                  if (mailToken.isNotEmpty()) startPolling()
-              } else {
-                  binding.mailPanel.visibility = View.GONE
-                  stopPolling()
-              }
-          }
+        binding.fabMail.setOnClickListener {
+            if (binding.mailPanel.visibility == View.GONE) {
+                binding.mailPanel.visibility = View.VISIBLE
+                if (mailToken.isNotEmpty()) startPolling()
+            } else {
+                binding.mailPanel.visibility = View.GONE
+                stopPolling()
+            }
+        }
 
-          binding.btnClose.setOnClickListener {
-              binding.mailPanel.visibility = View.GONE
-              stopPolling()
-          }
+        binding.btnClose.setOnClickListener {
+            binding.mailPanel.visibility = View.GONE
+            stopPolling()
+        }
 
-          binding.btnSetToken.setOnClickListener {
-              val tok = binding.etToken.text.toString().trim()
-              if (tok.isNotEmpty()) {
-                  mailToken = tok
-                  binding.etToken.text.clear()
-                  Toast.makeText(this, "Token set", Toast.LENGTH_SHORT).show()
-                  startPolling()
-              } else {
-                  Toast.makeText(this, "Enter token first", Toast.LENGTH_SHORT).show()
-              }
-          }
+        binding.btnSetToken.setOnClickListener {
+            val tok = binding.etToken.text.toString().trim()
+            if (tok.isNotEmpty()) {
+                mailToken = tok
+                binding.etToken.text.clear()
+                Toast.makeText(this, "Token set", Toast.LENGTH_SHORT).show()
+                startPolling()
+            } else {
+                Toast.makeText(this, "Enter token first", Toast.LENGTH_SHORT).show()
+            }
+        }
 
-          binding.btnRefresh.setOnClickListener {
-              if (mailToken.isEmpty()) {
-                  Toast.makeText(this, "Set token first", Toast.LENGTH_SHORT).show()
-              } else {
-                  lifecycleScope.launch { fetchMail(forceAll = true) }
-              }
-          }
-      }
+        binding.btnRefresh.setOnClickListener {
+            if (mailToken.isEmpty()) {
+                Toast.makeText(this, "Set token first", Toast.LENGTH_SHORT).show()
+            } else {
+                lifecycleScope.launch { fetchMail(forceAll = true) }
+            }
+        }
+    }
 
-      private fun startPolling() {
-          pollJob?.cancel()
-          pollJob = lifecycleScope.launch {
-              while (isActive) {
-                  fetchMail()
-                  delay(5000L)
-              }
-          }
-      }
+    private fun startPolling() {
+        pollJob?.cancel()
+        pollJob = lifecycleScope.launch {
+            while (isActive) {
+                fetchMail()
+                delay(5000L)
+            }
+        }
+    }
 
-      private fun stopPolling() {
-          pollJob?.cancel()
-          pollJob = null
-      }
+    private fun stopPolling() { pollJob?.cancel(); pollJob = null }
 
-      private suspend fun fetchMail(forceAll: Boolean = false) {
-          if (mailToken.isEmpty()) return
-          try {
-              val req = Request.Builder()
-                  .url("https://api.mail.tm/messages?page=1")
-                  .addHeader("Authorization", "Bearer " + mailToken)
-                  .build()
-              val resp = withContext(Dispatchers.IO) { httpClient.newCall(req).execute() }
-              if (!resp.isSuccessful) return
-              val body = resp.body?.string() ?: return
-              val json = JSONObject(body)
-              val members = json.optJSONArray("hydra:member") ?: return
-              val newMsgs = mutableListOf<Pair<String, String>>()
-              for (i in 0 until members.length()) {
-                  val msg = members.getJSONObject(i)
-                  val id = msg.getString("id")
-                  val subject = msg.optString("subject", "(no subject)")
-                  val intro = msg.optString("intro", "")
-                  if (forceAll || !seenIds.contains(id)) {
-                      seenIds.add(id)
-                      newMsgs.add(id to subject)
-                      val sl = subject.lowercase()
-                      val il = intro.lowercase()
-                      if (sl.contains("verify") || sl.contains("confirm") ||
-                          il.contains("replit.com")) {
-                          fetchAndOpenVerifyLink(id)
-                      }
-                  }
-              }
-              if (newMsgs.isNotEmpty()) {
-                  withContext(Dispatchers.Main) { addMailItems(newMsgs, forceAll) }
-              }
-          } catch (_: Exception) {}
-      }
+    private suspend fun fetchMail(forceAll: Boolean = false) {
+        if (mailToken.isEmpty()) return
+        try {
+            val req = Request.Builder()
+                .url("https://api.mail.tm/messages?page=1")
+                .addHeader("Authorization", "Bearer " + mailToken)
+                .build()
+            val resp = withContext(Dispatchers.IO) { httpClient.newCall(req).execute() }
+            if (!resp.isSuccessful) return
+            val body = resp.body?.string() ?: return
+            val json = JSONObject(body)
+            val members = json.optJSONArray("hydra:member") ?: return
+            val newMsgs = mutableListOf<Pair<String, String>>()
+            for (i in 0 until members.length()) {
+                val msg = members.getJSONObject(i)
+                val id = msg.getString("id")
+                val subject = msg.optString("subject", "(no subject)")
+                val intro = msg.optString("intro", "")
+                if (forceAll || !seenIds.contains(id)) {
+                    seenIds.add(id)
+                    newMsgs.add(id to subject)
+                    val sl = subject.lowercase()
+                    val il = intro.lowercase()
+                    if (sl.contains("verify") || sl.contains("confirm") ||
+                        il.contains("replit.com")) {
+                        fetchAndOpenVerifyLink(id)
+                    }
+                }
+            }
+            if (newMsgs.isNotEmpty()) {
+                withContext(Dispatchers.Main) { addMailItems(newMsgs, forceAll) }
+            }
+        } catch (_: Exception) {}
+    }
 
-      private suspend fun fetchAndOpenVerifyLink(msgId: String) {
-          try {
-              val req = Request.Builder()
-                  .url("https://api.mail.tm/messages/" + msgId)
-                  .addHeader("Authorization", "Bearer " + mailToken)
-                  .build()
-              val resp = withContext(Dispatchers.IO) { httpClient.newCall(req).execute() }
-              val bodyText = resp.body?.string() ?: return
-              val json = JSONObject(bodyText)
-              val html = json.optString("html", "")
-              val text = json.optString("text", "")
-              val combined = html + " " + text
-              val prefix = "https://replit.com/"
-              var url: String? = null
-              var idx = combined.indexOf(prefix)
-              while (idx >= 0) {
-                  val end = combined.indexOfFirst(idx) { c ->
-                      c == '"' || c == ''' || c == ' ' || c == '<' || c == '>'
-                  }
-                  val candidate = combined.substring(idx, if (end < 0) combined.length else end)
-                  if (candidate.contains("verify") || candidate.contains("confirm")) {
-                      url = candidate
-                      break
-                  }
-                  idx = combined.indexOf(prefix, idx + 1)
-              }
-              val finalUrl = url ?: return
-              withContext(Dispatchers.Main) {
-                  binding.mainWebView.loadUrl(finalUrl)
-                  Toast.makeText(this@MainActivity, "Opening verify link", Toast.LENGTH_SHORT).show()
-                  binding.mailPanel.visibility = View.GONE
-                  stopPolling()
-              }
-          } catch (_: Exception) {}
-      }
+    private suspend fun fetchAndOpenVerifyLink(msgId: String) {
+        try {
+            val req = Request.Builder()
+                .url("https://api.mail.tm/messages/" + msgId)
+                .addHeader("Authorization", "Bearer " + mailToken)
+                .build()
+            val resp = withContext(Dispatchers.IO) { httpClient.newCall(req).execute() }
+            val bodyText = resp.body?.string() ?: return
+            val json = JSONObject(bodyText)
+            val html = json.optString("html", "")
+            val text = json.optString("text", "")
+            val combined = html + " " + text
+            val prefix = "https://replit.com/"
+            val terminators = charArrayOf('"', ' ', '<', '>', '\n', '\r', '\t')
+            var url: String? = null
+            var searchFrom = 0
+            while (true) {
+                val idx = combined.indexOf(prefix, searchFrom)
+                if (idx < 0) break
+                val endIdx = combined.indexOfAny(terminators, idx)
+                val candidate = combined.substring(idx, if (endIdx < 0) combined.length else endIdx)
+                if (candidate.contains("verify") || candidate.contains("confirm")) {
+                    url = candidate
+                    break
+                }
+                searchFrom = idx + 1
+            }
+            val finalUrl = url ?: return
+            withContext(Dispatchers.Main) {
+                binding.mainWebView.loadUrl(finalUrl)
+                Toast.makeText(this@MainActivity, "Opening verify link", Toast.LENGTH_SHORT).show()
+                binding.mailPanel.visibility = View.GONE
+                stopPolling()
+            }
+        } catch (_: Exception) {}
+    }
 
-      private fun addMailItems(msgs: List<Pair<String, String>>, clear: Boolean) {
-          if (clear) binding.mailList.removeAllViews()
-          msgs.forEach { (id, subject) ->
-              val tv = TextView(this).apply {
-                  text = subject
-                  textSize = 12f
-                  setTextColor(0xFFFFFFFF.toInt())
-                  setPadding(8, 6, 8, 6)
-                  setOnClickListener { lifecycleScope.launch { fetchAndOpenVerifyLink(id) } }
-              }
-              binding.mailList.addView(tv, 0)
-          }
-      }
+    private fun addMailItems(msgs: List<Pair<String, String>>, clear: Boolean) {
+        if (clear) binding.mailList.removeAllViews()
+        msgs.forEach { (id, subject) ->
+            val tv = TextView(this).apply {
+                text = subject
+                textSize = 12f
+                setTextColor(0xFFFFFFFF.toInt())
+                setPadding(8, 6, 8, 6)
+                setOnClickListener { lifecycleScope.launch { fetchAndOpenVerifyLink(id) } }
+            }
+            binding.mailList.addView(tv, 0)
+        }
+    }
 
-      @Suppress("DEPRECATION")
-      override fun onBackPressed() {
-          if (binding.mainWebView.canGoBack()) binding.mainWebView.goBack()
-          else super.onBackPressed()
-      }
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (binding.mainWebView.canGoBack()) binding.mainWebView.goBack()
+        else super.onBackPressed()
+    }
 
-      override fun onDestroy() {
-          super.onDestroy()
-          stopPolling()
-      }
-
-      // Extension: find first char matching predicate starting at offset
-      private fun String.indexOfFirst(startIndex: Int, predicate: (Char) -> Boolean): Int {
-          for (i in startIndex until length) {
-              if (predicate(this[i])) return i
-          }
-          return -1
-      }
-  }
-  
+    override fun onDestroy() { super.onDestroy(); stopPolling() }
+}
