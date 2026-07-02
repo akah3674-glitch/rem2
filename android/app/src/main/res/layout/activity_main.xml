@@ -162,16 +162,6 @@
                 android:paddingStart="0dp"
                 android:paddingEnd="0dp"/>
 
-            <Button
-                android:id="@+id/btnAutoSetup"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Tự động"
-                android:textColor="#4FC3F7"
-                android:textSize="12sp"
-                android:paddingStart="4dp"
-                android:paddingEnd="4dp"/>
 
             <Button
                 android:id="@+id/btnRefresh"
