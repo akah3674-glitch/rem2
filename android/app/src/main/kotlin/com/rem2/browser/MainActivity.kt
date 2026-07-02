@@ -207,8 +207,8 @@ class MainActivity : AppCompatActivity() {
         val edgeWidth  = (40 * density).toInt()
         val minSwipeX  = (60 * density)
         val maxSwipeY  = (80 * density)
-        val minSwipeY  = (80 * density)   // tối thiểu kéo xuống để reload
-        val minVelY    = 800f              // vận tốc tối thiểu (dp/s)
+        val minSwipeY  = (200 * density)  // kéo xuống ít nhất 200dp mới reload
+        val minVelY    = 1800f            // vận tốc tối thiểu cao hơn tránh nhạy
 
         val gesture = GestureDetectorCompat(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onFling(
@@ -230,7 +230,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // ── Kéo xuống khi đầu trang → reload ─────────────────────────
-                if (dy > minSwipeY && velocityY > minVelY && ady > adx * 1.5f && webView.scrollY == 0) {
+                if (dy > minSwipeY && velocityY > minVelY && ady > adx * 3f && webView.scrollY == 0) {
                     toast("\u21bb Đang tải lại\u2026")
                     webView.reload()
                     return true
@@ -605,44 +605,107 @@ class MainActivity : AppCompatActivity() {
      */
     private fun injectAutoFillWatcher(webView: WebView) {
         if (autoEmail.isEmpty()) return
-        // Poll mỗi 400ms — đáng tin cậy hơn MutationObserver trên React SPA
+        // Tự điền hoàn toàn trong JS — không cần REM2 bridge
+        val email    = autoEmail
+        val username = autoUsername
+        val password = autoPassword
         val js = """
-            (function(){
-              if (window._rem2WatcherActive) return;
-              window._rem2WatcherActive = true;
-              var attempts = 0;
-              var maxAttempts = 450; // 3 phút
-              var tid = setInterval(function(){
-                attempts++;
-                if (attempts > maxAttempts) {
-                  clearInterval(tid);
-                  window._rem2WatcherActive = false;
-                  return;
-                }
-                // Tìm email input hiện trên màn hình
-                var sel = [
-                  'input[type="email"]',
-                  'input[name="email"]',
-                  'input[placeholder*="mail" i]',
-                  'input[placeholder*="Email"]',
-                  'input[autocomplete="email"]'
-                ];
-                var found = null;
-                for (var i = 0; i < sel.length; i++) {
-                  var els = document.querySelectorAll(sel[i]);
-                  for (var j = 0; j < els.length; j++) {
-                    var r = els[j].getBoundingClientRect();
-                    if (r.width > 0 && r.height > 0) { found = els[j]; break; }
-                  }
-                  if (found) break;
-                }
-                if (found) {
-                  clearInterval(tid);
-                  window._rem2WatcherActive = false;
-                  window.REM2.readyToFill();
-                }
-              }, 400);
-            })()
+(function(){
+  if (window._rem2AutoFill) return;
+  window._rem2AutoFill = true;
+
+  // Điền React input đúng cách — kích hoạt state update
+  function fill(el, val) {
+    try {
+      var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(el, val);
+    } catch(e) { el.value = val; }
+    ['input','change','blur'].forEach(function(ev) {
+      el.dispatchEvent(new Event(ev, {bubbles: true, cancelable: true}));
+    });
+  }
+
+  // Tìm element hiển thị trên màn hình
+  function findVisible(selectors) {
+    for (var i = 0; i < selectors.length; i++) {
+      var els = document.querySelectorAll(selectors[i]);
+      for (var j = 0; j < els.length; j++) {
+        var r = els[j].getBoundingClientRect();
+        if (r.width > 10 && r.height > 10 && r.top >= 0 && r.top < window.innerHeight) return els[j];
+      }
+    }
+    return null;
+  }
+
+  // Click nút Next/Continue (không phải OAuth)
+  function clickNext() {
+    var oauth = ['google','github','facebook','apple','microsoft','twitter'];
+    var btns = Array.from(document.querySelectorAll('button[type="submit"], button')).filter(function(b) {
+      if (!b.offsetParent || b.offsetWidth === 0) return false;
+      var t = (b.textContent || '').toLowerCase().trim();
+      return !oauth.some(function(k){ return t.indexOf(k) >= 0; });
+    });
+    for (var i = 0; i < btns.length; i++) {
+      var t = (btns[i].textContent || '').toLowerCase().replace(/[→>↪]/g,'').trim();
+      if (t === 'next' || t === 'continue' || t.indexOf('next') >= 0
+          || t.indexOf('get started') >= 0 || (t.indexOf('continue') >= 0 && t.indexOf('with') < 0)) {
+        btns[i].click();
+        return true;
+      }
+    }
+    // Fallback: submit form
+    var form = document.querySelector('form');
+    if (form) { form.dispatchEvent(new Event('submit', {bubbles: true})); return true; }
+    return false;
+  }
+
+  var phase = 0;  // 0=chờ email, 1=đã điền email, 2=chờ password
+  var ticks = 0;
+  var MAX_TICKS = 600; // 4 phút
+
+  var tid = setInterval(function() {
+    ticks++;
+    if (ticks > MAX_TICKS) { clearInterval(tid); window._rem2AutoFill = false; return; }
+
+    if (phase === 0) {
+      // Tìm và điền email
+      var emailEl = findVisible([
+        'input[type="email"]', 'input[name="email"]',
+        'input[autocomplete="email"]', 'input[placeholder*="mail" i]'
+      ]);
+      if (emailEl && emailEl.value !== '$email') {
+        fill(emailEl, '$email');
+        phase = 1;
+        // Sau 800ms: thử click Next để qua bước tiếp theo
+        setTimeout(function() { clickNext(); }, 800);
+      }
+    } else if (phase === 1) {
+      // Chờ trường password/username xuất hiện
+      var passEl = findVisible(['input[type="password"]']);
+      if (passEl) {
+        fill(passEl, '$password');
+        // Điền username nếu có
+        var userEl = findVisible([
+          'input[name="username"]', 'input[autocomplete="username"]',
+          'input[placeholder*="username" i]', 'input[placeholder*="user" i]'
+        ]);
+        if (userEl && userEl.value !== '$username') fill(userEl, '$username');
+        phase = 2;
+        setTimeout(function() { clickNext(); }, 800);
+      } else {
+        // Nếu email đã điền nhưng chưa có password → thử click Next lần nữa
+        if (ticks % 8 === 0) clickNext();
+      }
+    } else if (phase === 2) {
+      // Kiểm tra xem trang đã chuyển chưa
+      var passEl2 = findVisible(['input[type="password"]']);
+      if (!passEl2) {
+        clearInterval(tid);
+        window._rem2AutoFill = false;
+      }
+    }
+  }, 400);
+})()
         """.trimIndent()
         webView.evaluateJavascript(js, null)
     }
