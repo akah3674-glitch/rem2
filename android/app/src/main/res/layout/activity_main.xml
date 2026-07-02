@@ -57,7 +57,7 @@
     <LinearLayout
         android:id="@+id/mailPanel"
         android:layout_width="0dp"
-        android:layout_height="300dp"
+        android:layout_height="320dp"
         android:orientation="vertical"
         android:background="#0D1117"
         android:visibility="gone"
@@ -65,6 +65,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
+        <!-- Header -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="48dp"
@@ -123,6 +124,7 @@
                 android:paddingEnd="0dp"/>
         </LinearLayout>
 
+        <!-- Tabs -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="36dp"
@@ -150,6 +152,7 @@
                 android:background="@null"/>
         </LinearLayout>
 
+        <!-- Content area -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -175,6 +178,39 @@
                 android:visibility="gone"/>
 
         </FrameLayout>
+
+        <!-- Bottom action bar: invite new account -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="#161B22"
+            android:paddingStart="4dp"
+            android:paddingEnd="8dp">
+            <Button
+                android:id="@+id/btnInviteNew"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:text="+ Invite new"
+                android:textColor="#4FC3F7"
+                android:textSize="12sp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"/>
+            <TextView
+                android:id="@+id/tvInviteStatus"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text=""
+                android:textColor="#6B7280"
+                android:textSize="11sp"
+                android:gravity="end"
+                android:ellipsize="end"
+                android:maxLines="1"/>
+        </LinearLayout>
+
     </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
