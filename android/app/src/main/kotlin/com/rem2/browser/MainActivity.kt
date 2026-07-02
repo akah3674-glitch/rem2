@@ -176,7 +176,12 @@ class MainActivity : AppCompatActivity() {
             lifecycleScope.launch { fetchMail(forceAll = true) }
         }
         binding.btnAutoSetup.setOnClickListener {
-            lifecycleScope.launch { ensureMailAccount(force = true) }
+            if (prefs.getBoolean(KEY_REPLIT_REG, false) || mailEmail.isNotEmpty()) {
+                // Đã đăng ký hoặc có email cũ → Reset toàn bộ, tạo email mới
+                resetAndCreateNewEmail()
+            } else {
+                lifecycleScope.launch { ensureMailAccount(force = true) }
+            }
         }
         binding.btnSkipAutoReg.setOnClickListener {
             autoRegInProgress = false
@@ -204,6 +209,47 @@ class MainActivity : AppCompatActivity() {
         binding.tabVerify.setTextColor(0xFFFFFFFF.toInt())
         binding.tabMailList.setBackgroundColor(0x00000000)
         binding.tabMailList.setTextColor(0xFF90CAF9.toInt())
+    }
+
+    /**
+     * Đặt lại toàn bộ — xóa email cũ, tạo email Mail.tm mới, bắt đầu đăng ký Replit lại.
+     * Gọi khi email cũ đã dùng đăng ký xong hoặc bị lỗi.
+     */
+    private fun resetAndCreateNewEmail() {
+        // Dừng mọi luồng đang chạy
+        autoRegInProgress = false
+        pollJob?.cancel(); pollJob = null
+        hideAutoOverlay()
+
+        // Xóa thông tin email và tài khoản cũ
+        prefs.edit()
+            .remove(KEY_MAIL_EMAIL)
+            .remove(KEY_MAIL_PASS)
+            .remove(KEY_MAIL_TOKEN)
+            .remove(KEY_REPLIT_NAME)
+            .putBoolean(KEY_REPLIT_REG, false)
+            .apply()
+
+        // Reset biến trạng thái trong bộ nhớ
+        mailToken = ""; mailEmail = ""
+        seenIds.clear()
+
+        // Xóa danh sách email cũ trong UI
+        binding.mailList.removeAllViews()
+        binding.tvMailStatus.text = "Đặt lại xong — đang tạo email mới\u2026"
+        android.widget.Toast.makeText(this, "Đang tạo email mới, vui lòng chờ\u2026", android.widget.Toast.LENGTH_SHORT).show()
+
+        // Tạo tài khoản Mail.tm mới, sau đó tự đăng ký Replit
+        lifecycleScope.launch {
+            ensureMailAccount(force = true)
+            // Sau khi có email mới, đặt lại WebViewClient và vào trang signup Replit
+            kotlinx.coroutines.delay(600)
+            withContext(kotlinx.coroutines.Dispatchers.Main) {
+                if (mailEmail.isNotEmpty() && !prefs.getBoolean(KEY_REPLIT_REG, false)) {
+                    startAutoRegisterFlow()
+                }
+            }
+        }
     }
 
     // ─── Mail.tm account management ──────────────────────────────────────────
