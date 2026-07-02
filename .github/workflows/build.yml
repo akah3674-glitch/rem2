@@ -32,38 +32,44 @@ jobs:
         with:
           gradle-version: '8.2'
 
-      - name: Build release APK (persistent signing key)
+      - name: Build release APK
         run: cd android && gradle assembleRelease --no-daemon
         env:
           GRADLE_OPTS: '-Xmx3072m -Dorg.gradle.daemon=false'
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk rem2-v2.0-release.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk rem2-v3.0-release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rem2-v2.0-release
-          path: rem2-v2.0-release.apk
+          name: rem2-v3.0-release
+          path: rem2-v3.0-release.apk
           retention-days: 30
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v2.0.${{ github.run_number }}
-          name: "rem2 v2.0.${{ github.run_number }}"
+          tag_name: v3.0.${{ github.run_number }}
+          name: "Rem2 v3.0.${{ github.run_number }}"
           body: |
-            ## rem2 v2.0.${{ github.run_number }}
+            ## Rem2 v3.0.${{ github.run_number }}
 
-            **Cài đè không mất dữ liệu** (cùng chữ ký với mọi bản cũ từ v2.0.73+)
+            ⚠️ **Chữ ký số mới** — cần gỡ bản cũ trước khi cài (nếu đã có rem2 cũ)
 
-            ### Tính năng
-            - WebView Replit.com giả lập Cốc Cốc
-            - Mail.tm tự tạo + xác thực email tự động
-            - Tìm kiếm / chế độ máy tính / tải file
-            - Vuốt cạnh để quay lại, kéo sâu để tải lại trang
-            - FAB kéo được, tự điền email + mật khẩu
-          files: rem2-v2.0-release.apk
+            ### Tính năng v3.0
+            - 🗂 **Multi-tab** — nhiều tab Replit độc lập, nút ✕ để đóng từng tab
+            - 📋 **Smart paste** — ấn tài khoản trong panel → tự dán vào ô đang focus
+            - 👤 **Panel Tài khoản** — lưu và quản lý danh sách email/pass
+            - 📧 **Panel Xác thực** — inbox Mail.tm, tự mở khi có email mới
+            - ↻ **Nút Reload** + **＋ Tab mới** cố định trên thanh tab
+            - 🟰 **FAB hamburger ≡** kéo được, bật/tắt panel
+            - 🔧 **Fix CAPTCHA** "captcha token is invalid (code:1)"
+            - 🤖 **Auto-onboarding** — tự chọn câu hỏi và nhấn Next
+            - 🕵️ **Anti-detect** — giả lập thiết bị thật (DeviceProfile)
+            - 📱 **Vuốt trái/phải** — back/forward trong trình duyệt
+            - 📎 **Upload file** + 🖥 Desktop mode
+          files: rem2-v3.0-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

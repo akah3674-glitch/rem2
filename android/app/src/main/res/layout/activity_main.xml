@@ -4,282 +4,352 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="#0D1117">
 
-    <!-- ── Thanh tìm kiếm (ẩn mặc định) ──────────────────────────── -->
-    <LinearLayout
-        android:id="@+id/searchBar"
+    <!-- ── Tab bar: scrollable tabs ────────────────────────────────── -->
+    <HorizontalScrollView
+        android:id="@+id/tabScrollView"
         android:layout_width="0dp"
-        android:layout_height="48dp"
+        android:layout_height="38dp"
+        android:background="#0D1117"
+        android:scrollbars="none"
+        android:fillViewport="false"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@+id/tabActions">
+
+        <LinearLayout
+            android:id="@+id/tabBar"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"/>
+    </HorizontalScrollView>
+
+    <!-- Tab quick actions: Reload + New Tab -->
+    <LinearLayout
+        android:id="@+id/tabActions"
+        android:layout_width="wrap_content"
+        android:layout_height="38dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:background="#0D1117"
-        android:visibility="gone"
+        android:paddingEnd="4dp"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
-        <EditText
-            android:id="@+id/etSearch"
-            android:layout_width="0dp"
+
+        <TextView
+            android:id="@+id/btnReload"
+            android:layout_width="36dp"
             android:layout_height="36dp"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="4dp"
-            android:background="#1F2937"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:textColor="#FFFFFF"
-            android:textColorHint="#6B7280"
-            android:textSize="14sp"
-            android:hint="Tìm kiếm Google hoặc nhập URL..."
-            android:imeOptions="actionGo"
-            android:inputType="textUri"
-            android:maxLines="1"
-            android:singleLine="true"/>
-        <Button
-            android:id="@+id/btnCloseSearch"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:text="✕"
-            android:textColor="#AAAAAA"
-            android:textSize="16sp"
-            android:paddingStart="0dp"
-            android:paddingEnd="0dp"/>
+            android:text="↻"
+            android:textSize="20sp"
+            android:gravity="center"
+            android:textColor="#4FC3F7"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Tải lại"/>
+
+        <TextView
+            android:id="@+id/btnNewTab"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:text="＋"
+            android:textSize="18sp"
+            android:gravity="center"
+            android:textColor="#4FC3F7"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="Tab mới"/>
     </LinearLayout>
 
-    <!-- ── WebView chính ──────────────────────────────────────────── -->
-    <WebView
-        android:id="@+id/mainWebView"
+    <!-- Divider below tab bar -->
+    <View
+        android:id="@+id/tabDivider"
         android:layout_width="0dp"
-        android:layout_height="0dp"
-        app:layout_constraintTop_toBottomOf="@+id/searchBar"
-        app:layout_constraintBottom_toTopOf="@+id/mailPanel"
+        android:layout_height="1dp"
+        android:background="#21262D"
+        app:layout_constraintTop_toBottomOf="@+id/tabScrollView"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- ── Overlay tự động đăng ký ───────────────────────────────── -->
-    <LinearLayout
-        android:id="@+id/autoRegisterOverlay"
+    <!-- ── WebView container: always full height (panel overlays it) ── -->
+    <FrameLayout
+        android:id="@+id/webContainer"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:background="#CC000000"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/tabDivider"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
-        <ProgressBar
-            android:id="@+id/autoRegisterProgress"
-            android:layout_width="48dp"
-            android:layout_height="48dp"
-            android:layout_marginBottom="16dp"
-            android:indeterminateTint="#4FC3F7"/>
-        <TextView
-            android:id="@+id/tvAutoStatus"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Đang khởi động..."
-            android:textColor="#FFFFFF"
-            android:textSize="16sp"
-            android:gravity="center"
-            android:paddingStart="24dp"
-            android:paddingEnd="24dp"/>
-        <Button
-            android:id="@+id/btnSkipAutoReg"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Bỏ qua / Tự làm"
-            android:textColor="#90CAF9"
-            android:textSize="13sp"/>
-    </LinearLayout>
+        app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- ── Panel Mail.tm ─────────────────────────────────────────── -->
+    <!-- ── Mail Panel: floating overlay from bottom (55% height) ────── -->
     <LinearLayout
         android:id="@+id/mailPanel"
         android:layout_width="0dp"
-        android:layout_height="320dp"
+        android:layout_height="0dp"
         android:orientation="vertical"
-        android:background="#0D1117"
+        android:background="#161B22"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent">
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHeight_percent="0.56"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="1.0">
 
-        <!-- Header với nút mở rộng -->
+        <!-- Panel header -->
         <LinearLayout
+            android:id="@+id/panelHeader"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
+            android:layout_height="44dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingStart="10dp"
-            android:paddingEnd="4dp"
-            android:background="#1565C0">
+            android:background="#0D1117"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp">
 
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="@string/mail_panel_title"
-                android:textColor="#FFFFFF"
-                android:textSize="13sp"
-                android:textStyle="bold"/>
+            <!-- Drag handle indicator -->
+            <View
+                android:layout_width="32dp"
+                android:layout_height="4dp"
+                android:layout_marginStart="8dp"
+                android:background="#30363D"
+                android:layout_gravity="center_vertical"/>
 
-            <TextView
-                android:id="@+id/tvMailStatus"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="2"
-                android:text="Chưa kết nối"
-                android:textColor="#90CAF9"
-                android:textSize="11sp"
-                android:ellipsize="end"
-                android:maxLines="1"/>
-
-            <!-- 🔍 Bật/tắt thanh tìm kiếm -->
-            <Button
+            <!-- Search button -->
+            <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/btnToggleSearch"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:text="🔍"
-                android:textSize="16sp"
-                android:paddingStart="0dp"
-                android:paddingEnd="0dp"/>
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@android:drawable/ic_menu_search"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#8B949E"
+                android:layout_marginStart="4dp"/>
 
-            <!-- 🖥 Chế độ máy tính -->
-            <Button
-                android:id="@+id/btnDesktop"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:text="🖥"
-                android:textSize="16sp"
-                android:paddingStart="0dp"
-                android:paddingEnd="0dp"/>
-
-
-            <Button
-                android:id="@+id/btnRefresh"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:text="&#x21BB;"
+            <!-- Search input -->
+            <EditText
+                android:id="@+id/etSearch"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:visibility="gone"
+                android:background="#21262D"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
                 android:textColor="#FFFFFF"
-                android:textSize="18sp"
-                android:paddingStart="0dp"
-                android:paddingEnd="0dp"/>
+                android:textColorHint="#6B7280"
+                android:textSize="13sp"
+                android:hint="Tìm kiếm hoặc nhập URL..."
+                android:imeOptions="actionGo"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:singleLine="true"/>
 
-            <Button
+            <!-- Spacer -->
+            <View
+                android:id="@+id/panelSpacer"
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1"/>
+
+            <!-- Desktop mode -->
+            <androidx.appcompat.widget.AppCompatImageButton
+                android:id="@+id/btnDesktop"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@android:drawable/ic_menu_always_landscape_portrait"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#8B949E"
+                android:alpha="0.5"/>
+
+            <!-- New mail (+) -->
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/btnRefresh"
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:text="+"
+                android:textColor="#4FC3F7"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:paddingStart="8dp"
+                android:paddingEnd="4dp"/>
+
+            <!-- Close panel -->
+            <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/btnClose"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:text="&#x2715;"
-                android:textColor="#AAAAAA"
-                android:textSize="16sp"
-                android:paddingStart="0dp"
-                android:paddingEnd="0dp"/>
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="#6E7681"/>
         </LinearLayout>
 
-        <!-- Tabs -->
+        <!-- Section tabs -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="36dp"
             android:orientation="horizontal"
             android:background="#0D1117">
-            <Button
-                android:id="@+id/tabMailList"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+
+            <TextView
+                android:id="@+id/tabAccounts"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:text="Hộp thư"
-                android:textColor="#FFFFFF"
-                android:textSize="13sp"
-                android:background="#1565C0"/>
-            <Button
-                android:id="@+id/tabVerify"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:text="Trình duyệt xác nhận"
+                android:text="👤 Tài khoản"
                 android:textColor="#90CAF9"
-                android:textSize="13sp"
-                android:background="@null"/>
+                android:textSize="12sp"
+                android:gravity="center"
+                android:background="#1565C0"/>
+
+            <TextView
+                android:id="@+id/tabMailList"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="📧 Xác thực"
+                android:textColor="#90CAF9"
+                android:textSize="12sp"
+                android:gravity="center"
+                android:background="@android:color/transparent"/>
         </LinearLayout>
 
-        <!-- Nội dung -->
+        <!-- Divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#21262D"/>
+
+        <!-- Content area -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
-            <ScrollView
-                android:id="@+id/mailListContainer"
+
+            <!-- ── Accounts section ── -->
+            <LinearLayout
+                android:id="@+id/accountsContainer"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:background="#0D1117">
-                <LinearLayout
-                    android:id="@+id/mailList"
+                android:orientation="vertical">
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent">
+
+                    <LinearLayout
+                        android:id="@+id/accountList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"/>
+                </ScrollView>
+
+                <TextView
+                    android:id="@+id/tvAccountsEmpty"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"
+                    android:text="Chưa có tài khoản\nĐăng nhập Replit để lưu tự động"
+                    android:textColor="#6E7681"
+                    android:textSize="13sp"
+                    android:gravity="center"
+                    android:visibility="gone"/>
+            </LinearLayout>
+
+            <!-- ── Verify / Inbox section ── -->
+            <LinearLayout
+                android:id="@+id/verifyContainer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/tvMailStatus"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="8dp"/>
-            </ScrollView>
-            <WebView
-                android:id="@+id/verifyWebView"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:visibility="gone"/>
+                    android:text="Đang khởi tạo..."
+                    android:textColor="#8B949E"
+                    android:textSize="11sp"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="2dp"
+                    android:singleLine="true"
+                    android:ellipsize="end"/>
+
+                <!-- Mail list + verify WebView stacked -->
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="0dp"
+                    android:layout_weight="1">
+
+                    <ScrollView
+                        android:id="@+id/mailListScroll"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent">
+
+                        <LinearLayout
+                            android:id="@+id/mailList"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"/>
+                    </ScrollView>
+
+                    <!-- Verify WebView (shown when link loaded) -->
+                    <WebView
+                        android:id="@+id/verifyWebView"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:visibility="gone"/>
+                </FrameLayout>
+            </LinearLayout>
         </FrameLayout>
 
-        <!-- Thanh dưới -->
+        <!-- Status bar -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="28dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="#161B22"
-            android:paddingStart="4dp"
+            android:background="#0D1117"
+            android:paddingStart="8dp"
             android:paddingEnd="8dp">
-            <Button
-                android:id="@+id/btnInviteNew"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:text="+ Mời tài khoản mới"
-                android:textColor="#4FC3F7"
-                android:textSize="12sp"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"/>
+
             <TextView
-                android:id="@+id/tvInviteStatus"
+                android:id="@+id/tvBottomStatus"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text=""
-                android:textColor="#6B7280"
-                android:textSize="11sp"
-                android:gravity="end"
+                android:textColor="#6E7681"
+                android:textSize="10sp"
                 android:ellipsize="end"
                 android:maxLines="1"/>
+
+            <ProgressBar
+                android:id="@+id/pbMail"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:indeterminateTint="#4FC3F7"
+                android:visibility="gone"/>
         </LinearLayout>
     </LinearLayout>
 
-    <!-- ── FAB nút mail (kéo được) ──────────────────────────────── -->
+    <!-- ── FAB: hamburger ≡ (draggable) ─────────────────────────────── -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabMail"
+        android:id="@+id/fabMenu"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:src="@android:drawable/sym_action_email"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="24dp"
+        android:src="@android:drawable/ic_menu_more"
+        android:contentDescription="Menu"
         app:backgroundTint="#1976D2"
-        app:layout_constraintBottom_toTopOf="@+id/mailPanel"
+        app:fabSize="mini"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
