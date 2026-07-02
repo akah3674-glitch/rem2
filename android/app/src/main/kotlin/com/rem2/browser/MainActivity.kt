@@ -1,22 +1,35 @@
 package com.rem2.browser
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.view.GestureDetector
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.core.view.GestureDetectorCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
@@ -46,6 +59,11 @@ class MainActivity : AppCompatActivity() {
         private const val COCCOC_UA =
             "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) coc_coc_browser/117.0.0 Chrome/111.0.5563.116 Mobile Safari/537.36"
+
+        // UA máy tính (desktop mode)
+        private const val DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) Chrome/120.0.6099.210 Safari/537.36"
 
         private val FIRST_NAMES = listOf(
             "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Casey", "Riley",
@@ -123,6 +141,24 @@ class MainActivity : AppCompatActivity() {
 
     private var verifyPollJob: Job? = null
 
+    // File upload cho WebView
+    private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
+    private val filePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            fileUploadCallback?.onReceiveValue(
+                WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+            )
+        } else {
+            fileUploadCallback?.onReceiveValue(null)
+        }
+        fileUploadCallback = null
+    }
+
+    // Desktop mode
+    private var isDesktopMode = false
+
     // Profile giả lập thiết bị — đổi mới mỗi chu kỳ đăng ký
     private var currentDevice: DeviceProfile = DEVICE_PROFILES.random()
 
@@ -138,6 +174,8 @@ class MainActivity : AppCompatActivity() {
         setupMainWebView()
         setupVerifyWebView()
         setupPanel()
+        setupSearchBar()
+        requestStoragePermissionIfNeeded()
         lifecycleScope.launch { ensureMailAccount() }
     }
 
@@ -152,6 +190,7 @@ class MainActivity : AppCompatActivity() {
             settings.userAgentString   = COCCOC_UA
             addJavascriptInterface(WebBridge(), "REM2")
             webViewClient = buildMainClient()
+            webChromeClient = buildChromeClient()
             loadUrl("https://replit.com")
         }
         attachSwipeBack(binding.mainWebView)
@@ -218,7 +257,8 @@ class MainActivity : AppCompatActivity() {
                     v.postDelayed({ injectAutoFillWatcher(v) }, (800L..1500L).random())
                 }
                 // Trang onboarding/plans: tự chọn next/free
-                url.contains("/onboarding") || url.contains("/plans") -> {
+                url.contains("/onboarding") || url.contains("/plans") ||
+                url.contains("/account") || url.contains("/setup") -> {
                     val name = autoFullName.ifEmpty { randomFullName() }
                     v.postDelayed({ injectOnboardingStep(v, name) }, (1500L..3000L).random())
                 }
@@ -289,6 +329,15 @@ class MainActivity : AppCompatActivity() {
         binding.tabMailList.setOnClickListener { showInboxTab() }
         binding.tabVerify.setOnClickListener   { showVerifyTab() }
 
+        // 🔍 Nút tìm kiếm
+        binding.btnToggleSearch.setOnClickListener { toggleSearchBar() }
+        binding.btnCloseSearch.setOnClickListener {
+            binding.searchBar.visibility = View.GONE
+        }
+
+        // 🖥 Chế độ máy tính
+        binding.btnDesktop.setOnClickListener { toggleDesktopMode() }
+
         // Tap vào email status → copy vào clipboard
         binding.tvMailStatus.setOnClickListener {
             if (autoEmail.isNotEmpty()) {
@@ -306,6 +355,77 @@ class MainActivity : AppCompatActivity() {
                     if (id != 0) findViewById<View>(id)?.visibility = View.GONE
                 } catch (_: Exception) {}
             }
+        setupDraggableFab()
+    }
+
+    // ─── FAB kéo được (drag & drop) ──────────────────────────────────────────
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupDraggableFab() {
+        val fab = binding.fabMail
+        var dX = 0f; var dY = 0f
+        var isDragging = false
+        val touchSlop = 12f // dp ngưỡng nhận ra là drag
+
+        // Khôi phục vị trí đã lưu
+        fab.post {
+            val savedX = prefs.getFloat("fab_x", -1f)
+            val savedY = prefs.getFloat("fab_y", -1f)
+            if (savedX >= 0f && savedY >= 0f) {
+                fab.x = savedX; fab.y = savedY
+            }
+        }
+
+        // Override touch — cho phép vừa click vừa kéo
+        val originalClick = View.OnClickListener {
+            if (binding.mailPanel.visibility == View.GONE) {
+                binding.mailPanel.visibility = View.VISIBLE
+                if (mailToken.isNotEmpty()) startPolling()
+            } else {
+                binding.mailPanel.visibility = View.GONE
+                stopPolling()
+            }
+        }
+        fab.setOnClickListener(null) // xoá click cũ
+
+        fab.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = v.x - event.rawX
+                    dY = v.y - event.rawY
+                    isDragging = false
+                    false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val movedX = Math.abs(event.rawX + dX - v.x)
+                    val movedY = Math.abs(event.rawY + dY - v.y)
+                    if (movedX > touchSlop || movedY > touchSlop) {
+                        isDragging = true
+                    }
+                    if (isDragging) {
+                        // Giữ trong màn hình
+                        val maxX = (resources.displayMetrics.widthPixels  - v.width ).toFloat()
+                        val maxY = (resources.displayMetrics.heightPixels - v.height).toFloat()
+                        v.x = (event.rawX + dX).coerceIn(0f, maxX)
+                        v.y = (event.rawY + dY).coerceIn(0f, maxY)
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.TEXT_HANDLE_MOVE)
+                    }
+                    isDragging
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (isDragging) {
+                        // Lưu vị trí mới
+                        prefs.edit().putFloat("fab_x", v.x).putFloat("fab_y", v.y).apply()
+                    } else {
+                        // Tap bình thường → toggle panel
+                        originalClick.onClick(v)
+                    }
+                    isDragging = false
+                    isDragging
+                }
+                else -> false
+            }
+        }
     }
 
     private fun showInboxTab() {
@@ -800,58 +920,89 @@ class MainActivity : AppCompatActivity() {
     private fun injectOnboardingStep(webView: WebView, fullName: String) {
         val firstName = fullName.substringBefore(" ").ifEmpty { "User" }
         val lastName  = fullName.substringAfter(" ", "").ifEmpty { "Dev" }
-        val js = listOf(
-            "(function(){",
-            "  function setVal(el,val){try{var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;s.call(el,val);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}catch(e){el.value=val;}}",
-            "  function setArea(el,val){try{var s=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;s.call(el,val);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}catch(e){el.value=val;}}",
-            // Chọn gói miễn phí
-            "  var planClicked=false;",
-            "  document.querySelectorAll('button,a,[role=\"button\"]').forEach(function(el){",
-            "    if(planClicked) return;",
-            "    var t=(el.textContent||'').toLowerCase();",
-            "    if(t.indexOf('starter')>=0||t.indexOf('free')>=0||t.indexOf('continue with free')>=0){el.click();planClicked=true;}",
-            "  });",
-            "  if(planClicked) return 'plan-selected';",
-            // Điền tên
-            "  document.querySelectorAll('input[name=\"full_name\"],input[name=\"fullName\"],input[name=\"name\"]').forEach(function(el){setVal(el,'${fullName}');});",
-            "  document.querySelectorAll('input[name=\"first_name\"],input[name=\"firstName\"],input[placeholder*=\"first\" i]').forEach(function(el){setVal(el,'${firstName}');});",
-            "  document.querySelectorAll('input[name=\"last_name\"],input[name=\"lastName\"],input[placeholder*=\"last\" i]').forEach(function(el){setVal(el,'${lastName}');});",
-            "  document.querySelectorAll('textarea').forEach(function(el){if(!el.value) setArea(el,'Thích lập trình và xây dựng những thứ hay ho.');});",
-            // Chọn ngẫu nhiên option
-            "  var opts=Array.from(document.querySelectorAll('[data-testid*=\"option\"],[data-cy*=\"option\"],[class*=\"SelectableCard\"],[class*=\"selectable\"],[class*=\"choice\"],[role=\"checkbox\"],[role=\"radio\"]'));",
-            "  if(opts.length>0){var pick=Math.min(opts.length,Math.floor(Math.random()*2)+1);var chosen=[];while(chosen.length<pick){var idx=Math.floor(Math.random()*opts.length);if(!chosen.includes(idx))chosen.push(idx);}chosen.forEach(function(i){opts[i].click();});}",
-            "  var radios=document.querySelectorAll('input[type=\"radio\"]');",
-            "  if(radios.length>0) radios[Math.floor(Math.random()*radios.length)].click();",
-            // Bấm Next — lọc kỹ OAuth
-            "  var OB=['google','github','facebook','apple','microsoft','twitter',' x ','with x'];",
-            "  function noOb(t){return !OB.some(function(k){return(' '+t+' ').indexOf(k)>=0;});}",
-            "  function vis(el){return el.offsetParent!==null&&el.style.display!=='none'&&el.style.visibility!=='hidden';}",
-            "  var clicked=false;",
-            "  setTimeout(function(){",
-            "    var btns=Array.from(document.querySelectorAll('button[type=\"submit\"],button')).filter(vis);",
-            "    for(var i=0;i<btns.length;i++){",
-            "      var t=(btns[i].textContent||'').toLowerCase().trim();",
-            "      if(!noOb(t)) continue;",
-            "      var ok=t.indexOf('next')>=0||t.indexOf('get started')>=0||t.indexOf('finish')>=0||t.indexOf('done')>=0",
-            "            ||(t.indexOf('continue')>=0&&t.indexOf('with')<0&&t.length<18)",
-            "            ||(t.indexOf('start')>=0&&t.indexOf('starter')<0);",
-            "      if(ok){btns[i].click();clicked=true;break;}",
-            "    }",
-            "  },500);",
-            "  return clicked?'next-clicked':'filled';",
-            "})()"
-        ).joinToString("\n")
+        val js = """
+(function(){
+  function setVal(el,val){
+    try{var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
+    s.call(el,val);el.dispatchEvent(new Event('input',{bubbles:true}));
+    el.dispatchEvent(new Event('change',{bubbles:true}));el.dispatchEvent(new Event('blur',{bubbles:true}));}
+    catch(e){el.value=val;}
+  }
+  function setArea(el,val){
+    try{var s=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;
+    s.call(el,val);el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));}
+    catch(e){el.value=val;}
+  }
+  function vis(el){return el.offsetParent!==null&&el.style.display!=='none'&&el.style.visibility!=='hidden'&&el.offsetWidth>0;}
+  var OB=['google','github','facebook','apple','microsoft','twitter',' x ','with x'];
+  function noOb(t){return !OB.some(function(k){return(' '+t+' ').indexOf(k)>=0;});}
+
+  // Chọn gói miễn phí nếu thấy
+  var planClicked=false;
+  document.querySelectorAll('button,a,[role="button"]').forEach(function(el){
+    if(planClicked) return;
+    var t=(el.textContent||'').toLowerCase();
+    if(t.indexOf('starter')>=0||t.indexOf('free')>=0||t.indexOf('continue with free')>=0){el.click();planClicked=true;}
+  });
+  if(planClicked) return 'plan-selected';
+
+  // Điền tên
+  document.querySelectorAll('input[name="full_name"],input[name="fullName"],input[name="name"]').forEach(function(el){if(vis(el))setVal(el,'${fullName}');});
+  document.querySelectorAll('input[name="first_name"],input[name="firstName"],input[placeholder*="first" i]').forEach(function(el){if(vis(el))setVal(el,'${firstName}');});
+  document.querySelectorAll('input[name="last_name"],input[name="lastName"],input[placeholder*="last" i]').forEach(function(el){if(vis(el))setVal(el,'${lastName}');});
+  document.querySelectorAll('textarea').forEach(function(el){if(!el.value&&vis(el))setArea(el,'Thích lập trình và xây dựng những thứ hay ho.');});
+
+  // Chọn option ngẫu nhiên (radio, card)
+  var opts=Array.from(document.querySelectorAll('[data-testid*="option"],[data-cy*="option"],[class*="SelectableCard"],[class*="selectable"],[class*="choice"],[role="checkbox"],[role="radio"]'));
+  if(opts.length>0){var pick=Math.min(opts.length,Math.floor(Math.random()*2)+1);var chosen=[];while(chosen.length<pick){var idx=Math.floor(Math.random()*opts.length);if(!chosen.includes(idx))chosen.push(idx);}chosen.forEach(function(i){opts[i].click();});}
+  var radios=document.querySelectorAll('input[type="radio"]');
+  if(radios.length>0)radios[Math.floor(Math.random()*radios.length)].click();
+
+  // ── Bấm Next / Continue / Submit ──────────────────────────────────────
+  // Ưu tiên: button[type=submit] → button có text next/continue/finish/done
+  var clicked=false;
+  function tryClick(){
+    var candidates=[];
+    // 1. submit buttons
+    Array.from(document.querySelectorAll('button[type="submit"]')).filter(vis).forEach(function(b){candidates.push(b);});
+    // 2. tất cả buttons visible
+    Array.from(document.querySelectorAll('button')).filter(vis).forEach(function(b){if(!candidates.includes(b))candidates.push(b);});
+    for(var i=0;i<candidates.length;i++){
+      var t=(candidates[i].textContent||candidates[i].innerText||'').toLowerCase().replace(/[→>]/g,'').trim();
+      if(!noOb(t)) continue;
+      var ok=t==='next'||t==='continue'||t.indexOf('next')>=0||t.indexOf('get started')>=0
+             ||t.indexOf('finish')>=0||t.indexOf('done')>=0
+             ||(t.indexOf('continue')>=0&&t.indexOf('with')<0&&t.length<22)
+             ||(t.indexOf('start')>=0&&t.indexOf('starter')<0);
+      if(ok){candidates[i].click();clicked=true;break;}
+    }
+    return clicked;
+  }
+  // Thử ngay lập tức
+  tryClick();
+  // Thử lại sau 600ms nếu chưa click được
+  if(!clicked) setTimeout(function(){tryClick();},600);
+  // Thử lại sau 1.5s (đề phòng React chưa render kịp)
+  setTimeout(function(){
+    if(!clicked) tryClick();
+  },1500);
+
+  return clicked?'next-clicked':'filled';
+})()
+        """.trimIndent()
 
         webView.evaluateJavascript(js) { result ->
             val r = result?.trim('"') ?: ""
             if (r == "plan-selected") toast("Đã chọn gói miễn phí \u2713")
+            // Retry sau 5s nếu vẫn còn trên trang onboarding
             webView.postDelayed({
                 webView.evaluateJavascript("window.location.pathname") { path ->
                     val p = path?.trim('"') ?: ""
-                    if (p.contains("onboarding") || p.contains("plans"))
+                    if (p.contains("onboarding") || p.contains("plans") ||
+                        p.contains("setup") || p.contains("account"))
                         injectOnboardingStep(webView, fullName)
                 }
-            }, 4000)
+            }, 5000)
         }
     }
 
@@ -982,6 +1133,111 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun notifyNotLoggedIn() = runOnUiThread {
             // Không dùng nữa — giữ lại để tránh crash nếu JS cũ vẫn gọi
+        }
+    }
+
+    // ─── Search bar ──────────────────────────────────────────────────────────
+
+    private fun setupSearchBar() {
+        binding.etSearch.setOnEditorActionListener { v, actionId, event ->
+            val isDone = actionId == EditorInfo.IME_ACTION_GO ||
+                actionId == EditorInfo.IME_ACTION_SEARCH ||
+                (event?.keyCode == KeyEvent.KEYCODE_ENTER && event.action == KeyEvent.ACTION_DOWN)
+            if (isDone) {
+                val query = v.text.toString().trim()
+                if (query.isNotEmpty()) {
+                    val url = when {
+                        query.startsWith("http://") || query.startsWith("https://") -> query
+                        query.contains(".") && !query.contains(" ") -> "https://$query"
+                        else -> "https://www.google.com/search?q=${Uri.encode(query)}"
+                    }
+                    binding.mainWebView.loadUrl(url)
+                    binding.searchBar.visibility = View.GONE
+                    hideKeyboard()
+                }
+                true
+            } else false
+        }
+    }
+
+    private fun toggleSearchBar() {
+        if (binding.searchBar.visibility == View.GONE) {
+            binding.searchBar.visibility = View.VISIBLE
+            binding.etSearch.setText(binding.mainWebView.url ?: "")
+            binding.etSearch.requestFocus()
+            binding.etSearch.selectAll()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(binding.etSearch, InputMethodManager.SHOW_IMPLICIT)
+        } else {
+            binding.searchBar.visibility = View.GONE
+            hideKeyboard()
+        }
+    }
+
+    private fun hideKeyboard() {
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        currentFocus?.let { imm.hideSoftInputFromWindow(it.windowToken, 0) }
+    }
+
+    // ─── Desktop mode ─────────────────────────────────────────────────────────
+
+    private fun toggleDesktopMode() {
+        isDesktopMode = !isDesktopMode
+        val ua = if (isDesktopMode) DESKTOP_UA else COCCOC_UA
+        binding.mainWebView.settings.apply {
+            userAgentString      = ua
+            useWideViewPort      = isDesktopMode
+            loadWithOverviewMode = isDesktopMode
+        }
+        binding.btnDesktop.text = if (isDesktopMode) "📱" else "🖥"
+        binding.mainWebView.reload()
+        toast(if (isDesktopMode) "🖥 Chế độ máy tính" else "📱 Chế độ di động")
+    }
+
+    // ─── File upload / Storage permission ────────────────────────────────────
+
+    private fun buildChromeClient() = object : WebChromeClient() {
+        override fun onShowFileChooser(
+            webView: WebView,
+            filePathCallback: ValueCallback<Array<Uri>>,
+            fileChooserParams: FileChooserParams
+        ): Boolean {
+            fileUploadCallback?.onReceiveValue(null)
+            fileUploadCallback = filePathCallback
+
+            val intent = fileChooserParams.createIntent().apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                // Cho phép chọn nhiều file
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                }
+            }
+            return try {
+                filePickerLauncher.launch(intent)
+                true
+            } catch (e: Exception) {
+                fileUploadCallback?.onReceiveValue(null)
+                fileUploadCallback = null
+                false
+            }
+        }
+    }
+
+    private fun requestStoragePermissionIfNeeded() {
+        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                android.Manifest.permission.READ_MEDIA_IMAGES,
+                android.Manifest.permission.READ_MEDIA_VIDEO,
+                android.Manifest.permission.READ_MEDIA_AUDIO
+            )
+        } else {
+            arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        val missing = perms.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 200)
         }
     }
 
