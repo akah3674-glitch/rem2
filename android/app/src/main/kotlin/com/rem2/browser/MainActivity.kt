@@ -38,7 +38,6 @@ class MainActivity : AppCompatActivity() {
         private const val MAILTM           = "https://api.mail.tm"
         private val JSON_MT = "application/json; charset=utf-8".toMediaType()
 
-        // Random name pool
         private val FIRST_NAMES = listOf(
             "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Casey", "Riley",
             "Avery", "Blake", "Cameron", "Drew", "Elliot", "Finley", "Harper",
@@ -59,14 +58,12 @@ class MainActivity : AppCompatActivity() {
         .build()
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
 
-    // Main mail account
     private var mailToken         = ""
     private var mailEmail         = ""
     private var pollJob: Job?     = null
     private val seenIds           = mutableSetOf<String>()
     private var autoRegInProgress = false
 
-    // Invite flow state
     private var inviteMailToken    = ""
     private var inviteMailEmail    = ""
     private var inviteInProgress   = false
@@ -80,11 +77,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
         setupMainWebView()
         setupVerifyWebView()
         setupPanel()
-
         lifecycleScope.launch { ensureMailAccount() }
     }
 
@@ -109,13 +104,12 @@ class MainActivity : AppCompatActivity() {
         override fun onPageFinished(v: WebView, url: String) {
             val u = url.trimEnd('/')
             when {
-                // Auto-detect onboarding even outside auto-register flow
-                url.contains("/onboarding") -> {
-                    val name = prefs.getString(KEY_REPLIT_NAME, "") ?: ""
-                    val finalName = if (name.isNotEmpty()) name else randomFullName()
-                    v.postDelayed({ injectOnboardingForm(v, finalName) }, 1500)
+                url.contains("/onboarding") || url.contains("/plans") -> {
+                    val name = prefs.getString(KEY_REPLIT_NAME, "").let {
+                        if (it.isNullOrEmpty()) randomFullName() else it
+                    }
+                    v.postDelayed({ injectOnboardingStep(v, name) }, 1500)
                 }
-                // Detect homepage not logged in
                 (u == "https://replit.com" || u == "https://www.replit.com") &&
                 !prefs.getBoolean(KEY_REPLIT_REG, false) && !autoRegInProgress -> {
                     detectAndAutoRegister(v)
@@ -139,21 +133,18 @@ class MainActivity : AppCompatActivity() {
         override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
         override fun onPageFinished(v: WebView, url: String) {
             when {
-                // Invite signup page — auto-fill with invite account details
                 url.contains("replit.com") &&
-                (url.contains("invite") || url.contains("join")) &&
+                (url.contains("invite") || url.contains("join") || url.contains("signup")) &&
                 inviteMailEmail.isNotEmpty() -> {
                     val iName = prefs.getString(KEY_INVITE_NAME, randomFullName()) ?: randomFullName()
                     val iUser = "user" + (10000..99999).random()
                     val iPass = "Rem2x" + (100000..999999).random()
-                    v.postDelayed({ injectSignupForm(v, inviteMailEmail, iUser, iPass, iName) }, 2500)
+                    v.postDelayed({ expandEmailForm(v, inviteMailEmail, iUser, iPass, iName) }, 2000)
                 }
-                // Onboarding after invite signup
-                url.contains("/onboarding") -> {
+                url.contains("/onboarding") || url.contains("/plans") -> {
                     val name = prefs.getString(KEY_INVITE_NAME, randomFullName()) ?: randomFullName()
-                    v.postDelayed({ injectOnboardingForm(v, name) }, 1500)
+                    v.postDelayed({ injectOnboardingStep(v, name) }, 1500)
                 }
-                // Verify/signup complete (no verify/invite/confirm keyword)
                 url.contains("replit.com") &&
                 !url.contains("verify") && !url.contains("confirm") &&
                 !url.contains("invite") && !url.contains("join") &&
@@ -235,25 +226,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        withContext(Dispatchers.Main) { binding.tvMailStatus.text = "Creating Mail.tm\u2026" }
+        withContext(Dispatchers.Main) { binding.tvMailStatus.text = "Đang tạo Mail.tm\u2026" }
 
         val domains = getMailDomains()
         if (domains.isEmpty()) {
-            withContext(Dispatchers.Main) { binding.tvMailStatus.text = "\u2717 Mail.tm unavailable" }
+            withContext(Dispatchers.Main) { binding.tvMailStatus.text = "\u2717 Mail.tm không khả dụng" }
             return
         }
-        val domain = domains[0]
-        val user   = "rem2" + (1000..9999).random()
-        val email  = "$user@$domain"
-        val pass   = UUID.randomUUID().toString().replace("-", "").take(16)
+        val user  = "rem2" + (1000..9999).random()
+        val email = "$user@${domains[0]}"
+        val pass  = UUID.randomUUID().toString().replace("-", "").take(16)
 
         if (!mailCreate(email, pass)) {
-            withContext(Dispatchers.Main) { binding.tvMailStatus.text = "\u2717 Create failed" }
+            withContext(Dispatchers.Main) { binding.tvMailStatus.text = "\u2717 Tạo tài khoản thất bại" }
             return
         }
         val tok = mailLogin(email, pass)
         if (tok.isEmpty()) {
-            withContext(Dispatchers.Main) { binding.tvMailStatus.text = "\u2717 Login failed" }
+            withContext(Dispatchers.Main) { binding.tvMailStatus.text = "\u2717 Đăng nhập thất bại" }
             return
         }
         mailToken = tok
@@ -265,7 +255,7 @@ class MainActivity : AppCompatActivity() {
             .apply()
         withContext(Dispatchers.Main) {
             binding.tvMailStatus.text = "\u2713 $email"
-            toast("Mail.tm ready: $email")
+            toast("Mail.tm sẵn sàng: $email")
             if (binding.mailPanel.visibility == View.VISIBLE) startPolling()
         }
     }
@@ -337,7 +327,7 @@ class MainActivity : AppCompatActivity() {
             for (i in 0 until members.length()) {
                 val msg     = members.getJSONObject(i)
                 val id      = msg.getString("id")
-                val subject = msg.optString("subject", "(no subject)")
+                val subject = msg.optString("subject", "(không có tiêu đề)")
                 val intro   = msg.optString("intro", "")
                 if (forceAll || !seenIds.contains(id)) {
                     seenIds.add(id)
@@ -363,16 +353,15 @@ class MainActivity : AppCompatActivity() {
                 .addHeader("Authorization", "Bearer $mailToken")
                 .build()
             val resp     = withContext(Dispatchers.IO) { http.newCall(req).execute() }
-            val bodyText = resp.body?.string() ?: return
-            val combined = extractCombined(bodyText)
+            val combined = extractCombined(resp.body?.string() ?: return)
             val finalUrl = findReplitLink(combined, listOf("verify", "confirm")) ?: return
             withContext(Dispatchers.Main) {
                 binding.verifyWebView.loadUrl(finalUrl)
                 showVerifyTab()
                 if (binding.mailPanel.visibility == View.GONE)
                     binding.mailPanel.visibility = View.VISIBLE
-                toast("Opening verify link\u2026")
-                if (autoRegInProgress) updateAutoStatus("Verifying email in panel\u2026")
+                toast("Đang mở link xác nhận\u2026")
+                if (autoRegInProgress) updateAutoStatus("Đang xác nhận email\u2026")
             }
         } catch (_: Exception) {}
     }
@@ -382,12 +371,12 @@ class MainActivity : AppCompatActivity() {
         autoRegInProgress = false
         hideAutoOverlay()
         showInboxTab()
-        toast("Email verified! Replit account ready \u2713")
+        toast("Email đã xác nhận! Tài khoản Replit sẵn sàng \u2713")
         binding.mainWebView.webViewClient = buildMainClient()
         binding.mainWebView.loadUrl("https://replit.com")
     }
 
-    // ─── Auto-register Replit ─────────────────────────────────────────────────
+    // ─── Auto-register ────────────────────────────────────────────────────────
 
     private fun detectAndAutoRegister(webView: WebView) {
         val js = listOf(
@@ -417,7 +406,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
         autoRegInProgress = true
-        showAutoOverlay("Opening signup page\u2026")
+        showAutoOverlay("Đang mở trang đăng ký\u2026")
 
         val email    = mailEmail
         val username = "user" + (10000..99999).random()
@@ -430,21 +419,21 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(v: WebView, url: String) {
                 when {
                     url.contains("/signup") -> {
-                        updateAutoStatus("Filling signup form\u2026")
-                        v.postDelayed({ injectSignupForm(v, email, username, password, fullName) }, 2500)
+                        updateAutoStatus("Đang chọn đăng ký bằng email\u2026")
+                        v.postDelayed({ expandEmailForm(v, email, username, password, fullName) }, 2000)
                     }
-                    url.contains("/onboarding") -> {
-                        updateAutoStatus("Filling profile info\u2026")
-                        v.postDelayed({ injectOnboardingForm(v, fullName) }, 1500)
+                    url.contains("/onboarding") || url.contains("/plans") -> {
+                        updateAutoStatus("Đang điền thông tin tài khoản\u2026")
+                        v.postDelayed({ injectOnboardingStep(v, fullName) }, 1500)
                     }
                     url.contains("replit.com") && !url.contains("signup") &&
-                    !url.contains("onboarding") &&
+                    !url.contains("onboarding") && !url.contains("plans") &&
                     url != "https://replit.com/" && url != "https://replit.com" -> {
-                        updateAutoStatus("Signup done, waiting for verify email\u2026")
+                        updateAutoStatus("Đăng ký xong, chờ email xác nhận\u2026")
                         waitForVerifyEmail()
                     }
                     (url == "https://replit.com/" || url == "https://replit.com") && autoRegInProgress -> {
-                        updateAutoStatus("Waiting for verification email\u2026")
+                        updateAutoStatus("Đang chờ email xác nhận\u2026")
                         waitForVerifyEmail()
                     }
                 }
@@ -453,8 +442,53 @@ class MainActivity : AppCompatActivity() {
         binding.mainWebView.loadUrl("https://replit.com/signup")
     }
 
-    // ─── Form injection helpers ───────────────────────────────────────────────
+    // ─── Form injection ───────────────────────────────────────────────────────
 
+    /**
+     * Bước 1: Tìm nút "Tiếp tục bằng email" và bấm để hiện form.
+     * Nếu form email đã hiện → điền ngay.
+     */
+    private fun expandEmailForm(
+        webView: WebView,
+        email: String, username: String, password: String, fullName: String
+    ) {
+        val js = listOf(
+            "(function(){",
+            "  var inputs = document.querySelectorAll('input[type=\"email\"],input[name=\"email\"]');",
+            "  if (inputs.length > 0) return 'visible';",
+            "  var els = document.querySelectorAll('button,a,[role=\"button\"]');",
+            "  for (var i = 0; i < els.length; i++) {",
+            "    var t = (els[i].textContent || els[i].innerText || '').toLowerCase().trim();",
+            "    if (t.indexOf('email') >= 0 || t === 'continue') {",
+            "      els[i].click(); return 'clicked:' + t.substring(0,30);",
+            "    }",
+            "  }",
+            "  return 'not-found';",
+            "})()"
+        ).joinToString("\n")
+
+        webView.evaluateJavascript(js) { result ->
+            val r = result?.trim('"') ?: ""
+            when {
+                r == "visible" -> {
+                    updateAutoStatus("Đang điền form đăng ký\u2026")
+                    webView.postDelayed({ injectSignupForm(webView, email, username, password, fullName) }, 500)
+                }
+                r.startsWith("clicked:") -> {
+                    updateAutoStatus("Đang mở form email\u2026")
+                    webView.postDelayed({ injectSignupForm(webView, email, username, password, fullName) }, 2000)
+                }
+                else -> {
+                    updateAutoStatus("Đang chờ trang tải\u2026")
+                    webView.postDelayed({ expandEmailForm(webView, email, username, password, fullName) }, 2000)
+                }
+            }
+        }
+    }
+
+    /**
+     * Bước 2: Điền form email / username / password và bấm Đăng ký.
+     */
     private fun injectSignupForm(
         webView: WebView,
         email: String, username: String, password: String,
@@ -473,13 +507,13 @@ class MainActivity : AppCompatActivity() {
             "    } catch(e) { el.value = val; }",
             "  }",
             "  var filled = 0;",
-            "  document.querySelectorAll('input[type=\"email\"],input[name=\"email\"]').forEach(function(el){ setVal(el, '${email}'); filled++; });",
-            "  document.querySelectorAll('input[name=\"username\"]').forEach(function(el){ setVal(el, '${username}'); filled++; });",
-            "  document.querySelectorAll('input[type=\"password\"]').forEach(function(el){ setVal(el, '${password}'); filled++; });",
-            "  document.querySelectorAll('input[name=\"first_name\"],input[placeholder*=\"first\" i]').forEach(function(el){ setVal(el, '${firstName}'); filled++; });",
-            "  document.querySelectorAll('input[name=\"last_name\"],input[placeholder*=\"last\" i]').forEach(function(el){ setVal(el, '${lastName}'); filled++; });",
-            "  document.querySelectorAll('input[name=\"full_name\"],input[placeholder*=\"name\" i]').forEach(function(el){ setVal(el, '${fullName}'); filled++; });",
-            "  if (filled === 0) { return 'no-fields'; }",
+            "  document.querySelectorAll('input[type=\"email\"],input[name=\"email\"]').forEach(function(el){ setVal(el,'${email}'); filled++; });",
+            "  document.querySelectorAll('input[name=\"username\"]').forEach(function(el){ setVal(el,'${username}'); filled++; });",
+            "  document.querySelectorAll('input[type=\"password\"]').forEach(function(el){ setVal(el,'${password}'); filled++; });",
+            "  document.querySelectorAll('input[name=\"first_name\"],input[placeholder*=\"first\" i]').forEach(function(el){ setVal(el,'${firstName}'); filled++; });",
+            "  document.querySelectorAll('input[name=\"last_name\"],input[placeholder*=\"last\" i]').forEach(function(el){ setVal(el,'${lastName}'); filled++; });",
+            "  document.querySelectorAll('input[name=\"full_name\"],input[placeholder*=\"name\" i]').forEach(function(el){ setVal(el,'${fullName}'); filled++; });",
+            "  if (filled === 0) return 'no-fields';",
             "  setTimeout(function(){",
             "    var btns = document.querySelectorAll('button[type=\"submit\"],button');",
             "    for (var i = 0; i < btns.length; i++) {",
@@ -493,64 +527,90 @@ class MainActivity : AppCompatActivity() {
 
         webView.evaluateJavascript(js) { result ->
             if (result?.contains("no-fields") == true) {
-                updateAutoStatus("Form not ready, retrying\u2026")
-                webView.postDelayed({ injectSignupForm(webView, email, username, password, fullName) }, 2000)
+                updateAutoStatus("Form chưa sẵn sàng, thử lại\u2026")
+                webView.postDelayed({ expandEmailForm(webView, email, username, password, fullName) }, 2000)
             } else {
-                updateAutoStatus("Submitted, waiting for verify email\u2026")
+                updateAutoStatus("Đã gửi, chờ email xác nhận\u2026")
                 waitForVerifyEmail()
             }
         }
     }
 
-    private fun injectOnboardingForm(webView: WebView, fullName: String) {
+    /**
+     * Xử lý toàn bộ luồng Onboarding của Replit:
+     * - Bấm Next trên trang "Let's set up your account"
+     * - Chọn ngẫu nhiên các tùy chọn trong câu hỏi
+     * - Điền tên / bio nếu có
+     * - Chọn "Free / Continue with Starter" khi chọn gói
+     */
+    private fun injectOnboardingStep(webView: WebView, fullName: String) {
         val firstName = fullName.substringBefore(" ").ifEmpty { "User" }
         val lastName  = fullName.substringAfter(" ", "").ifEmpty { "Dev" }
         val js = listOf(
             "(function(){",
-            "  function setVal(el, val) {",
-            "    try {",
-            "      var s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;",
-            "      s.call(el, val); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));",
-            "    } catch(e) { el.value = val; }",
+            "  function setVal(el,val){",
+            "    try{ var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;",
+            "    s.call(el,val); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){el.value=val;}",
             "  }",
-            "  function setArea(el, val) {",
-            "    try {",
-            "      var s = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;",
-            "      s.call(el, val); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));",
-            "    } catch(e) { el.value = val; }",
+            "  function setArea(el,val){",
+            "    try{ var s=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value').set;",
+            "    s.call(el,val); el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); }catch(e){el.value=val;}",
             "  }",
-            // Full name
+            // 1) Chọn gói miễn phí trước (ưu tiên cao nhất)
+            "  var planClicked = false;",
+            "  document.querySelectorAll('button,a,[role=\"button\"]').forEach(function(el){",
+            "    if(planClicked) return;",
+            "    var t=(el.textContent||'').toLowerCase();",
+            "    if(t.indexOf('starter')>=0||t.indexOf('free')>=0||t.indexOf('continue with free')>=0){",
+            "      el.click(); planClicked=true;",
+            "    }",
+            "  });",
+            "  if(planClicked) return 'plan-selected';",
+            // 2) Điền tên nếu có input
             "  document.querySelectorAll('input[name=\"full_name\"],input[name=\"fullName\"],input[name=\"name\"]').forEach(function(el){ setVal(el,'${fullName}'); });",
-            // First / last
             "  document.querySelectorAll('input[name=\"first_name\"],input[name=\"firstName\"],input[placeholder*=\"first\" i]').forEach(function(el){ setVal(el,'${firstName}'); });",
             "  document.querySelectorAll('input[name=\"last_name\"],input[name=\"lastName\"],input[placeholder*=\"last\" i]').forEach(function(el){ setVal(el,'${lastName}'); });",
-            // Bio / about / intro
-            "  document.querySelectorAll('textarea').forEach(function(el){ if(!el.value) setArea(el,'Learning to code and build cool things.'); });",
-            // Role/interest: click first radio or select "Developer"
-            "  var radios = document.querySelectorAll('input[type=\"radio\"]');",
-            "  var clicked = false;",
-            "  for(var i=0;i<radios.length;i++){",
-            "    var lbl = (radios[i].nextSibling && radios[i].nextSibling.textContent||'').toLowerCase();",
-            "    if(lbl.indexOf('develop')>=0||lbl.indexOf('software')>=0){ radios[i].click(); clicked=true; break; }",
+            "  document.querySelectorAll('textarea').forEach(function(el){ if(!el.value) setArea(el,'Thích lập trình và xây dựng những thứ hay ho.'); });",
+            // 3) Chọn ngẫu nhiên các tùy chọn (role cards, checkboxes, radio)
+            "  var opts = Array.from(document.querySelectorAll('[data-testid*=\"option\"],[data-cy*=\"option\"],[class*=\"SelectableCard\"],[class*=\"selectable\"],[class*=\"choice\"],[role=\"checkbox\"],[role=\"radio\"]'));",
+            "  if(opts.length > 0){",
+            "    var pick = Math.min(opts.length, Math.floor(Math.random()*2)+1);",
+            "    var chosen = [];",
+            "    while(chosen.length < pick){ var idx=Math.floor(Math.random()*opts.length); if(!chosen.includes(idx)) chosen.push(idx); }",
+            "    chosen.forEach(function(i){ opts[i].click(); });",
             "  }",
-            "  if(!clicked && radios.length>0) radios[0].click();",
-            // Click role card / option divs
-            "  var cards = document.querySelectorAll('[data-cy*=\"role\"],[class*=\"role\"],[class*=\"option\"],[class*=\"card\"]');",
-            "  if(cards.length>0) cards[0].click();",
-            // Click continue / next / finish
+            "  var radios = document.querySelectorAll('input[type=\"radio\"]');",
+            "  if(radios.length>0) radios[Math.floor(Math.random()*radios.length)].click();",
+            // 4) Bấm Next / Continue
+            "  var clicked = false;",
             "  setTimeout(function(){",
             "    var btns = document.querySelectorAll('button[type=\"submit\"],button');",
             "    for(var i=0;i<btns.length;i++){",
-            "      var t = (btns[i].textContent||'').toLowerCase();",
-            "      if(t.indexOf('continue')>=0||t.indexOf('next')>=0||t.indexOf('finish')>=0||t.indexOf('done')>=0||t.indexOf('start')>=0||t.indexOf('create')>=0){",
-            "        btns[i].click(); break;",
+            "      var t=(btns[i].textContent||'').toLowerCase();",
+            "      if(t.indexOf('next')>=0||t.indexOf('continue')>=0||t.indexOf('get started')>=0||t.indexOf('finish')>=0||t.indexOf('done')>=0||t.indexOf('start')>=0){",
+            "        btns[i].click(); clicked=true; break;",
             "      }",
             "    }",
-            "  }, 600);",
-            "  return 'onboarding-done';",
+            "  }, 500);",
+            "  return clicked ? 'next-clicked' : 'filled';",
             "})()"
         ).joinToString("\n")
-        webView.evaluateJavascript(js) { _ -> }
+
+        webView.evaluateJavascript(js) { result ->
+            val r = result?.trim('"') ?: ""
+            if (r == "plan-selected") {
+                updateAutoStatus("Đã chọn gói miễn phí \u2713")
+            }
+            // Sau 4 giây thử lại nếu vẫn còn ở trang onboarding (có thể có nhiều bước)
+            webView.postDelayed({
+                webView.evaluateJavascript("window.location.pathname") { path ->
+                    val p = path?.trim('"') ?: ""
+                    if (p.contains("onboarding") || p.contains("plans")) {
+                        injectOnboardingStep(webView, fullName)
+                    }
+                }
+            }, 4000)
+        }
     }
 
     // ─── Wait for verify email ────────────────────────────────────────────────
@@ -571,7 +631,7 @@ class MainActivity : AppCompatActivity() {
                 autoRegInProgress = false
                 withContext(Dispatchers.Main) {
                     hideAutoOverlay()
-                    toast("Timeout - please verify manually in Mail panel")
+                    toast("Hết thời gian - vui lòng xác nhận thủ công trong panel Mail")
                     binding.mainWebView.webViewClient = buildMainClient()
                 }
             }
@@ -582,26 +642,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun startInviteFlow() {
         if (inviteInProgress) {
-            toast("Invite already in progress\u2026")
+            toast("Đang có lời mời đang xử lý\u2026")
             return
         }
         if (mailToken.isEmpty()) {
-            toast("Set up Mail.tm first (tap Auto)")
+            toast("Hãy thiết lập Mail.tm trước (nhấn Tự động)")
             return
         }
         inviteInProgress = true
-        updateInviteStatus("Creating invite email\u2026")
+        updateInviteStatus("Đang tạo email mời\u2026")
 
         lifecycleScope.launch {
             val domains = getMailDomains()
             if (domains.isEmpty()) {
-                withContext(Dispatchers.Main) {
-                    updateInviteStatus("Mail.tm unavailable")
-                    inviteInProgress = false
-                }
+                withContext(Dispatchers.Main) { updateInviteStatus("Mail.tm không khả dụng"); inviteInProgress = false }
                 return@launch
             }
-            // Prefer a different domain if possible
             val domain = if (domains.size > 1) domains[1] else domains[0]
             val user   = "inv" + (1000..9999).random()
             val email  = "$user@$domain"
@@ -609,12 +665,12 @@ class MainActivity : AppCompatActivity() {
             val name   = randomFullName()
 
             if (!mailCreate(email, pass)) {
-                withContext(Dispatchers.Main) { updateInviteStatus("Create failed"); inviteInProgress = false }
+                withContext(Dispatchers.Main) { updateInviteStatus("Tạo tài khoản thất bại"); inviteInProgress = false }
                 return@launch
             }
             val tok = mailLogin(email, pass)
             if (tok.isEmpty()) {
-                withContext(Dispatchers.Main) { updateInviteStatus("Login failed"); inviteInProgress = false }
+                withContext(Dispatchers.Main) { updateInviteStatus("Đăng nhập thất bại"); inviteInProgress = false }
                 return@launch
             }
 
@@ -629,8 +685,7 @@ class MainActivity : AppCompatActivity() {
                 .apply()
 
             withContext(Dispatchers.Main) {
-                updateInviteStatus("Sending invite to $email\u2026")
-                // Navigate main WebView to refer page and fill the invite email
+                updateInviteStatus("Đang gửi lời mời đến $email\u2026")
                 binding.mainWebView.webViewClient = buildInviteWebViewClient(email)
                 binding.mainWebView.loadUrl("https://replit.com/refer")
             }
@@ -647,9 +702,8 @@ class MainActivity : AppCompatActivity() {
                     v.postDelayed({ injectInviteEmailField(v, inviteEmail) }, 2000)
                 }
                 url.contains("replit.com") && !url.contains("refer") && !url.contains("invite") -> {
-                    // Invite sent or redirect; restore main client and poll invite inbox
                     binding.mainWebView.webViewClient = buildMainClient()
-                    updateInviteStatus("Watching invite inbox\u2026")
+                    updateInviteStatus("Đang theo dõi hộp thư lời mời\u2026")
                     startInviteMailPolling()
                 }
             }
@@ -681,7 +735,7 @@ class MainActivity : AppCompatActivity() {
             if (result?.contains("no-input") == true) {
                 webView.postDelayed({ injectInviteEmailField(webView, email) }, 2000)
             } else {
-                updateInviteStatus("Invite sent, watching inbox\u2026")
+                updateInviteStatus("Đã gửi lời mời, đang theo dõi hộp thư\u2026")
                 startInviteMailPolling()
             }
         }
@@ -698,7 +752,7 @@ class MainActivity : AppCompatActivity() {
             if (inviteInProgress) {
                 inviteInProgress = false
                 withContext(Dispatchers.Main) {
-                    updateInviteStatus("Timeout - check manually")
+                    updateInviteStatus("Hết thời gian - kiểm tra thủ công")
                     binding.mainWebView.webViewClient = buildMainClient()
                 }
             }
@@ -712,7 +766,7 @@ class MainActivity : AppCompatActivity() {
                 .url("$MAILTM/messages?page=1")
                 .addHeader("Authorization", "Bearer $inviteMailToken")
                 .build()
-            val resp    = withContext(Dispatchers.IO) { http.newCall(req).execute() }
+            val resp = withContext(Dispatchers.IO) { http.newCall(req).execute() }
             if (!resp.isSuccessful) {
                 val e = prefs.getString(KEY_INVITE_EMAIL, "") ?: ""
                 val p = prefs.getString(KEY_INVITE_PASS,  "") ?: ""
@@ -725,8 +779,7 @@ class MainActivity : AppCompatActivity() {
                 val id  = msg.getString("id")
                 if (!inviteSeenIds.contains(id)) {
                     inviteSeenIds.add(id)
-                    val subject = msg.optString("subject", "")
-                    val sl = subject.lowercase()
+                    val sl = msg.optString("subject", "").lowercase()
                     if (sl.contains("invite") || sl.contains("replit") || sl.contains("join")) {
                         fetchAndHandleInviteEmail(id)
                     }
@@ -746,12 +799,12 @@ class MainActivity : AppCompatActivity() {
             val finalUrl = findReplitLink(combined, listOf("invite", "join", "signup", "refer")) ?: return
             withContext(Dispatchers.Main) {
                 invitePollJob?.cancel()
-                updateInviteStatus("Invite received! Completing signup\u2026")
+                updateInviteStatus("Đã nhận lời mời! Đang hoàn thành đăng ký\u2026")
                 binding.verifyWebView.loadUrl(finalUrl)
                 showVerifyTab()
                 if (binding.mailPanel.visibility == View.GONE)
                     binding.mailPanel.visibility = View.VISIBLE
-                toast("Invite link found \u2013 auto-signing up\u2026")
+                toast("Tìm thấy link mời \u2013 đang tự đăng ký\u2026")
             }
         } catch (_: Exception) {}
     }
@@ -760,19 +813,17 @@ class MainActivity : AppCompatActivity() {
         inviteInProgress = false
         invitePollJob?.cancel()
         val invEmail = prefs.getString(KEY_INVITE_EMAIL, "") ?: ""
-        updateInviteStatus("\u2713 $invEmail registered")
-        toast("Invite account registered! \u2713")
+        updateInviteStatus("\u2713 $invEmail đã đăng ký")
+        toast("Tài khoản mời đã đăng ký! \u2713")
         showInboxTab()
     }
 
-    // ─── Link extraction helpers ──────────────────────────────────────────────
+    // ─── Link helpers ─────────────────────────────────────────────────────────
 
     private fun extractCombined(bodyText: String): String {
         return try {
             val json = JSONObject(bodyText)
-            val html = json.optString("html", "")
-            val text = json.optString("text", "")
-            "$html $text"
+            "${json.optString("html", "")} ${json.optString("text", "")}"
         } catch (e: Exception) { bodyText }
     }
 
