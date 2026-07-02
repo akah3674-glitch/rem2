@@ -162,15 +162,17 @@ class MainActivity : AppCompatActivity() {
         binding.fabMail.setOnClickListener {
             if (binding.mailPanel.visibility == View.GONE) {
                 binding.mailPanel.visibility = View.VISIBLE
-                if (mailToken.isNotEmpty()) startPolling()
+                // Chỉ bắt đầu polling nếu KHÔNG đang auto-register
+                if (mailToken.isNotEmpty() && !autoRegInProgress) startPolling()
             } else {
                 binding.mailPanel.visibility = View.GONE
-                stopPolling()
+                // Không stopPolling nếu đang auto-register — vẫn cần nhận email verify
+                if (!autoRegInProgress) stopPolling()
             }
         }
         binding.btnClose.setOnClickListener {
             binding.mailPanel.visibility = View.GONE
-            stopPolling()
+            if (!autoRegInProgress) stopPolling()
         }
         binding.btnRefresh.setOnClickListener {
             lifecycleScope.launch { fetchMail(forceAll = true) }
@@ -532,12 +534,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 when {
                     url.contains("/signup") -> {
-                        updateAutoStatus("Đang chọn đăng ký bằng email\u2026")
-                        v.postDelayed({ expandEmailForm(v, email, username, password, fullName) }, 2500)
+                        val d = (2500L..5000L).random()
+                        updateAutoStatus("Chờ trang sẵn sàng (${d/1000}s)\u2026")
+                        v.postDelayed({ expandEmailForm(v, email, username, password, fullName) }, d)
                     }
                     url.contains("/onboarding") || url.contains("/plans") -> {
+                        val d = (1500L..3000L).random()
                         updateAutoStatus("Đang điền thông tin tài khoản\u2026")
-                        v.postDelayed({ injectOnboardingStep(v, fullName) }, 1500)
+                        v.postDelayed({ injectOnboardingStep(v, fullName) }, d)
                     }
                     url.contains("replit.com") && !url.contains("signup") &&
                     !url.contains("onboarding") && !url.contains("plans") &&
@@ -595,16 +599,19 @@ class MainActivity : AppCompatActivity() {
             val r = result?.trim('"') ?: ""
             when {
                 r == "visible" -> {
-                    updateAutoStatus("Đang điền form đăng ký\u2026")
-                    webView.postDelayed({ injectSignupForm(webView, email, username, password, fullName) }, 500)
+                    val d = (800L..2000L).random()
+                    updateAutoStatus("Điền form đăng ký (${d}ms)\u2026")
+                    webView.postDelayed({ injectSignupForm(webView, email, username, password, fullName) }, d)
                 }
                 r.startsWith("clicked:") -> {
-                    updateAutoStatus("Đang mở form email\u2026")
-                    webView.postDelayed({ injectSignupForm(webView, email, username, password, fullName) }, 2000)
+                    val d = (2000L..4000L).random()
+                    updateAutoStatus("Mở form email, chờ ${d/1000}s\u2026")
+                    webView.postDelayed({ injectSignupForm(webView, email, username, password, fullName) }, d)
                 }
                 else -> {
-                    updateAutoStatus("Đang chờ trang tải\u2026")
-                    webView.postDelayed({ expandEmailForm(webView, email, username, password, fullName) }, 2000)
+                    val d = (2000L..3500L).random()
+                    updateAutoStatus("Trang chưa sẵn sàng, thử lại sau ${d/1000}s\u2026")
+                    webView.postDelayed({ expandEmailForm(webView, email, username, password, fullName) }, d)
                 }
             }
         }
@@ -630,6 +637,13 @@ class MainActivity : AppCompatActivity() {
             "      el.dispatchEvent(new Event('change', {bubbles: true}));",
             "    } catch(e) { el.value = val; }",
             "  }",
+            // ── ẩn nút OAuth ngay khi vào form ──
+            "  var OAUTH = ['google','github','facebook','apple','microsoft','twitter',' x ','with x','continue with google','continue with github'];",
+            "  document.querySelectorAll('button,a,[role=\"button\"]').forEach(function(el){",
+            "    var t = ' '+(el.textContent||el.innerText||'').toLowerCase()+' ';",
+            "    if (OAUTH.some(function(k){ return t.indexOf(k)>=0; })){ el.style.display='none'; el.style.pointerEvents='none'; }",
+            "  });",
+            // ── điền form ──
             "  var filled = 0;",
             "  document.querySelectorAll('input[type=\"email\"],input[name=\"email\"]').forEach(function(el){ setVal(el,'${email}'); filled++; });",
             "  document.querySelectorAll('input[name=\"username\"]').forEach(function(el){ setVal(el,'${username}'); filled++; });",
@@ -638,14 +652,24 @@ class MainActivity : AppCompatActivity() {
             "  document.querySelectorAll('input[name=\"last_name\"],input[placeholder*=\"last\" i]').forEach(function(el){ setVal(el,'${lastName}'); filled++; });",
             "  document.querySelectorAll('input[name=\"full_name\"],input[placeholder*=\"name\" i]').forEach(function(el){ setVal(el,'${fullName}'); filled++; });",
             "  if (filled === 0) return 'no-fields';",
+            // ── click submit với delay ngẫu nhiên (tránh bot detection) ──
+            "  var submitDelay = 900 + Math.floor(Math.random()*1200);",
             "  setTimeout(function(){",
-            "    var btns = document.querySelectorAll('button[type=\"submit\"],button');",
-            "    for (var i = 0; i < btns.length; i++) {",
-            "      var t = (btns[i].textContent || '').toLowerCase();",
-            "      var noOAuth = t.indexOf('google')<0 && t.indexOf('github')<0 && t.indexOf('facebook')<0 && t.indexOf('apple')<0;",
-            "      if (noOAuth && (t.indexOf('sign')>=0||t.indexOf('create')>=0||t.indexOf('register')>=0||(t.indexOf('continue')>=0&&t.length<25))) { btns[i].click(); break; }",
+            "    function isVisible(el){ return el.offsetParent!==null && el.style.display!=='none' && el.style.visibility!=='hidden'; }",
+            "    function isOAuthBtn(t){ return OAUTH.some(function(k){ return (' '+t+' ').indexOf(k)>=0; }); }",
+            // Ưu tiên button[type=submit] visible
+            "    var btns = Array.from(document.querySelectorAll('button[type=\"submit\"]')).filter(isVisible);",
+            "    if (btns.length === 0) btns = Array.from(document.querySelectorAll('button')).filter(isVisible);",
+            "    for (var i=0; i<btns.length; i++){",
+            "      var t = (btns[i].textContent||'').toLowerCase().trim();",
+            "      if (isOAuthBtn(t)) continue;",
+            // 'continue' OK chỉ khi KHÔNG có 'with' — loại 'Continue with X/Google'
+            "      var ok = t.indexOf('sign')>=0 || t.indexOf('create')>=0 || t.indexOf('register')>=0",
+            "             || (t.indexOf('continue')>=0 && t.indexOf('with')<0 && t.length<20)",
+            "             || t.indexOf('next')>=0 || t.indexOf('submit')>=0;",
+            "      if (ok){ btns[i].click(); break; }",
             "    }",
-            "  }, 800);",
+            "  }, submitDelay);",
             "  return 'ok:' + filled;",
             "})()"
         ).joinToString("\n")
@@ -706,16 +730,21 @@ class MainActivity : AppCompatActivity() {
             "  }",
             "  var radios = document.querySelectorAll('input[type=\"radio\"]');",
             "  if(radios.length>0) radios[Math.floor(Math.random()*radios.length)].click();",
-            // 4) Bấm Next / Continue
+            // 4) Bấm Next / Continue — lọc ketat OAuth
+            "  var OB=['google','github','facebook','apple','microsoft','twitter',' x ','with x'];",
+            "  function noOb(t){ return !OB.some(function(k){ return (' '+t+' ').indexOf(k)>=0; }); }",
+            "  function vis(el){ return el.offsetParent!==null&&el.style.display!=='none'&&el.style.visibility!=='hidden'; }",
             "  var clicked = false;",
             "  setTimeout(function(){",
-            "    var btns = document.querySelectorAll('button[type=\"submit\"],button');",
+            "    var btns=Array.from(document.querySelectorAll('button[type=\"submit\"],button')).filter(vis);",
             "    for(var i=0;i<btns.length;i++){",
-            "      var t=(btns[i].textContent||'').toLowerCase();",
-            "      var noOAuth=t.indexOf('google')<0&&t.indexOf('github')<0&&t.indexOf('facebook')<0&&t.indexOf('apple')<0;",
-            "      if(noOAuth&&(t.indexOf('next')>=0||t.indexOf('get started')>=0||t.indexOf('finish')>=0||t.indexOf('done')>=0||(t.indexOf('continue')>=0&&t.length<25)||(t.indexOf('start')>=0&&t.indexOf('starter')<0))){",
-            "        btns[i].click(); clicked=true; break;",
-            "      }",
+            "      var t=(btns[i].textContent||'').toLowerCase().trim();",
+            "      if(!noOb(t)) continue;",
+            // 'continue' OK chỉ nếu KHÔNG có 'with' (loại 'Continue with X/Google')
+            "      var ok=t.indexOf('next')>=0||t.indexOf('get started')>=0||t.indexOf('finish')>=0||t.indexOf('done')>=0",
+            "            ||(t.indexOf('continue')>=0&&t.indexOf('with')<0&&t.length<18)",
+            "            ||(t.indexOf('start')>=0&&t.indexOf('starter')<0);",
+            "      if(ok){ btns[i].click(); clicked=true; break; }",
             "    }",
             "  }, 500);",
             "  return clicked ? 'next-clicked' : 'filled';",
