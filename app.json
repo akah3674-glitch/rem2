@@ -1,17 +1,18 @@
 {
-    "expo": {
-      "name": "Rem2 Browser",
-      "slug": "rem2",
-      "version": "1.0.0",
-      "orientation": "portrait",
-      "userInterfaceStyle": "dark",
-      "android": {
-        "package": "com.rem2.browser",
-        "permissions": ["INTERNET"],
-        "adaptiveIcon": {
-          "backgroundColor": "#0e1117"
-        }
-      },
-      "plugins": ["react-native-webview"]
-    }
+  "expo": {
+    "name": "Rem2 Browser",
+    "slug": "rem2",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "com.rem2.browser",
+      "permissions": [
+        "INTERNET"
+      ]
+    },
+    "plugins": [
+      "react-native-webview"
+    ]
   }
+}
