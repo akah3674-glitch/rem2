@@ -49,6 +49,49 @@ class MainActivity : AppCompatActivity() {
             "White", "Harris", "Martin", "Garcia", "Martinez", "Robinson", "Clark"
         )
         fun randomFullName() = "${FIRST_NAMES.random()} ${LAST_NAMES.random()}"
+
+        // ── Device profiles (thiết bị thật, UA từ GSMArena / UA-Parser DB) ──
+        data class DeviceProfile(
+            val name: String,
+            val ua: String,
+            val screenW: Int, val screenH: Int,
+            val deviceMemory: Int,      // GB
+            val hardwareConcurrency: Int,
+            val timezone: String
+        )
+
+        val DEVICE_PROFILES = listOf(
+            DeviceProfile("Samsung S23",
+                "Mozilla/5.0 (Linux; Android 13; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36",
+                393, 851, 8, 8, "Asia/Ho_Chi_Minh"),
+            DeviceProfile("Samsung A54",
+                "Mozilla/5.0 (Linux; Android 13; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.193 Mobile Safari/537.36",
+                360, 780, 6, 8, "Asia/Ho_Chi_Minh"),
+            DeviceProfile("Xiaomi 13",
+                "Mozilla/5.0 (Linux; Android 13; 2211133C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Mobile Safari/537.36",
+                393, 851, 12, 8, "Asia/Bangkok"),
+            DeviceProfile("Redmi Note 12",
+                "Mozilla/5.0 (Linux; Android 13; 23021RAAEG) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.111 Mobile Safari/537.36",
+                393, 873, 6, 8, "Asia/Jakarta"),
+            DeviceProfile("OPPO Reno10",
+                "Mozilla/5.0 (Linux; Android 13; CPH2531) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.163 Mobile Safari/537.36",
+                412, 915, 8, 8, "Asia/Singapore"),
+            DeviceProfile("Vivo Y36",
+                "Mozilla/5.0 (Linux; Android 13; V2247) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.140 Mobile Safari/537.36",
+                393, 873, 8, 8, "Asia/Ho_Chi_Minh"),
+            DeviceProfile("Pixel 7",
+                "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36",
+                412, 915, 8, 8, "America/New_York"),
+            DeviceProfile("OnePlus 11",
+                "Mozilla/5.0 (Linux; Android 13; CPH2449) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36",
+                412, 919, 16, 8, "Europe/London"),
+            DeviceProfile("Samsung A34",
+                "Mozilla/5.0 (Linux; Android 13; SM-A346E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.80 Mobile Safari/537.36",
+                360, 800, 6, 8, "Asia/Tokyo"),
+            DeviceProfile("Realme C55",
+                "Mozilla/5.0 (Linux; Android 13; RMX3710) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.5845.163 Mobile Safari/537.36",
+                393, 851, 8, 8, "Asia/Kuala_Lumpur")
+        )
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -71,6 +114,9 @@ class MainActivity : AppCompatActivity() {
 
     private var verifyPollJob: Job? = null
 
+    // Profile giả lập thiết bị — đổi mới mỗi chu kỳ đăng ký
+    private var currentDevice: DeviceProfile = DEVICE_PROFILES.random()
+
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -92,8 +138,7 @@ class MainActivity : AppCompatActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mixedContentMode  = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            settings.userAgentString   =
-                "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"
+            settings.userAgentString   = currentDevice.ua
             addJavascriptInterface(WebBridge(), "REM2")
             webViewClient = buildMainClient()
             loadUrl("https://replit.com")
@@ -102,6 +147,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildMainClient() = object : WebViewClient() {
         override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
+        override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
+            v.evaluateJavascript(buildAntiDetectJs(currentDevice), null)
+        }
         override fun onPageFinished(v: WebView, url: String) {
             when {
                 // Trang signup: inject watcher — khi user click email form, tự điền
@@ -128,14 +176,16 @@ class MainActivity : AppCompatActivity() {
         binding.verifyWebView.apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.userAgentString   =
-                "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36"
+            settings.userAgentString   = currentDevice.ua
             webViewClient = buildVerifyClient()
         }
     }
 
     private fun buildVerifyClient() = object : WebViewClient() {
         override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
+        override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
+            v.evaluateJavascript(buildAntiDetectJs(currentDevice), null)
+        }
         override fun onPageFinished(v: WebView, url: String) {
             when {
                 url.contains("/onboarding") || url.contains("/plans") -> {
@@ -232,6 +282,137 @@ class MainActivity : AppCompatActivity() {
         toast("Đang tạo email mới\u2026")
 
         lifecycleScope.launch { ensureMailAccount(force = true) }
+    }
+
+    // ─── Anti-detection JS ───────────────────────────────────────────────────
+
+    /**
+     * Inject trước khi trang load (onPageStarted).
+     * Giả lập navigator, screen, canvas, WebGL của thiết bị thật.
+     */
+    private fun buildAntiDetectJs(d: DeviceProfile): String {
+        val noise = (1..8).random()          // canvas noise seed per session
+        val chVer = d.ua.substringAfter("Chrome/").substringBefore(" ").substringBefore(".")
+        return """
+(function(){
+  /* 1 ── Xóa navigator.webdriver hoàn toàn */
+  try {
+    Object.defineProperty(navigator,'webdriver',{get:()=>undefined,configurable:true});
+  } catch(e){}
+
+  /* 2 ── Platform nhất quán với UA */
+  try {
+    Object.defineProperty(navigator,'platform',{get:()=>'Linux armv8l',configurable:true});
+  } catch(e){}
+
+  /* 3 ── userAgent (backup) */
+  try {
+    Object.defineProperty(navigator,'userAgent',{get:()=>'${d.ua}',configurable:true});
+  } catch(e){}
+
+  /* 4 ── Ngôn ngữ nhất quán với timezone */
+  var lang = '${if (d.timezone.startsWith("Asia/Ho_Chi_Minh")) "vi-VN" 
+               else if (d.timezone.startsWith("Asia")) "en-US" 
+               else "en-US"}';
+  try {
+    Object.defineProperty(navigator,'language',{get:()=>lang,configurable:true});
+    Object.defineProperty(navigator,'languages',{get:()=>[lang,'en-US','en'],configurable:true});
+  } catch(e){}
+
+  /* 5 ── deviceMemory và hardwareConcurrency */
+  try {
+    Object.defineProperty(navigator,'deviceMemory',{get:()=>${d.deviceMemory},configurable:true});
+  } catch(e){}
+  try {
+    Object.defineProperty(navigator,'hardwareConcurrency',{get:()=>${d.hardwareConcurrency},configurable:true});
+  } catch(e){}
+
+  /* 6 ── Plugins: giả lập danh sách plugin Chrome Android */
+  try {
+    var fakePlugins = [
+      {name:'Chrome PDF Plugin',filename:'internal-pdf-viewer',description:'Portable Document Format'},
+      {name:'Chrome PDF Viewer',filename:'mhjfbmdgcfjbbpaeojofohoefgiehjai',description:''},
+      {name:'Native Client',filename:'internal-nacl-plugin',description:''}
+    ];
+    Object.defineProperty(navigator,'plugins',{
+      get:()=>Object.assign(fakePlugins,{item:function(i){return fakePlugins[i];},
+        namedItem:function(n){return fakePlugins.find(function(p){return p.name===n;})||null;},
+        length:fakePlugins.length}),
+      configurable:true
+    });
+    Object.defineProperty(navigator,'mimeTypes',{
+      get:()=>({length:2,item:function(){return null;}}),configurable:true
+    });
+  } catch(e){}
+
+  /* 7 ── Screen resolution */
+  try {
+    Object.defineProperty(screen,'width',{get:()=>${d.screenW},configurable:true});
+    Object.defineProperty(screen,'height',{get:()=>${d.screenH},configurable:true});
+    Object.defineProperty(screen,'availWidth',{get:()=>${d.screenW},configurable:true});
+    Object.defineProperty(screen,'availHeight',{get:()=>${d.screenH - 48},configurable:true});
+    Object.defineProperty(screen,'colorDepth',{get:()=>24,configurable:true});
+    Object.defineProperty(screen,'pixelDepth',{get:()=>24,configurable:true});
+  } catch(e){}
+  try {
+    Object.defineProperty(window,'outerWidth',{get:()=>${d.screenW},configurable:true});
+    Object.defineProperty(window,'outerHeight',{get:()=>${d.screenH},configurable:true});
+  } catch(e){}
+
+  /* 8 ── Canvas fingerprint noise (thêm nhiễu nhỏ) */
+  try {
+    var _toDataURL = HTMLCanvasElement.prototype.toDataURL;
+    HTMLCanvasElement.prototype.toDataURL = function(type){
+      var ctx = this.getContext('2d');
+      if(ctx){
+        var img = ctx.getImageData(0,0,this.width,this.height);
+        for(var i=0;i<img.data.length;i+=4){
+          img.data[i]   ^= (${noise} & 3);
+          img.data[i+1] ^= ((${noise}>>1) & 3);
+        }
+        ctx.putImageData(img,0,0);
+      }
+      return _toDataURL.apply(this,arguments);
+    };
+    var _getImageData = CanvasRenderingContext2D.prototype.getImageData;
+    CanvasRenderingContext2D.prototype.getImageData = function(sx,sy,sw,sh){
+      var data = _getImageData.apply(this,arguments);
+      for(var i=0;i<data.data.length;i+=4) data.data[i] ^= (${noise} & 1);
+      return data;
+    };
+  } catch(e){}
+
+  /* 9 ── WebGL fingerprint */
+  try {
+    var getParam = WebGLRenderingContext.prototype.getParameter;
+    WebGLRenderingContext.prototype.getParameter = function(param){
+      if(param===37445) return 'Google Inc. (Qualcomm)';
+      if(param===37446) return 'ANGLE (Qualcomm, Adreno (TM) 740, OpenGL ES 3.2)';
+      return getParam.call(this,param);
+    };
+  } catch(e){}
+
+  /* 10 ── chrome object (bot check) */
+  try {
+    if(!window.chrome){
+      window.chrome = {
+        app:{isInstalled:false},
+        runtime:{id:undefined,connect:function(){},sendMessage:function(){}},
+        loadTimes:function(){return {};},csi:function(){return {};}
+      };
+    }
+  } catch(e){}
+
+  /* 11 ── Permissions API giả */
+  try {
+    var _query = navigator.permissions.query.bind(navigator.permissions);
+    navigator.permissions.query = function(p){
+      if(p&&p.name==='notifications') return Promise.resolve({state:'denied',onchange:null});
+      return _query(p);
+    };
+  } catch(e){}
+})();
+        """.trimIndent()
     }
 
     // ─── Auto-fill watcher ────────────────────────────────────────────────────
@@ -457,10 +638,14 @@ class MainActivity : AppCompatActivity() {
         autoEmail = ""; autoUsername = ""; autoPassword = ""; autoFullName = ""
         seenIds.clear()
 
+        // Đổi profile thiết bị mới cho chu kỳ tiếp
+        currentDevice = DEVICE_PROFILES.filter { it != currentDevice }.random()
         withContext(Dispatchers.Main) {
+            binding.mainWebView.settings.userAgentString  = currentDevice.ua
+            binding.verifyWebView.settings.userAgentString = currentDevice.ua
             binding.mailList.removeAllViews()
             binding.tvMailStatus.text = "Email cũ đã xóa \u2014 đang tạo email mới\u2026"
-            toast("Đang tạo email mới cho chu kỳ tiếp theo\u2026")
+            toast("Đang tạo email mới \u2014 thiết bị: ${currentDevice.name}")
         }
         ensureMailAccount(force = true)
     }
