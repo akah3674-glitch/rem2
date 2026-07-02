@@ -12,8 +12,22 @@ android {
         versionCode 2
         versionName '2.0'
     }
+    signingConfigs {
+        release {
+            storeFile     file('../rem2.keystore')
+            storePassword 'rem2pass123'
+            keyAlias      'rem2key'
+            keyPassword   'rem2pass123'
+        }
+    }
     buildTypes {
-        release { minifyEnabled false }
+        release {
+            minifyEnabled  false
+            signingConfig  signingConfigs.release
+        }
+        debug {
+            signingConfig  signingConfigs.release
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
