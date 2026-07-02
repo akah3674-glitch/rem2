@@ -16,6 +16,7 @@ import android.webkit.WebViewClient
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.GestureDetectorCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
@@ -40,6 +41,11 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_REPLIT_NAME  = "replit_name"
         private const val MAILTM           = "https://api.mail.tm"
         private val JSON_MT = "application/json; charset=utf-8".toMediaType()
+
+        // UA Cốc Cốc Browser (Chromium-based, phổ biến tại Việt Nam)
+        private const val COCCOC_UA =
+            "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) coc_coc_browser/117.0.0 Chrome/111.0.5563.116 Mobile Safari/537.36"
 
         private val FIRST_NAMES = listOf(
             "Alex", "Sam", "Jordan", "Taylor", "Morgan", "Casey", "Riley",
@@ -124,6 +130,8 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Theo chủ đề sáng/tối của hệ thống (mặc định theo máy gốc)
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -141,7 +149,7 @@ class MainActivity : AppCompatActivity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mixedContentMode  = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            settings.userAgentString   = currentDevice.ua
+            settings.userAgentString   = COCCOC_UA
             addJavascriptInterface(WebBridge(), "REM2")
             webViewClient = buildMainClient()
             loadUrl("https://replit.com")
@@ -150,7 +158,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Vuốt từ cạnh trái/phải → goBack().
+     * Vuốt từ cạnh TRÁI → goBack() (giống Cốc Cốc / Chrome Android).
      * Vuốt xuống khi đã ở đầu trang → reload.
      * Không consume event nên WebView vẫn xử lý scroll/tap bình thường.
      */
@@ -175,10 +183,9 @@ class MainActivity : AppCompatActivity() {
                 val adx = Math.abs(dx); val ady = Math.abs(dy)
                 val screenW = resources.displayMetrics.widthPixels
 
-                // ── Vuốt cạnh → back ──────────────────────────────────────────
-                val fromLeft  = x1 < edgeWidth && dx >  minSwipeX && ady < maxSwipeY
-                val fromRight = x1 > (screenW - edgeWidth) && dx < -minSwipeX && ady < maxSwipeY
-                if (fromLeft || fromRight) {
+                // ── Vuốt từ cạnh TRÁI → back ─────────────────────────────────
+                val fromLeft = x1 < edgeWidth && dx > minSwipeX && ady < maxSwipeY
+                if (fromLeft) {
                     if (webView.canGoBack()) { webView.goBack(); return true }
                 }
 
@@ -229,7 +236,7 @@ class MainActivity : AppCompatActivity() {
         binding.verifyWebView.apply {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
-            settings.userAgentString   = currentDevice.ua
+            settings.userAgentString   = COCCOC_UA
             webViewClient = buildVerifyClient()
         }
     }
