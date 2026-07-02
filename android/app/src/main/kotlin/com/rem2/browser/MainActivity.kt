@@ -415,8 +415,20 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString(KEY_REPLIT_NAME, fullName).apply()
 
         binding.mainWebView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
+            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
+                val u = r.url.toString()
+                // Chặn redirect sang Google/GitHub OAuth — quay lại trang signup
+                if (u.contains("accounts.google.com") || u.contains("github.com/login") ||
+                    u.contains("github.com/session") || u.contains("appleid.apple.com")) {
+                    updateAutoStatus("Đã chặn OAuth ngoài, quay lại signup\u2026")
+                    v.postDelayed({ v.loadUrl("https://replit.com/signup") }, 500)
+                    return true
+                }
+                return false
+            }
             override fun onPageFinished(v: WebView, url: String) {
+                // Bỏ qua nếu đang ở trang OAuth ngoài
+                if (url.contains("google.com") || url.contains("github.com") || url.contains("apple.com")) return
                 when {
                     url.contains("/signup") -> {
                         updateAutoStatus("Đang chọn đăng ký bằng email\u2026")
@@ -459,7 +471,10 @@ class MainActivity : AppCompatActivity() {
             "  var els = document.querySelectorAll('button,a,[role=\"button\"]');",
             "  for (var i = 0; i < els.length; i++) {",
             "    var t = (els[i].textContent || els[i].innerText || '').toLowerCase().trim();",
-            "    if (t.indexOf('email') >= 0 || t === 'continue') {",
+            "    // Chỉ click nếu có chữ 'email' VÀ không phải Google/GitHub/Apple",
+            "    if (t.indexOf('email') >= 0 &&",
+            "        t.indexOf('google') < 0 && t.indexOf('github') < 0 &&",
+            "        t.indexOf('facebook') < 0 && t.indexOf('apple') < 0) {",
             "      els[i].click(); return 'clicked:' + t.substring(0,30);",
             "    }",
             "  }",
@@ -518,7 +533,8 @@ class MainActivity : AppCompatActivity() {
             "    var btns = document.querySelectorAll('button[type=\"submit\"],button');",
             "    for (var i = 0; i < btns.length; i++) {",
             "      var t = (btns[i].textContent || '').toLowerCase();",
-            "      if (t.indexOf('sign')>=0||t.indexOf('create')>=0||t.indexOf('continue')>=0||t.indexOf('register')>=0) { btns[i].click(); break; }",
+            "      var noOAuth = t.indexOf('google')<0 && t.indexOf('github')<0 && t.indexOf('facebook')<0 && t.indexOf('apple')<0;",
+            "      if (noOAuth && (t.indexOf('sign')>=0||t.indexOf('create')>=0||t.indexOf('register')>=0||(t.indexOf('continue')>=0&&t.length<25))) { btns[i].click(); break; }",
             "    }",
             "  }, 800);",
             "  return 'ok:' + filled;",
@@ -587,7 +603,8 @@ class MainActivity : AppCompatActivity() {
             "    var btns = document.querySelectorAll('button[type=\"submit\"],button');",
             "    for(var i=0;i<btns.length;i++){",
             "      var t=(btns[i].textContent||'').toLowerCase();",
-            "      if(t.indexOf('next')>=0||t.indexOf('continue')>=0||t.indexOf('get started')>=0||t.indexOf('finish')>=0||t.indexOf('done')>=0||t.indexOf('start')>=0){",
+            "      var noOAuth=t.indexOf('google')<0&&t.indexOf('github')<0&&t.indexOf('facebook')<0&&t.indexOf('apple')<0;",
+            "      if(noOAuth&&(t.indexOf('next')>=0||t.indexOf('get started')>=0||t.indexOf('finish')>=0||t.indexOf('done')>=0||(t.indexOf('continue')>=0&&t.length<25)||(t.indexOf('start')>=0&&t.indexOf('starter')<0))){",
             "        btns[i].click(); clicked=true; break;",
             "      }",
             "    }",
