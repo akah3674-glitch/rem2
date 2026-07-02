@@ -319,11 +319,8 @@ class MainActivity : AppCompatActivity() {
             binding.mailPanel.visibility = View.GONE
             stopPolling()
         }
+        // 🔄 Tạo mail.tm mới (đổi tài khoản)
         binding.btnRefresh.setOnClickListener {
-            lifecycleScope.launch { fetchMail(forceAll = true) }
-        }
-        // Nút "Tự động / Reset" → tạo email mới
-        binding.btnAutoSetup.setOnClickListener {
             resetAndCreateNewEmail()
         }
         binding.tabMailList.setOnClickListener { showInboxTab() }
@@ -869,6 +866,11 @@ class MainActivity : AppCompatActivity() {
             val finalUrl = findReplitLink(combined, listOf("verify", "confirm")) ?: return
             withContext(Dispatchers.Main) {
                 binding.verifyWebView.loadUrl(finalUrl)
+                // Tự mở panel nếu đang ẩn, rồi chuyển sang tab xác nhận
+                if (binding.mailPanel.visibility != View.VISIBLE) {
+                    binding.mailPanel.visibility = View.VISIBLE
+                    if (mailToken.isNotEmpty()) startPolling()
+                }
                 showVerifyTab()
                 if (binding.mailPanel.visibility == View.GONE)
                     binding.mailPanel.visibility = View.VISIBLE
