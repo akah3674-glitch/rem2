@@ -19,7 +19,7 @@
           android:layout_width="0dp"
           android:layout_height="260dp"
           android:orientation="vertical"
-          android:background="@color/design_default_color_primary_dark"
+          android:background="#1A237E"
           android:visibility="gone"
           app:layout_constraintBottom_toBottomOf="parent"
           app:layout_constraintStart_toStartOf="parent"
@@ -37,7 +37,7 @@
                   android:layout_width="0dp"
                   android:layout_height="wrap_content"
                   android:layout_weight="1"
-                  android:text="📬 Mail.tm Monitor"
+                  android:text="Mail.tm Monitor"
                   android:textColor="#FFFFFF"
                   android:textSize="16sp"
                   android:textStyle="bold"/>
@@ -53,7 +53,7 @@
                   style="@style/Widget.MaterialComponents.Button.TextButton"
                   android:layout_width="wrap_content"
                   android:layout_height="wrap_content"
-                  android:text="✕"
+                  android:text="X"
                   android:textColor="#FFFFFF"/>
           </LinearLayout>
 
