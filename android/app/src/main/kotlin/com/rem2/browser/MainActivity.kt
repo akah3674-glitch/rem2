@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.*
+import kotlin.coroutines.resume
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -770,11 +771,66 @@ class MainActivity : AppCompatActivity() {
 
     // ─── Wait for verify email ────────────────────────────────────────────────
 
+    /**
+     * Kiểm tra lỗi CAPTCHA / rate-limit trên trang hiện tại.
+     * Trả về: "captcha" | "tooslow" | "ok"
+     */
+    private suspend fun checkPageErrors(): String = withContext(Dispatchers.Main) {
+        suspendCancellableCoroutine { cont ->
+            val js = """
+                (function(){
+                  var b = (document.body ? document.body.innerText : '').toLowerCase();
+                  if (b.indexOf('captcha') >= 0 &&
+                      (b.indexOf('kh\u00f4ng h\u1ee3p l\u1ec7') >= 0 || b.indexOf('invalid') >= 0 || b.indexOf('m\u00e3 1') >= 0))
+                      return 'captcha';
+                  if (b.indexOf('thao t\u00e1c qu\u00e1 nhanh') >= 0 || b.indexOf('too fast') >= 0 ||
+                      b.indexOf('too many') >= 0 || b.indexOf('rate limit') >= 0)
+                      return 'tooslow';
+                  if (b.indexOf('captcha') >= 0) return 'captcha';
+                  return 'ok';
+                })()
+            """.trimIndent()
+            binding.mainWebView.evaluateJavascript(js) { result ->
+                if (cont.isActive) cont.resume(result?.trim('"') ?: "ok")
+            }
+        }
+    }
+
     private fun waitForVerifyEmail() {
         lifecycleScope.launch {
-            repeat(36) {
+            var retries = 0
+            repeat(48) {   // max ~4 phút
                 if (!autoRegInProgress) return@launch
                 delay(5000)
+
+                // ── Kiểm tra lỗi CAPTCHA / rate-limit ──────────────────────
+                val err = try { checkPageErrors() } catch (_: Exception) { "ok" }
+                when (err) {
+                    "captcha" -> {
+                        retries++
+                        val wait = if (retries <= 2) 35_000L else 60_000L
+                        updateAutoStatus("\u26a0 CAPTCHA l\u1ed7i \u2014 \u0111\u1ee3i ${wait/1000}s r\u1ed3i th\u1eed l\u1ea1i (#$retries)\u2026")
+                        delay(wait)
+                        withContext(Dispatchers.Main) {
+                            if (autoRegInProgress)
+                                binding.mainWebView.loadUrl("https://replit.com/signup")
+                        }
+                        return@launch   // onPageFinished sẽ trigger expandEmailForm lại
+                    }
+                    "tooslow" -> {
+                        retries++
+                        val wait = 90_000L + (retries * 15_000L)
+                        updateAutoStatus("\u26a0 Thao t\u00e1c qu\u00e1 nhanh \u2014 \u0111\u1ee3i ${wait/1000}s (#$retries)\u2026")
+                        delay(wait)
+                        withContext(Dispatchers.Main) {
+                            if (autoRegInProgress)
+                                binding.mainWebView.loadUrl("https://replit.com/signup")
+                        }
+                        return@launch
+                    }
+                }
+
+                // ── Poll email xác nhận ──────────────────────────────────────
                 fetchMail()
                 if (prefs.getBoolean(KEY_REPLIT_REG, false)) {
                     autoRegInProgress = false
@@ -786,7 +842,7 @@ class MainActivity : AppCompatActivity() {
                 autoRegInProgress = false
                 withContext(Dispatchers.Main) {
                     hideAutoOverlay()
-                    toast("Hết thời gian - vui lòng xác nhận thủ công trong panel Mail")
+                    toast("H\u1ebft th\u1eddi gian - vui l\u00f2ng x\u00e1c nh\u1eadn th\u1ee7 c\u00f4ng trong panel Mail")
                     binding.mainWebView.webViewClient = buildMainClient()
                 }
             }
