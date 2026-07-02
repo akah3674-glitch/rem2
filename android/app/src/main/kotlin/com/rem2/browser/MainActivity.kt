@@ -420,6 +420,41 @@ class MainActivity : AppCompatActivity() {
         toast("Email đã xác nhận! Tài khoản Replit sẵn sàng \u2713")
         binding.mainWebView.webViewClient = buildMainClient()
         binding.mainWebView.loadUrl("https://replit.com")
+        // Tự động reset email cũ → tạo email mới cho chu kỳ đăng ký tiếp theo
+        lifecycleScope.launch {
+            delay(3000L)
+            refreshMailForNextCycle()
+        }
+    }
+
+    /**
+     * Sau khi đăng ký xong: xóa email cũ (đã dùng), tạo email Mail.tm mới,
+     * reset cờ replit_registered = false → sẵn sàng cho lần đăng ký tiếp theo.
+     */
+    private suspend fun refreshMailForNextCycle() {
+        // Dừng polling email cũ
+        pollJob?.cancel(); pollJob = null
+
+        // Xóa thông tin email và cờ đã đăng ký
+        prefs.edit()
+            .remove(KEY_MAIL_EMAIL)
+            .remove(KEY_MAIL_PASS)
+            .remove(KEY_MAIL_TOKEN)
+            .remove(KEY_REPLIT_NAME)
+            .putBoolean(KEY_REPLIT_REG, false)
+            .apply()
+
+        mailToken = ""; mailEmail = ""
+        seenIds.clear()
+
+        withContext(Dispatchers.Main) {
+            binding.mailList.removeAllViews()
+            binding.tvMailStatus.text = "Email cũ đã xóa \u2014 đang tạo email mới\u2026"
+            toast("Đang tạo email mới cho chu kỳ tiếp theo\u2026")
+        }
+
+        // Tạo email Mail.tm mới (không tự đăng ký Replit ngay)
+        ensureMailAccount(force = true)
     }
 
     // ─── Auto-register ────────────────────────────────────────────────────────
@@ -463,22 +498,25 @@ class MainActivity : AppCompatActivity() {
         binding.mainWebView.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
                 val u = r.url.toString()
-                // Chặn redirect sang Google/GitHub OAuth — quay lại trang signup
-                if (u.contains("accounts.google.com") || u.contains("github.com/login") ||
-                    u.contains("github.com/session") || u.contains("appleid.apple.com")) {
-                    updateAutoStatus("Đã chặn OAuth ngoài, quay lại signup\u2026")
-                    v.postDelayed({ v.loadUrl("https://replit.com/signup") }, 500)
+                // Chặn TẤT CẢ URL không phải replit.com trong quá trình đăng ký
+                if (!u.contains("replit.com") && !u.startsWith("about:") && !u.startsWith("data:") && !u.startsWith("javascript:")) {
+                    updateAutoStatus("Đã chặn redirect ngoài (\u2715 ${r.url.host}), quay lại signup\u2026")
+                    v.postDelayed({ v.loadUrl("https://replit.com/signup") }, 600)
                     return true
                 }
                 return false
             }
             override fun onPageFinished(v: WebView, url: String) {
-                // Bỏ qua nếu đang ở trang OAuth ngoài
-                if (url.contains("google.com") || url.contains("github.com") || url.contains("apple.com")) return
+                // Nếu lạc sang trang ngoài replit (Google, GitHub, Apple…) → quay lại signup ngay
+                if (!url.contains("replit.com") && url != "about:blank" && url.isNotEmpty()) {
+                    updateAutoStatus("Phát hiện trang ngoài, quay lại signup\u2026")
+                    v.postDelayed({ v.loadUrl("https://replit.com/signup") }, 600)
+                    return
+                }
                 when {
                     url.contains("/signup") -> {
                         updateAutoStatus("Đang chọn đăng ký bằng email\u2026")
-                        v.postDelayed({ expandEmailForm(v, email, username, password, fullName) }, 2000)
+                        v.postDelayed({ expandEmailForm(v, email, username, password, fullName) }, 2500)
                     }
                     url.contains("/onboarding") || url.contains("/plans") -> {
                         updateAutoStatus("Đang điền thông tin tài khoản\u2026")
@@ -512,16 +550,28 @@ class MainActivity : AppCompatActivity() {
     ) {
         val js = listOf(
             "(function(){",
+            "  // Nếu form email đã hiện sẵn → báo 'visible'",
             "  var inputs = document.querySelectorAll('input[type=\"email\"],input[name=\"email\"]');",
             "  if (inputs.length > 0) return 'visible';",
+            "  // Tìm nút 'Continue with email' chính xác — ưu tiên match chặt trước",
+            "  var OAUTH = ['google','github','facebook','apple','microsoft','twitter'];",
+            "  function isOAuth(t){ return OAUTH.some(function(k){ return t.indexOf(k) >= 0; }); }",
             "  var els = document.querySelectorAll('button,a,[role=\"button\"]');",
+            "  // Pass 1: khớp chặt — chỉ text có 'email' và KHÔNG có bất kỳ từ OAuth nào, độ dài < 40",
             "  for (var i = 0; i < els.length; i++) {",
-            "    var t = (els[i].textContent || els[i].innerText || '').toLowerCase().trim();",
-            "    // Chỉ click nếu có chữ 'email' VÀ không phải Google/GitHub/Apple",
-            "    if (t.indexOf('email') >= 0 &&",
-            "        t.indexOf('google') < 0 && t.indexOf('github') < 0 &&",
-            "        t.indexOf('facebook') < 0 && t.indexOf('apple') < 0) {",
-            "      els[i].click(); return 'clicked:' + t.substring(0,30);",
+            "    var raw = (els[i].textContent || els[i].innerText || '').trim();",
+            "    var t = raw.toLowerCase();",
+            "    if (t.indexOf('email') >= 0 && !isOAuth(t) && raw.length < 40) {",
+            "      els[i].click(); return 'clicked:' + raw.substring(0,35);",
+            "    }",
+            "  }",
+            "  // Pass 2: nếu không tìm thấy, click bất kỳ nút nào KHÔNG phải OAuth",
+            "  for (var j = 0; j < els.length; j++) {",
+            "    var raw2 = (els[j].textContent || els[j].innerText || '').trim();",
+            "    var t2 = raw2.toLowerCase();",
+            "    if (!isOAuth(t2) && raw2.length > 3 && raw2.length < 50",
+            "        && (t2.indexOf('continue') >= 0 || t2.indexOf('sign up') >= 0 || t2.indexOf('register') >= 0)) {",
+            "      els[j].click(); return 'clicked2:' + raw2.substring(0,35);",
             "    }",
             "  }",
             "  return 'not-found';",
