@@ -496,21 +496,32 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString(KEY_REPLIT_NAME, fullName).apply()
 
         binding.mainWebView.webViewClient = object : WebViewClient() {
+            private fun isExternal(url: String) =
+                url.isNotEmpty() && url != "about:blank" &&
+                !url.startsWith("data:") && !url.startsWith("javascript:") &&
+                !url.contains("replit.com")
+
             override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest): Boolean {
                 val u = r.url.toString()
-                // Chặn TẤT CẢ URL không phải replit.com trong quá trình đăng ký
-                if (!u.contains("replit.com") && !u.startsWith("about:") && !u.startsWith("data:") && !u.startsWith("javascript:")) {
-                    updateAutoStatus("Đã chặn redirect ngoài (\u2715 ${r.url.host}), quay lại signup\u2026")
-                    v.postDelayed({ v.loadUrl("https://replit.com/signup") }, 600)
+                if (isExternal(u)) {
+                    updateAutoStatus("\u2715 Chặn: ${r.url.host} \u2192 quay lại signup\u2026")
+                    v.stopLoading()
+                    v.postDelayed({ v.loadUrl("https://replit.com/signup") }, 400)
                     return true
                 }
                 return false
             }
+            override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                if (isExternal(url)) {
+                    updateAutoStatus("\u2715 Dừng tải: ${url.take(30)} \u2192 quay lại signup\u2026")
+                    v.stopLoading()
+                    v.postDelayed({ v.loadUrl("https://replit.com/signup") }, 400)
+                }
+            }
             override fun onPageFinished(v: WebView, url: String) {
-                // Nếu lạc sang trang ngoài replit (Google, GitHub, Apple…) → quay lại signup ngay
-                if (!url.contains("replit.com") && url != "about:blank" && url.isNotEmpty()) {
-                    updateAutoStatus("Phát hiện trang ngoài, quay lại signup\u2026")
-                    v.postDelayed({ v.loadUrl("https://replit.com/signup") }, 600)
+                if (isExternal(url)) {
+                    updateAutoStatus("\u2715 Trang ngoài đã tải, quay lại signup\u2026")
+                    v.postDelayed({ v.loadUrl("https://replit.com/signup") }, 400)
                     return
                 }
                 when {
@@ -548,30 +559,20 @@ class MainActivity : AppCompatActivity() {
         webView: WebView,
         email: String, username: String, password: String, fullName: String
     ) {
+        // CHỈ tìm nút có chữ "email" — KHÔNG có fallback sang "continue/sign up"
+        // vì fallback đó click nhầm "Continue with X / Google / etc."
         val js = listOf(
             "(function(){",
-            "  // Nếu form email đã hiện sẵn → báo 'visible'",
             "  var inputs = document.querySelectorAll('input[type=\"email\"],input[name=\"email\"]');",
             "  if (inputs.length > 0) return 'visible';",
-            "  // Tìm nút 'Continue with email' chính xác — ưu tiên match chặt trước",
-            "  var OAUTH = ['google','github','facebook','apple','microsoft','twitter'];",
-            "  function isOAuth(t){ return OAUTH.some(function(k){ return t.indexOf(k) >= 0; }); }",
+            "  var BLOCK = ['google','github','facebook','apple','microsoft','twitter','x.com',' x ','with x'];",
             "  var els = document.querySelectorAll('button,a,[role=\"button\"]');",
-            "  // Pass 1: khớp chặt — chỉ text có 'email' và KHÔNG có bất kỳ từ OAuth nào, độ dài < 40",
             "  for (var i = 0; i < els.length; i++) {",
             "    var raw = (els[i].textContent || els[i].innerText || '').trim();",
-            "    var t = raw.toLowerCase();",
-            "    if (t.indexOf('email') >= 0 && !isOAuth(t) && raw.length < 40) {",
+            "    var t = ' ' + raw.toLowerCase() + ' ';",
+            "    var blocked = BLOCK.some(function(k){ return t.indexOf(k) >= 0; });",
+            "    if (!blocked && raw.toLowerCase().indexOf('email') >= 0 && raw.length < 45) {",
             "      els[i].click(); return 'clicked:' + raw.substring(0,35);",
-            "    }",
-            "  }",
-            "  // Pass 2: nếu không tìm thấy, click bất kỳ nút nào KHÔNG phải OAuth",
-            "  for (var j = 0; j < els.length; j++) {",
-            "    var raw2 = (els[j].textContent || els[j].innerText || '').trim();",
-            "    var t2 = raw2.toLowerCase();",
-            "    if (!isOAuth(t2) && raw2.length > 3 && raw2.length < 50",
-            "        && (t2.indexOf('continue') >= 0 || t2.indexOf('sign up') >= 0 || t2.indexOf('register') >= 0)) {",
-            "      els[j].click(); return 'clicked2:' + raw2.substring(0,35);",
             "    }",
             "  }",
             "  return 'not-found';",
