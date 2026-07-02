@@ -15,6 +15,7 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
+    <!-- Overlay tự động đăng ký -->
     <LinearLayout
         android:id="@+id/autoRegisterOverlay"
         android:layout_width="0dp"
@@ -37,7 +38,7 @@
             android:id="@+id/tvAutoStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Initializing..."
+            android:text="Đang khởi động..."
             android:textColor="#FFFFFF"
             android:textSize="16sp"
             android:gravity="center"
@@ -49,11 +50,12 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:text="Skip / Do manually"
+            android:text="Bỏ qua / Tự làm"
             android:textColor="#90CAF9"
             android:textSize="13sp"/>
     </LinearLayout>
 
+    <!-- Panel Mail.tm -->
     <LinearLayout
         android:id="@+id/mailPanel"
         android:layout_width="0dp"
@@ -87,7 +89,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="2"
-                android:text="Not connected"
+                android:text="Chưa kết nối"
                 android:textColor="#90CAF9"
                 android:textSize="11sp"
                 android:ellipsize="end"
@@ -97,7 +99,7 @@
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Auto"
+                android:text="Tự động"
                 android:textColor="#4FC3F7"
                 android:textSize="12sp"
                 android:paddingStart="6dp"
@@ -136,7 +138,7 @@
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:text="Inbox"
+                android:text="Hộp thư"
                 android:textColor="#FFFFFF"
                 android:textSize="13sp"
                 android:background="#1565C0"/>
@@ -146,13 +148,13 @@
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
-                android:text="Verify Browser"
+                android:text="Trình duyệt xác nhận"
                 android:textColor="#90CAF9"
                 android:textSize="13sp"
                 android:background="@null"/>
         </LinearLayout>
 
-        <!-- Content area -->
+        <!-- Nội dung -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -179,7 +181,7 @@
 
         </FrameLayout>
 
-        <!-- Bottom action bar: invite new account -->
+        <!-- Thanh dưới: mời tài khoản mới -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="40dp"
@@ -193,7 +195,7 @@
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"
-                android:text="+ Invite new"
+                android:text="+ Mời tài khoản mới"
                 android:textColor="#4FC3F7"
                 android:textSize="12sp"
                 android:paddingStart="8dp"
