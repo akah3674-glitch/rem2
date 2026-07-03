@@ -2,11 +2,9 @@
 package com.rem2.browser
 
 import android.annotation.SuppressLint
-import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.webkit.*
-import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
@@ -21,17 +19,12 @@ import org.json.JSONObject
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
-// --- Models -----------------------------------------------------------------
-
 data class AccountEntry(
     val id: String = UUID.randomUUID().toString(),
     val email: String,
     val password: String,
-    val username: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val username: String = ""
 )
-
-// --- MainActivity -----------------------------------------------------------
 
 @SuppressLint("ClickableViewAccessibility", "SetJavaScriptEnabled")
 class MainActivity : AppCompatActivity() {
@@ -46,38 +39,42 @@ class MainActivity : AppCompatActivity() {
             "(KHTML, like Gecko) coc_coc_browser/109.0.0.0 Chrome/123.0.0.0 Mobile Safari/537.36"
 
         fun randEmail(domain: String): String {
-            val adj  = listOf("bright","swift","calm","bold","wild","keen","cool","dark")
-            val noun = listOf("fox","star","byte","hawk","wolf","ace","jet","sky")
-            return "${adj.random()}${noun.random()}${(1000..9999).random()}@${domain}"
+            val adj  = listOf("bright","swift","calm","bold","wild","keen","cool","dark","nice","fast")
+            val noun = listOf("fox","star","byte","hawk","wolf","ace","jet","sky","ray","ion")
+            return adj.random() + noun.random() + (1000..9999).random() + "@" + domain
         }
         fun randPassword() = (1..10).map {
             "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP0123456789".random()
         }.joinToString("") + "!9"
         fun randFullName(): String {
-            val first = listOf("Alex","Sam","Jordan","Taylor","Morgan","Casey")
-            val last  = listOf("Smith","Jones","Brown","Davis","Wilson","Lee")
-            return "${first.random()} ${last.random()}"
+            val first = listOf("Alex","Sam","Jordan","Taylor","Morgan","Casey","Riley","Blake")
+            val last  = listOf("Smith","Jones","Brown","Davis","Wilson","Lee","Clark","Hall")
+            return first.random() + " " + last.random()
         }
         fun randUsername(): String {
-            val adj  = listOf("cool","fast","dark","blue","wild","swift")
-            val noun = listOf("fox","hawk","wolf","bear","lion","ace")
-            return "${adj.random()}${noun.random()}${(1000..9999).random()}"
+            val adj  = listOf("cool","fast","dark","blue","wild","swift","calm","bright")
+            val noun = listOf("fox","hawk","wolf","bear","lion","ace","star","byte")
+            return adj.random() + noun.random() + (1000..9999).random()
         }
     }
 
     private lateinit var binding: ActivityMainBinding
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
     private val http = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).build()
+        .connectTimeout(25, TimeUnit.SECONDS)
+        .readTimeout(35, TimeUnit.SECONDS)
+        .build()
 
     private val accounts = mutableListOf<AccountEntry>()
-    private var logOpen  = false
+    private var panelOpen     = false
+    private var showingVerify = false
+
     private var autoEmail    = ""
     private var autoPassword = ""
     private var autoUsername = ""
-    private var autoName     = ""
+    private var mailtmToken  = ""
 
-    // -------------------------------------------------------------------------
+    // ─── Lifecycle ────────────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -85,35 +82,53 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         CookieManager.getInstance().setAcceptCookie(true)
-
         loadAccounts()
         setupHeader()
         setupWebView()
-
+        setupVerifyWebView()
         lifecycleScope.launch { ensureAccount() }
     }
 
-    // --- Header --------------------------------------------------------------
+    // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
         binding.btnToggleLog.setOnClickListener {
-            logOpen = !logOpen
-            binding.logPanel.visibility = if (logOpen) View.VISIBLE else View.GONE
+            panelOpen = !panelOpen
+            binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
         }
-        binding.btnClearLog.setOnClickListener {
-            binding.tvLog.text = ""
+        binding.btnClearLog.setOnClickListener { binding.tvLog.text = "" }
+        binding.tabLog.setOnClickListener    { switchTab(false) }
+        binding.tabVerify.setOnClickListener { switchTab(true)  }
+    }
+
+    private fun switchTab(toVerify: Boolean) {
+        showingVerify = toVerify
+        if (toVerify) {
+            binding.logScroll.visibility     = View.GONE
+            binding.verifyWebView.visibility = View.VISIBLE
+            binding.tabLog.setBackgroundColor(0xFFF3F4F6.toInt())
+            binding.tabLog.setTextColor(0xFF6B7280.toInt())
+            binding.tabVerify.setBackgroundColor(0xFFFFFFFF.toInt())
+            binding.tabVerify.setTextColor(0xFF1D4ED8.toInt())
+        } else {
+            binding.logScroll.visibility     = View.VISIBLE
+            binding.verifyWebView.visibility = View.GONE
+            binding.tabLog.setBackgroundColor(0xFFFFFFFF.toInt())
+            binding.tabLog.setTextColor(0xFF1D4ED8.toInt())
+            binding.tabVerify.setBackgroundColor(0xFFF3F4F6.toInt())
+            binding.tabVerify.setTextColor(0xFF6B7280.toInt())
         }
     }
 
-    // --- Log -----------------------------------------------------------------
+    // ─── Logging ──────────────────────────────────────────────────────────────
 
     private fun log(msg: String) = runOnUiThread {
         val cur = binding.tvLog.text.toString()
-        binding.tvLog.text = if (cur.isEmpty()) msg else "$cur\n$msg"
+        binding.tvLog.text = if (cur.isEmpty()) msg else (cur + "\n" + msg)
         binding.logScroll.post { binding.logScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
-    // --- Accounts ------------------------------------------------------------
+    // ─── Accounts ─────────────────────────────────────────────────────────────
 
     private fun loadAccounts() {
         val raw = prefs.getString(KEY_ACCOUNTS, "[]") ?: "[]"
@@ -143,7 +158,7 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString(KEY_ACCOUNTS, arr.toString()).apply()
     }
 
-    // --- WebView -------------------------------------------------------------
+    // ─── Main WebView ─────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
@@ -159,40 +174,20 @@ class MainActivity : AppCompatActivity() {
             displayZoomControls      = false
             mixedContentMode         = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             userAgentString          = COCCOC_UA
-            allowFileAccess          = true
             javaScriptCanOpenWindowsAutomatically = true
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
-        wv.addJavascriptInterface(object : Any() {
-            @JavascriptInterface fun onPageReady(url: String) {
-                runOnUiThread {
-                    if (binding.verifyOverlay.visibility == View.VISIBLE &&
-                        (url.contains("replit.com") || url.contains("replit.app")) &&
-                        !url.contains("verify") && url != "about:blank") {
-                        binding.verifyOverlay.visibility = View.GONE
-                        log("Xac thuc thanh cong!")
-                    }
-                }
-            }
-        }, "RemBridge")
-
         wv.webViewClient = object : WebViewClient() {
-            override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                injectAutoFill(v, url)
-            }
             override fun onPageFinished(v: WebView, url: String) {
-                v.evaluateJavascript("RemBridge.onPageReady(window.location.href);", null)
-                injectAutoFill(v, url)
-                // If onboarding page, auto-fill name
-                if (url.contains("onboarding") || url.contains("wizard")) {
-                    v.postDelayed({ injectNameFill(v) }, 1500)
+                if (url.contains("signup") || url.contains("login") || url.contains("register")) {
+                    startAutoFillLoop(v)
                 }
             }
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                 val url = req.url.toString()
                 if (url.contains("verify") || url.contains("confirm-email")) {
-                    showVerifyOverlay(url)
+                    openVerifyTab(url)
                     return true
                 }
                 return false
@@ -209,178 +204,238 @@ class MainActivity : AppCompatActivity() {
         wv.loadUrl("https://replit.com/signup")
     }
 
-    // --- Verify overlay ------------------------------------------------------
+    // ─── Verify WebView (mini browser inside panel) ───────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun showVerifyOverlay(url: String) = runOnUiThread {
-        binding.verifyOverlay.visibility = View.VISIBLE
-        binding.verifyWebView.settings.javaScriptEnabled = true
-        binding.verifyWebView.settings.domStorageEnabled = true
-        CookieManager.getInstance().setAcceptThirdPartyCookies(binding.verifyWebView, true)
-        binding.verifyWebView.loadUrl(url)
-        binding.btnCloseVerify.setOnClickListener {
-            binding.verifyOverlay.visibility = View.GONE
+    private fun setupVerifyWebView() {
+        val vwv = binding.verifyWebView
+        vwv.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            mixedContentMode  = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            userAgentString   = COCCOC_UA
         }
-        log("Mo trang xac thuc email...")
+        CookieManager.getInstance().setAcceptThirdPartyCookies(vwv, true)
+
+        vwv.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(v: WebView, url: String) {
+                if (url.contains("replit.com") &&
+                    !url.contains("verify") &&
+                    !url.contains("confirm") &&
+                    url != "about:blank") {
+                    log("Xac thuc email thanh cong!")
+                    CookieManager.getInstance().flush()
+                }
+            }
+        }
     }
 
-    // --- Auto-fill JS --------------------------------------------------------
-
-    private fun injectAutoFill(wv: WebView, url: String) {
-        if (autoEmail.isEmpty() || autoPassword.isEmpty()) return
-        if (!url.contains("signup") && !url.contains("register") && !url.contains("login")) return
-        val e = autoEmail.replace("\\", "\\\\").replace("'", "\\'")
-        val p = autoPassword.replace("\\", "\\\\").replace("'", "\\'")
-        val u = autoUsername.replace("\\", "\\\\").replace("'", "\\'")
-        wv.evaluateJavascript(
-            "(function(){" +
-            "function fill(sel,val){var el=document.querySelector(sel);if(!el||el.value===val)return;" +
-            "var nv=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');" +
-            "if(nv&&nv.set)nv.set.call(el,val);else el.value=val;" +
-            "el.dispatchEvent(new Event('input',{bubbles:true}));}" +
-            "fill('input[type=email],input[name*=email]','" + e + "');" +
-            "fill('input[type=password],input[name*=pass]','" + p + "');" +
-            "fill('input[name*=user],input[placeholder*=user]','" + u + "');" +
-            "})()", null)
+    private fun openVerifyTab(url: String) = runOnUiThread {
+        log("Mo link xac thuc trong panel...")
+        binding.verifyWebView.loadUrl(url)
+        panelOpen = true
+        binding.logPanel.visibility = View.VISIBLE
+        switchTab(true)
     }
 
-    private fun injectNameFill(wv: WebView) {
-        if (autoName.isEmpty()) return
-        val n = autoName.replace("'", "\\'")
-        wv.evaluateJavascript(
-            "(function(){" +
-            "function fill(sel,val){var el=document.querySelector(sel);if(!el)return;" +
-            "var nv=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');" +
-            "if(nv&&nv.set)nv.set.call(el,val);else el.value=val;" +
-            "el.dispatchEvent(new Event('input',{bubbles:true}));}" +
-            "fill('input[placeholder*=name],input[name*=name]','" + n + "');" +
-            "var btns=Array.from(document.querySelectorAll('button'));" +
-            "var next=btns.find(function(b){return /next|continue/i.test(b.textContent);});" +
-            "if(next)next.click();" +
-            "})()", null)
+    // ─── Auto-fill: self-retrying JS loop ─────────────────────────────────────
+
+    private fun startAutoFillLoop(wv: WebView) {
+        if (autoEmail.isEmpty()) return
+        // Escape single quotes only (safe in JS string)
+        val e = autoEmail.replace("'", "\\'")
+        val p = autoPassword.replace("'", "\\'")
+        val u = autoUsername.replace("'", "\\'")
+        // Build JS string using concatenation to avoid any template/escape conflicts
+        val js = StringBuilder()
+        js.append("(function(){")
+        js.append("var attempts=0;")
+        js.append("var iv=setInterval(function(){")
+        js.append("attempts++;")
+        js.append("function fill(sel,val){")
+        js.append("var el=document.querySelector(sel);")
+        js.append("if(!el)return false;")
+        js.append("var d=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');")
+        js.append("if(d&&d.set)d.set.call(el,val);else el.value=val;")
+        js.append("el.dispatchEvent(new Event('input',{bubbles:true}));")
+        js.append("el.dispatchEvent(new Event('change',{bubbles:true}));")
+        js.append("return el.value===val;")
+        js.append("}")
+        js.append("var ok=0;")
+        js.append("ok+=fill('input[type=email]','").append(e).append("')?1:0;")
+        js.append("ok+=fill('input[name*=email]','").append(e).append("')?1:0;")
+        js.append("ok+=fill('input[type=password]','").append(p).append("')?1:0;")
+        js.append("ok+=fill('input[name*=user]','").append(u).append("')?1:0;")
+        js.append("ok+=fill('[placeholder*=user]','").append(u).append("')?1:0;")
+        js.append("if(ok>=2&&attempts>=2)clearInterval(iv);")
+        js.append("if(attempts>=30)clearInterval(iv);")
+        js.append("},700);")
+        js.append("})()")
+        wv.evaluateJavascript(js.toString(), null)
     }
 
-    // --- Main account flow ---------------------------------------------------
+    // ─── Account flow ─────────────────────────────────────────────────────────
 
     private suspend fun ensureAccount() = withContext(Dispatchers.IO) {
-        log("Bat dau xu ly tai khoan...")
+        log("Bat dau...")
 
-        // Get mail.tm domain
-        log("Lay domain Mail.tm...")
+        // 1. Get mail.tm domain
         val domain = try {
             val req = Request.Builder().url("$MAILTM/domains").build()
             val res = http.newCall(req).execute()
-            val body = res.body?.string() ?: "[]"
-            JSONArray(body).getJSONObject(0).getString("domain")
-        } catch (e: Exception) { "mail.tm" }
+            JSONArray(res.body?.string() ?: "[]").getJSONObject(0).getString("domain")
+        } catch (e: Exception) {
+            log("Mail.tm domain loi: ${e.message}")
+            "mail.tm"
+        }
 
-        // Generate credentials
+        // 2. Generate credentials
         autoEmail    = randEmail(domain)
         autoPassword = randPassword()
         autoUsername = randUsername()
-        autoName     = randFullName()
-
         log("Email: $autoEmail")
         log("Pass:  $autoPassword")
         log("User:  $autoUsername")
 
-        // Create mail.tm account
-        log("Tao hop thu Mail.tm...")
-        try {
-            val reqBody = JSONObject().apply {
-                put("address", autoEmail); put("password", autoPassword)
-            }.toString().toRequestBody(JSON_MT)
-            val req = Request.Builder().url("$MAILTM/accounts").post(reqBody).build()
-            val res = http.newCall(req).execute()
-            if (res.code == 201) log("Tao hop thu OK!")
-            else log("Mail.tm code: ${res.code}")
-        } catch (e: Exception) { log("Mail.tm loi: ${e.message}") }
+        // 3. Register mail.tm — retry up to 3 times with new email on conflict
+        var loginEmail = autoEmail
+        var loginPass  = autoPassword
+        for (attempt in 1..3) {
+            try {
+                val body = JSONObject().apply {
+                    put("address", loginEmail)
+                    put("password", loginPass)
+                }.toString().toRequestBody(JSON_MT)
+                val req = Request.Builder().url("$MAILTM/accounts").post(body).build()
+                val res = http.newCall(req).execute()
+                when (res.code) {
+                    201  -> { log("Tao hop thu OK: $loginEmail"); break }
+                    422  -> {
+                        loginEmail = randEmail(domain)
+                        loginPass  = randPassword()
+                        log("422 - Thu email moi: $loginEmail")
+                    }
+                    else -> log("Mail.tm HTTP ${res.code}")
+                }
+            } catch (e: Exception) {
+                log("Mail.tm loi: ${e.message}")
+            }
+            delay(2000)
+        }
+        autoEmail    = loginEmail
+        autoPassword = loginPass
 
-        // Save account
+        // 4. Login mail.tm — retry up to 5 times
+        log("Dang nhap Mail.tm...")
+        for (attempt in 1..5) {
+            try {
+                delay(if (attempt == 1) 1000L else 2500L)
+                val body = JSONObject().apply {
+                    put("address", loginEmail)
+                    put("password", loginPass)
+                }.toString().toRequestBody(JSON_MT)
+                val req = Request.Builder().url("$MAILTM/token").post(body).build()
+                val res = http.newCall(req).execute()
+                val tok = JSONObject(res.body?.string() ?: "{}").optString("token", "")
+                if (tok.isNotEmpty()) {
+                    mailtmToken = tok
+                    log("Dang nhap Mail.tm OK")
+                    break
+                } else {
+                    log("Token trong ($attempt/5)...")
+                }
+            } catch (e: Exception) {
+                log("Login loi: ${e.message}")
+            }
+        }
+
+        if (mailtmToken.isEmpty()) log("Khong dang nhap duoc Mail.tm")
+
+        // 5. Save account
         accounts.add(AccountEntry(email = autoEmail, password = autoPassword, username = autoUsername))
         saveAccounts()
 
-        // Load Replit signup
+        // 6. Navigate to Replit signup
         withContext(Dispatchers.Main) {
-            log("Mo trang dang ky Replit...")
+            log("Mo Replit signup...")
             binding.webView.loadUrl("https://replit.com/signup")
         }
 
-        // Wait then poll for verification
-        delay(10000)
-        pollVerification(autoEmail, autoPassword)
+        // 7. Poll for verify email
+        delay(15000)
+        if (mailtmToken.isNotEmpty()) {
+            pollVerification()
+        } else {
+            log("Bo qua poll - khong co token")
+        }
     }
 
-    private suspend fun pollVerification(email: String, password: String) = withContext(Dispatchers.IO) {
+    private suspend fun pollVerification() = withContext(Dispatchers.IO) {
         log("Cho email xac thuc tu Replit...")
-
-        val token = try {
-            val reqBody = JSONObject().apply {
-                put("address", email); put("password", password)
-            }.toString().toRequestBody(JSON_MT)
-            val req = Request.Builder().url("$MAILTM/token").post(reqBody).build()
-            val res = http.newCall(req).execute()
-            JSONObject(res.body?.string() ?: "{}").optString("token", "")
-        } catch (e: Exception) { "" }
-
-        if (token.isEmpty()) { log("Khong dang nhap duoc Mail.tm"); return@withContext }
-
-        repeat(60) { attempt ->
+        repeat(72) { attempt ->
             delay(5000)
             try {
-                val req = Request.Builder().url("$MAILTM/messages")
-                    .header("Authorization", "Bearer $token").build()
-                val res = http.newCall(req).execute()
+                val req = Request.Builder()
+                    .url("$MAILTM/messages")
+                    .header("Authorization", "Bearer $mailtmToken")
+                    .build()
+                val res  = http.newCall(req).execute()
                 val msgs = JSONObject(res.body?.string() ?: "{}").optJSONArray("hydra:member") ?: JSONArray()
                 if (msgs.length() > 0) {
+                    log("${msgs.length()} email trong hop thu")
                     for (i in 0 until msgs.length()) {
-                        val msg = msgs.getJSONObject(i)
-                        val subject = msg.optString("subject", "")
-                        if (subject.contains("verify", ignoreCase = true) ||
-                            subject.contains("confirm", ignoreCase = true) ||
-                            subject.contains("Replit", ignoreCase = true)) {
-                            log("Email xac thuc: $subject")
-                            val msgId = msg.getString("id")
-                            val req2 = Request.Builder().url("$MAILTM/messages/$msgId")
-                                .header("Authorization", "Bearer $token").build()
-                            val res2 = http.newCall(req2).execute()
-                            val fullBody = res2.body?.string() ?: "{}"
-                            val html = JSONObject(fullBody).optString("html", "")
-                            // Extract verify link using simple string parsing
-                            val verifyUrl = extractVerifyLink(html)
-                            if (verifyUrl != null) {
-                                log("Link xac thuc tim thay!")
-                                withContext(Dispatchers.Main) { showVerifyOverlay(verifyUrl) }
+                        val msg  = msgs.getJSONObject(i)
+                        val subj = msg.optString("subject", "")
+                        if (subj.contains("verify", ignoreCase = true) ||
+                            subj.contains("confirm", ignoreCase = true) ||
+                            subj.contains("Replit", ignoreCase = true)) {
+                            log("Email xac thuc: $subj")
+                            val req2 = Request.Builder()
+                                .url("$MAILTM/messages/${msg.getString("id")}")
+                                .header("Authorization", "Bearer $mailtmToken")
+                                .build()
+                            val html = JSONObject(http.newCall(req2).execute().body?.string() ?: "{}").optString("html", "")
+                            val link = extractVerifyLink(html)
+                            if (link != null) {
+                                log("Tim thay link xac thuc!")
+                                withContext(Dispatchers.Main) { openVerifyTab(link) }
                                 return@withContext
                             } else {
-                                log("Khong tim thay link xac thuc trong email")
+                                log("Khong tim thay link trong email")
                             }
                         }
                     }
                 }
+                if (attempt > 0 && attempt % 6 == 0) log("Dang cho... ${(attempt + 1) * 5}s")
             } catch (e: Exception) {
-                if (attempt % 6 == 0) log("Dang cho... ${(attempt + 1) * 5}s")
+                if (attempt % 12 == 0) log("Poll loi: ${e.message}")
             }
         }
-        log("Het thoi gian cho email xac thuc")
+        log("Het thoi gian cho email")
     }
 
-    // Extract replit verify link using simple substring matching (no Regex escaping issues)
+    // Use char codes to avoid quote escaping issues in the extractor
     private fun extractVerifyLink(html: String): String? {
+        val DQUOTE = 34.toChar()
+        val SQUOTE = 39.toChar()
+        val SPACE  = 32.toChar()
+        val NL     = 10.toChar()
+        val LT     = 60.toChar()
+        val GT     = 62.toChar()
         val markers = listOf("confirm-email", "verify-email", "email-verification", "verifyEmail")
         for (marker in markers) {
             val idx = html.indexOf(marker)
             if (idx < 0) continue
-            // Walk backwards to find start of URL (https://)
             var start = idx
-            while (start > 0 && html[start - 1] != '"' && html[start - 1] != '\''
-                   && html[start - 1] != '<' && html[start - 1] != ' ' && html[start - 1] != '\n') {
+            while (start > 0) {
+                val ch = html[start - 1]
+                if (ch == DQUOTE || ch == SQUOTE || ch == SPACE || ch == NL || ch == LT) break
                 start--
             }
-            // Walk forward to find end of URL
             var end = idx
-            while (end < html.length && html[end] != '"' && html[end] != '\''
-                   && html[end] != '>' && html[end] != ' ' && html[end] != '\n') {
+            while (end < html.length) {
+                val ch = html[end]
+                if (ch == DQUOTE || ch == SQUOTE || ch == GT || ch == SPACE || ch == NL) break
                 end++
             }
             val url = html.substring(start, end)
@@ -389,11 +444,13 @@ class MainActivity : AppCompatActivity() {
         return null
     }
 
+    // ─── Back press ───────────────────────────────────────────────────────────
+
     override fun onBackPressed() {
         when {
-            binding.verifyOverlay.visibility == View.VISIBLE ->
-                binding.verifyOverlay.visibility = View.GONE
-            logOpen -> { binding.logPanel.visibility = View.GONE; logOpen = false }
+            panelOpen && showingVerify && binding.verifyWebView.canGoBack() ->
+                binding.verifyWebView.goBack()
+            panelOpen -> { binding.logPanel.visibility = View.GONE; panelOpen = false }
             binding.webView.canGoBack() -> binding.webView.goBack()
             else -> super.onBackPressed()
         }
