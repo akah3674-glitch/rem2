@@ -240,6 +240,13 @@ class MainActivity : AppCompatActivity() {
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String) {
                 runOnUiThread { binding.swipeRefresh.isRefreshing = false }
+                // Sau khi verify link chay trong main WebView → detect thanh cong
+                if (url.contains("replit.com") && !url.contains("verify") &&
+                    !url.contains("confirm") && !url.contains("signup") &&
+                    !url.contains("login") && url != "about:blank") {
+                    log("✓ Xac thuc thanh cong! Da vao dashboard Replit.")
+                    CookieManager.getInstance().flush()
+                }
                 val isSignup = url.contains("signup") || url.contains("login") || url.contains("register")
                 if (isSignup && autoEmail.isNotEmpty()) {
                     // Inject immediately and again after 1s, 2s, 4s
@@ -346,24 +353,19 @@ class MainActivity : AppCompatActivity() {
 
         vwv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String) {
-                if (url.contains("replit.com") &&
-                    !url.contains("verify") &&
-                    !url.contains("confirm") &&
-                    url != "about:blank") {
-                    log("Xac thuc email thanh cong!")
-                    CookieManager.getInstance().flush()
-                    // Reload main webview to pick up auth
-                    runOnUiThread {
-                        binding.webView.reload()
-                    }
-                }
+                // O be chi show mail.tm inbox — khong can xu ly Replit o day
             }
         }
     }
 
     private fun openVerifyTab(url: String) = runOnUiThread {
-        log("Mo link xac thuc trong panel...")
-        binding.verifyWebView.loadUrl(url)
+        log("Tim thay link xac thuc — dang xac minh trong WebView chinh...")
+        // Load verify URL vao MAIN WebView → Replit tu xac minh & chuyen huong
+        binding.webView.loadUrl(url)
+        // verifyWebView chi show hop thu mail.tm de xem email
+        if (binding.verifyWebView.url == null || binding.verifyWebView.url == "about:blank") {
+            binding.verifyWebView.loadUrl("https://mail.tm")
+        }
         panelOpen = true
         binding.logPanel.visibility = View.VISIBLE
         switchTab(true)
