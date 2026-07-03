@@ -21,6 +21,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -78,35 +79,10 @@ class MainActivity : AppCompatActivity() {
         private const val MAILTM          = "https://api.mail.tm"
         private val JSON_MT = "application/json; charset=utf-8".toMediaType()
 
-        private const val MOBILE_UA =
-            "Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) coc_coc_browser/117.0.0 Chrome/111.0.5563.116 Mobile Safari/537.36"
         private const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/120.0.6099.210 Safari/537.36"
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
-        private val FIRST_NAMES = listOf(
-            "Alex","Sam","Jordan","Taylor","Morgan","Casey","Riley","Avery",
-            "Blake","Cameron","Drew","Elliot","Finley","Harper","Jamie","Kai",
-            "Logan","Mika","Noah","Quinn","Robin","Sage","Skyler","Toby"
-        )
-        private val LAST_NAMES = listOf(
-            "Smith","Lee","Chen","Park","Johnson","Brown","Davis","Wilson",
-            "Moore","Taylor","Anderson","Thomas","Jackson","White","Harris",
-            "Martin","Garcia","Martinez","Robinson","Clark"
-        )
-        fun randomFullName() = "${FIRST_NAMES.random()} ${LAST_NAMES.random()}"
-        fun randomUsername(): String {
-            val adjs  = listOf("cool","fast","dark","blue","wild","swift","calm","bright","smart","keen")
-            val nouns = listOf("fox","hawk","wolf","bear","lion","ace","star","byte","code","dev")
-            return adjs.random() + nouns.random() + (1000..9999).random()
-        }
-        fun randomPassword(): String {
-            val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP0123456789!@#"
-            return (1..14).map { chars.random() }.joinToString("")
-        }
-
-        // ── Device profiles ──────────────────────────────────────────────────
         data class DeviceProfile(
             val name: String, val ua: String,
             val screenW: Int, val screenH: Int,
@@ -115,30 +91,39 @@ class MainActivity : AppCompatActivity() {
         )
         val DEVICE_PROFILES = listOf(
             DeviceProfile("Samsung S23",
-                "Mozilla/5.0 (Linux; Android 13; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
                 393, 851, 8, 8, "Asia/Ho_Chi_Minh"),
             DeviceProfile("Samsung A54",
-                "Mozilla/5.0 (Linux; Android 13; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.193 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.118 Mobile Safari/537.36",
                 360, 780, 6, 8, "Asia/Ho_Chi_Minh"),
             DeviceProfile("Xiaomi 13",
-                "Mozilla/5.0 (Linux; Android 13; 2211133C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.230 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; 2211133C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
                 393, 851, 12, 8, "Asia/Bangkok"),
             DeviceProfile("Redmi Note 12",
-                "Mozilla/5.0 (Linux; Android 13; 23021RAAEG) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.111 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; 23021RAAEG) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.119 Mobile Safari/537.36",
                 393, 873, 6, 8, "Asia/Jakarta"),
             DeviceProfile("OPPO Reno10",
-                "Mozilla/5.0 (Linux; Android 13; CPH2531) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.6045.163 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; CPH2531) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.80 Mobile Safari/537.36",
                 412, 915, 8, 8, "Asia/Singapore"),
-            DeviceProfile("Vivo Y36",
-                "Mozilla/5.0 (Linux; Android 13; V2247) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.5938.140 Mobile Safari/537.36",
-                393, 873, 8, 8, "Asia/Ho_Chi_Minh"),
             DeviceProfile("Pixel 7",
-                "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
                 412, 915, 8, 8, "America/New_York"),
-            DeviceProfile("OnePlus 11",
-                "Mozilla/5.0 (Linux; Android 13; CPH2449) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.210 Mobile Safari/537.36",
-                412, 919, 16, 8, "Europe/London")
         )
+
+        fun randomFullName(): String {
+            val first = listOf("Alex","Sam","Jordan","Taylor","Morgan","Casey","Riley","Blake","Kai","Logan")
+            val last  = listOf("Smith","Lee","Chen","Park","Johnson","Brown","Davis","Wilson","Moore","Taylor")
+            return "${first.random()} ${last.random()}"
+        }
+        fun randomUsername(): String {
+            val adjs  = listOf("cool","fast","dark","blue","wild","swift","bright","smart","keen","top")
+            val nouns = listOf("fox","hawk","wolf","ace","star","byte","code","dev","pro","net")
+            return adjs.random() + nouns.random() + (1000..9999).random()
+        }
+        fun randomPassword(): String {
+            val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP0123456789!@#"
+            return (1..14).map { chars.random() }.joinToString("")
+        }
     }
 
     // ── Binding ──────────────────────────────────────────────────────────────
@@ -147,8 +132,8 @@ class MainActivity : AppCompatActivity() {
 
     // ── HTTP ─────────────────────────────────────────────────────────────────
     private val http = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(25, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
     // ── Tabs ─────────────────────────────────────────────────────────────────
@@ -168,8 +153,8 @@ class MainActivity : AppCompatActivity() {
     private var isDesktopMode = false
 
     // ── Mail state ────────────────────────────────────────────────────────────
-    private var mailToken   = ""
-    private var mailEmail   = ""
+    private var mailToken    = ""
+    private var mailEmail    = ""
     private var mailPassword = ""
     private var pollJob: Job? = null
     private val seenIds = mutableSetOf<String>()
@@ -208,6 +193,12 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Enable cookies globally (needed for hCaptcha/Cloudflare)
+        CookieManager.getInstance().apply {
+            setAcceptCookie(true)
+            setAcceptThirdPartyCookies(binding.root as? WebView ?: WebView(this@MainActivity), true)
+        }
+
         requestStoragePermissionIfNeeded()
         loadAccounts()
         setupPanel()
@@ -216,16 +207,13 @@ class MainActivity : AppCompatActivity() {
         setupVerifyWebView()
 
         addNewTab("https://replit.com", select = true)
-
         lifecycleScope.launch { ensureMailAccount() }
     }
 
     // ─── Tab management ────────────────────────────────────────────────────────
 
     private fun addNewTab(url: String? = null, select: Boolean = true): TabEntry {
-        // Tab đầu tiên → replit.com; tab mới → trang login để đăng ký tài khoản riêng
-        val targetUrl = url ?: if (tabs.isEmpty()) "https://replit.com"
-                                else "https://replit.com/login"
+        val targetUrl = url ?: "https://replit.com/signup"
         val entry = TabEntry(url = targetUrl)
         tabs.add(entry)
         val wv = createWebView()
@@ -235,6 +223,7 @@ class MainActivity : AppCompatActivity() {
         wv.loadUrl(targetUrl)
         if (select) selectTab(tabs.size - 1) else wv.visibility = View.GONE
         renderTabBar()
+        renderPanelTabList()
         return entry
     }
 
@@ -245,14 +234,16 @@ class MainActivity : AppCompatActivity() {
         }
         activeTabIndex = index
         renderTabBar()
+        renderPanelTabList()
     }
 
     private fun closeTab(index: Int) {
-        if (tabs.size <= 1) return
+        if (tabs.size <= 1) { toast("Không thể đóng tab cuối"); return }
         tabs[index].webView?.let { binding.webContainer.removeView(it); it.destroy() }
         tabs.removeAt(index)
         selectTab(if (index >= tabs.size) tabs.size - 1 else index)
         renderTabBar()
+        renderPanelTabList()
     }
 
     private fun renderTabBar() {
@@ -265,47 +256,89 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 background = if (i == activeTabIndex) GradientDrawable().apply {
-                    setColor(0xFFEEEEEE.toInt()); cornerRadius = 6 * dp } else null
+                    setColor(0xFF1565C0.toInt()); cornerRadius = 6 * dp } else null
                 setPadding((6*dp).toInt(), 0, (2*dp).toInt(), 0)
                 setOnClickListener { selectTab(i); closePanel() }
             }
             val title = TextView(this).apply {
-                text = (if (i == activeTabIndex) "● " else "") + tab.title.take(12).ifEmpty { "Replit" }
-                textSize = 12f
-                setTextColor(if (i == activeTabIndex) Color.WHITE else 0xFF555555.toInt())
+                text = tab.title.take(14).ifEmpty { "Replit" }
+                textSize = 11.5f
+                setTextColor(if (i == activeTabIndex) Color.WHITE else 0xFF444444.toInt())
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setSingleLine(true)
-                maxWidth = (120 * dp).toInt()
+                maxWidth = (110 * dp).toInt()
             }
             val closeBtn = TextView(this).apply {
                 text = " ✕"
-                textSize = 11f
-                setTextColor(if (i == activeTabIndex) 0xFFAAAAAA.toInt() else 0xFF555555.toInt())
+                textSize = 10f
+                setTextColor(if (i == activeTabIndex) 0xFFCCCCCC.toInt() else 0xFF888888.toInt())
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setPadding((2*dp).toInt(), 0, (4*dp).toInt(), 0)
-                setOnClickListener {
-                    if (tabs.size > 1) closeTab(i) else toast("Không thể đóng tab cuối")
-                }
+                setOnClickListener { closeTab(i) }
             }
             chip.addView(title)
             chip.addView(closeBtn)
             bar.addView(chip, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
-            ).apply { setMargins((2*dp).toInt(), (4*dp).toInt(), (2*dp).toInt(), (4*dp).toInt()) })
+            ).apply { setMargins((2*dp).toInt(), (3*dp).toInt(), (2*dp).toInt(), (3*dp).toInt()) })
         }
         binding.tabScrollView.post {
             bar.getChildAt(activeTabIndex)?.let { binding.tabScrollView.smoothScrollTo(it.left, 0) }
         }
     }
 
+    /** Panel's tab list (inside mail panel) */
+    private fun renderPanelTabList() {
+        val container = binding.panelTabList
+        container.removeAllViews()
+        val dp = resources.displayMetrics.density
+
+        tabs.forEachIndexed { i, tab ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                background = if (i == activeTabIndex) GradientDrawable().apply {
+                    setColor(0xFFE3F2FD.toInt()); cornerRadius = 6 * dp } else null
+                setPadding((10*dp).toInt(), (5*dp).toInt(), (6*dp).toInt(), (5*dp).toInt())
+                setOnClickListener { selectTab(i); closePanel() }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins((4*dp).toInt(), (2*dp).toInt(), (4*dp).toInt(), (2*dp).toInt()) }
+            }
+            val indicator = TextView(this).apply {
+                text = if (i == activeTabIndex) "●" else "○"
+                textSize = 8f
+                setTextColor(if (i == activeTabIndex) 0xFF1565C0.toInt() else 0xFF999999.toInt())
+                setPadding(0, 0, (6*dp).toInt(), 0)
+            }
+            val title = TextView(this).apply {
+                text = tab.title.take(24).ifEmpty { "Replit" }
+                textSize = 12f
+                setTextColor(if (i == activeTabIndex) 0xFF1565C0.toInt() else 0xFF333333.toInt())
+                setSingleLine(true)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val closeBtn = TextView(this).apply {
+                text = "✕"
+                textSize = 11f
+                setTextColor(0xFF999999.toInt())
+                setPadding((8*dp).toInt(), 0, (4*dp).toInt(), 0)
+                setOnClickListener { closeTab(i) }
+            }
+            row.addView(indicator)
+            row.addView(title)
+            row.addView(closeBtn)
+            container.addView(row)
+        }
+    }
+
     private fun setupTabActions() {
         binding.btnReload.setOnClickListener {
             tabs.getOrNull(activeTabIndex)?.webView?.reload()
-            // Spin animation 360°
             ObjectAnimator.ofFloat(binding.btnReload, "rotation", 0f, 360f).apply {
-                duration = 600
-                start()
+                duration = 600; start()
             }
         }
         binding.btnNewTab.setOnClickListener {
@@ -318,22 +351,8 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
     private fun createWebView(): WebView {
         val wv = WebView(this)
-        wv.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled = true
-            allowFileAccess = true
-            allowContentAccess = true
-            setSupportZoom(true)
-            builtInZoomControls = true
-            displayZoomControls = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            mediaPlaybackRequiresUserGesture = false
-            userAgentString = currentDevice.ua
-            cacheMode = WebSettings.LOAD_DEFAULT
-            loadWithOverviewMode = true
-            useWideViewPort = true
-        }
+        applyWebViewSettings(wv)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
         wv.addJavascriptInterface(object : Any() {
             @JavascriptInterface
@@ -347,6 +366,10 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 view.evaluateJavascript(buildAntiDetectJs(currentDevice), null)
+                // Inject captcha fix early
+                if (url.contains("replit.com")) {
+                    view.evaluateJavascript(buildCaptchaFixJs(), null)
+                }
             }
 
             override fun onPageFinished(view: WebView, url: String) {
@@ -354,23 +377,23 @@ class MainActivity : AppCompatActivity() {
                 if (idx >= 0) {
                     tabs[idx].url = url
                     tabs[idx].title = view.title?.take(18)?.ifEmpty { "Replit" } ?: "Replit"
-                    if (idx == activeTabIndex) renderTabBar()
+                    if (idx == activeTabIndex) { renderTabBar(); renderPanelTabList() }
                 }
-                // Inject field focus detection
                 view.evaluateJavascript(buildFieldFocusJs(), null)
-                // CAPTCHA fix on signup pages
                 if (url.contains("replit.com")) {
                     view.evaluateJavascript(buildCaptchaFixJs(), null)
-                    // Auto-fill ONLY on registration page (skip login)
+                    // Auto-fill ONLY on signup pages
                     val isSignup = (url.contains("/signup") || url.contains("/join"))
                         && !url.contains("/login") && !url.contains("/signin")
                     if (isSignup && autoEmail.isNotEmpty()) {
                         view.postDelayed({
                             injectSignupForm(view, autoEmail, autoUsername, autoPassword, autoFullName)
-                        }, 1500)
+                        }, 1800)
                     }
-                    // Auto-onboarding
-                    if (url.contains("onboarding") || url.contains("plans") || url.contains("wizard")) {
+                    // Auto-onboarding (wizard questions)
+                    val isOnboarding = url.contains("onboarding") || url.contains("plans")
+                        || url.contains("wizard") || url.contains("get-started")
+                    if (isOnboarding) {
                         view.postDelayed({ injectOnboardingStep(view, autoFullName) }, 1500)
                     }
                 }
@@ -382,7 +405,7 @@ class MainActivity : AppCompatActivity() {
                 val idx = tabs.indexOfFirst { it.webView == view }
                 if (idx >= 0) {
                     tabs[idx].title = title.take(18).ifEmpty { "Replit" }
-                    if (idx == activeTabIndex) renderTabBar()
+                    if (idx == activeTabIndex) { renderTabBar(); renderPanelTabList() }
                 }
             }
             override fun onShowFileChooser(
@@ -391,7 +414,6 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 fileUploadCallback?.onReceiveValue(null)
                 fileUploadCallback = filePathCallback
-                // Use ACTION_OPEN_DOCUMENT for persistent URI access across process boundaries
                 val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "*/*"
@@ -399,7 +421,7 @@ class MainActivity : AppCompatActivity() {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
                              Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
-                val chooser = Intent.createChooser(pick, "Chọn file đính kèm")
+                val chooser = Intent.createChooser(pick, "Chọn file")
                 return try { filePickerLauncher.launch(chooser); true }
                 catch (e: Exception) {
                     fileUploadCallback?.onReceiveValue(null); fileUploadCallback = null; false
@@ -407,22 +429,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Swipe left/right to navigate back/forward
         val gd = GestureDetectorCompat(this, object : GestureDetector.SimpleOnGestureListener() {
             override fun onFling(e1: MotionEvent?, e2: MotionEvent, vX: Float, vY: Float): Boolean {
                 if (e1 == null) return false
-                val dx = e2.x - e1.x
-                val dy = e2.y - e1.y
-                // Easier trigger: |dx| > |dy| (not 1.5x), velocity > 250
-                if (Math.abs(dx) < Math.abs(dy) || Math.abs(vX) < 250) return false
-                // Both left and right swipe → go back
-                return if (Math.abs(dx) > 60) {
-                    if (wv.canGoBack()) {
-                        wv.goBack()
-                        wv.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
-                        runOnUiThread { toast("◀ Quay lại") }
-                        true
-                    } else false
+                val dx = e2.x - e1.x; val dy = e2.y - e1.y
+                if (Math.abs(dx) < Math.abs(dy) || Math.abs(vX) < 250 || Math.abs(dx) < 60) return false
+                return if (wv.canGoBack()) {
+                    wv.goBack()
+                    wv.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                    true
                 } else false
             }
         })
@@ -430,30 +445,54 @@ class MainActivity : AppCompatActivity() {
         return wv
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun applyWebViewSettings(wv: WebView) {
+        wv.settings.apply {
+            javaScriptEnabled          = true
+            domStorageEnabled          = true
+            databaseEnabled            = true
+            allowFileAccess            = true
+            allowContentAccess         = true
+            setSupportZoom(true)
+            builtInZoomControls        = true
+            displayZoomControls        = false
+            mixedContentMode           = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            mediaPlaybackRequiresUserGesture = false
+            userAgentString            = if (isDesktopMode) DESKTOP_UA else currentDevice.ua
+            cacheMode                  = WebSettings.LOAD_DEFAULT
+            loadWithOverviewMode       = true
+            useWideViewPort            = true
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(true)
+            // Important for Replit: loosen sandbox
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                safeBrowsingEnabled = false
+            }
+        }
+        WebView.setWebContentsDebuggingEnabled(false)
+    }
+
     // ─── Verify WebView (inside panel) ────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupVerifyWebView() {
-        binding.verifyWebView.apply {
-            settings.javaScriptEnabled = true
-            settings.domStorageEnabled = true
-            settings.userAgentString = currentDevice.ua
-            webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
-                override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                    v.evaluateJavascript(buildAntiDetectJs(currentDevice), null)
-                }
-                override fun onPageFinished(v: WebView, url: String) {
-                    if (url.contains("onboarding") || url.contains("plans")) {
-                        v.postDelayed({ injectOnboardingStep(v, autoFullName) }, 1500)
-                    } else if (url.contains("replit.com") && !url.contains("verify") &&
-                               !url.contains("confirm") && url != "about:blank") {
-                        // Verify complete — hide verifyWebView, show mail list
-                        runOnUiThread {
-                            binding.verifyWebView.visibility = View.GONE
-                            binding.mailListScroll.visibility = View.VISIBLE
-                            toast("✅ Xác thực thành công!")
-                        }
+        val vwv = binding.verifyWebView
+        applyWebViewSettings(vwv)
+        CookieManager.getInstance().setAcceptThirdPartyCookies(vwv, true)
+        vwv.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
+            override fun onPageStarted(v: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                v.evaluateJavascript(buildAntiDetectJs(currentDevice), null)
+            }
+            override fun onPageFinished(v: WebView, url: String) {
+                if (url.contains("onboarding") || url.contains("plans") || url.contains("wizard")) {
+                    v.postDelayed({ injectOnboardingStep(v, autoFullName) }, 1500)
+                } else if (url.contains("replit.com") && !url.contains("verify") &&
+                           !url.contains("confirm") && url != "about:blank") {
+                    runOnUiThread {
+                        binding.verifyWebView.visibility    = View.GONE
+                        binding.mailListScroll.visibility   = View.VISIBLE
+                        toast("✅ Xác thực thành công!")
                     }
                 }
             }
@@ -465,25 +504,12 @@ class MainActivity : AppCompatActivity() {
     private fun setupPanel() {
         binding.tabAccounts.setOnClickListener { switchPanelSection(0) }
         binding.tabMailList.setOnClickListener  { switchPanelSection(1) }
+        binding.tabPanelTabs.setOnClickListener { switchPanelSection(2) }
+        binding.btnClose.setOnClickListener     { closePanel() }
 
-        binding.btnClose.setOnClickListener { closePanel() }
-
-        binding.btnToggleSearch.setOnClickListener {
-            if (binding.etSearch.visibility == View.GONE) {
-                binding.tvPanelTitle.visibility = View.GONE
-                binding.etSearch.visibility    = View.VISIBLE
-                binding.etSearch.requestFocus()
-                showKeyboard(binding.etSearch)
-            } else {
-                binding.etSearch.visibility    = View.GONE
-                binding.tvPanelTitle.visibility = View.VISIBLE
-                hideKeyboard()
-            }
-        }
-
+        // Search bar submit
         binding.etSearch.setOnEditorActionListener { _, actionId, event ->
-            if (actionId == EditorInfo.IME_ACTION_GO ||
-                event?.keyCode == KeyEvent.KEYCODE_ENTER) {
+            if (actionId == EditorInfo.IME_ACTION_GO || event?.keyCode == KeyEvent.KEYCODE_ENTER) {
                 val q = binding.etSearch.text.toString().trim()
                 if (q.isNotEmpty()) {
                     val url = if (q.startsWith("http")) q
@@ -495,7 +521,29 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
 
-        binding.btnRefresh.setOnClickListener {
+        // Search icon toggle
+        binding.btnToggleSearch.setOnClickListener {
+            val isOpen = binding.etSearch.visibility == View.VISIBLE
+            binding.etSearch.visibility = if (isOpen) View.GONE else View.VISIBLE
+            binding.tvPanelTitle.visibility = if (isOpen) View.VISIBLE else View.GONE
+            if (!isOpen) { binding.etSearch.requestFocus(); showKeyboard(binding.etSearch) }
+            else hideKeyboard()
+        }
+
+        // Desktop mode toggle
+        binding.btnDesktop.setOnClickListener {
+            isDesktopMode = !isDesktopMode
+            val ua = if (isDesktopMode) DESKTOP_UA else currentDevice.ua
+            tabs.forEach { it.webView?.settings?.userAgentString = ua }
+            tabs.getOrNull(activeTabIndex)?.webView?.reload()
+            binding.btnDesktop.setTextColor(
+                if (isDesktopMode) 0xFF1565C0.toInt() else 0xFF888888.toInt()
+            )
+            toast(if (isDesktopMode) "Chế độ máy tính bật" else "Chế độ di động")
+        }
+
+        // + button: delete old mail, create new mail
+        binding.btnNewMail.setOnClickListener {
             lifecycleScope.launch {
                 stopPolling()
                 prefs.edit()
@@ -505,8 +553,9 @@ class MainActivity : AppCompatActivity() {
                 seenIds.clear()
                 withContext(Dispatchers.Main) {
                     binding.mailList.removeAllViews()
-                    binding.tvMailStatus.text = "Đang tạo email mới..."
-                    binding.tvBottomStatus.text = ""
+                    binding.verifyWebView.visibility  = View.GONE
+                    binding.mailListScroll.visibility = View.VISIBLE
+                    binding.tvMailStatus.text = "⏳ Đang tạo email mới..."
                     toast("Đang tạo email mới...")
                 }
                 ensureMailAccount(force = true)
@@ -514,11 +563,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.tvMailStatus.setOnClickListener {
-            if (mailEmail.isNotEmpty()) {
-                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(ClipData.newPlainText("email", mailEmail))
-                toast("Đã copy: $mailEmail")
-            }
+            if (mailEmail.isNotEmpty()) copyToClipboard(mailEmail, "Email đã copy")
+        }
+
+        // Add tab from panel
+        binding.btnPanelNewTab.setOnClickListener {
+            addNewTab(); closePanel()
         }
 
         refreshAccountList()
@@ -526,22 +576,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun switchPanelSection(section: Int) {
         panelSection = section
-        if (section == 0) {
-            binding.accountsContainer.visibility = View.VISIBLE
-            binding.verifyContainer.visibility = View.GONE
-            binding.tabAccounts.setBackgroundColor(0xFF1565C0.toInt())
-            binding.tabAccounts.setTextColor(Color.WHITE)
-            binding.tabMailList.setBackgroundColor(Color.TRANSPARENT)
-            binding.tabMailList.setTextColor(0xFF1565C0.toInt())
-        } else {
-            binding.accountsContainer.visibility = View.GONE
-            binding.verifyContainer.visibility = View.VISIBLE
-            binding.tabMailList.setBackgroundColor(0xFF1565C0.toInt())
-            binding.tabMailList.setTextColor(Color.WHITE)
-            binding.tabAccounts.setBackgroundColor(Color.TRANSPARENT)
-            binding.tabAccounts.setTextColor(0xFF1565C0.toInt())
-            if (mailToken.isNotEmpty()) startPolling()
+        val sections = listOf(binding.accountsContainer, binding.verifyContainer, binding.tabsContainer)
+        val tabBtns  = listOf(binding.tabAccounts, binding.tabMailList, binding.tabPanelTabs)
+        sections.forEachIndexed { i, v -> v.visibility = if (i == section) View.VISIBLE else View.GONE }
+        tabBtns.forEachIndexed { i, tv ->
+            if (i == section) {
+                tv.setBackgroundColor(0xFF1565C0.toInt()); tv.setTextColor(Color.WHITE)
+            } else {
+                tv.setBackgroundColor(Color.TRANSPARENT); tv.setTextColor(0xFF1565C0.toInt())
+            }
         }
+        if (section == 1 && mailToken.isNotEmpty()) startPolling()
+        if (section == 2) renderPanelTabList()
     }
 
     private fun openPanel() {
@@ -568,11 +614,11 @@ class MainActivity : AppCompatActivity() {
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
                 accounts.add(AccountEntry(
-                    id = o.optString("id", UUID.randomUUID().toString()),
-                    email = o.getString("email"),
+                    id       = o.optString("id", UUID.randomUUID().toString()),
+                    email    = o.getString("email"),
                     password = o.optString("password", ""),
                     username = o.optString("username", ""),
-                    createdAt = o.optLong("createdAt", System.currentTimeMillis())
+                    createdAt= o.optLong("createdAt", System.currentTimeMillis())
                 ))
             }
         } catch (_: Exception) {}
@@ -592,8 +638,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun addOrUpdateAccount(acc: AccountEntry) {
         if (accounts.none { it.email == acc.email }) {
-            accounts.add(0, acc)
-            saveAccounts()
+            accounts.add(0, acc); saveAccounts()
             runOnUiThread { refreshAccountList() }
         }
     }
@@ -604,106 +649,150 @@ class MainActivity : AppCompatActivity() {
         val dp = resources.displayMetrics.density
 
         if (accounts.isEmpty()) {
-            binding.tvAccountsEmpty.visibility = View.VISIBLE
-            return
+            binding.tvAccountsEmpty.visibility = View.VISIBLE; return
         }
         binding.tvAccountsEmpty.visibility = View.GONE
 
         accounts.forEach { acc ->
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding((12*dp).toInt(), (8*dp).toInt(), (12*dp).toInt(), (8*dp).toInt())
+                setPadding((10*dp).toInt(), (8*dp).toInt(), (10*dp).toInt(), (8*dp).toInt())
                 background = GradientDrawable().apply {
-                    setColor(0xFFEEEEEE.toInt()); cornerRadius = 8 * dp }
+                    setColor(0xFFF0F4FF.toInt()); cornerRadius = 8 * dp
+                    setStroke(1, 0xFFD0D9FF.toInt())
+                }
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins((8*dp).toInt(),(4*dp).toInt(),(8*dp).toInt(),(4*dp).toInt()) }
+                ).apply { setMargins((8*dp).toInt(), (3*dp).toInt(), (8*dp).toInt(), (3*dp).toInt()) }
             }
 
             // Email row
-            val emailRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = android.view.Gravity.CENTER_VERTICAL
+            val emailRow = makeCredRow("📧", acc.email, true) {
+                // Smart paste: if email field focused → paste email
+                smartPaste(acc.email, acc.password, "email")
             }
-            val emailTv = TextView(this).apply {
-                text = "📧 " + acc.email
-                textSize = 12f
-                setTextColor(0xFF1565C0.toInt())
-                setSingleLine(true)
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
-            val pasteEmail = TextView(this).apply {
-                text = "📋"
-                textSize = 14f
-                setPadding((8*dp).toInt(), 0, 0, 0)
-                setOnClickListener { pasteIntoWebView(acc.email) }
-            }
-            emailRow.addView(emailTv); emailRow.addView(pasteEmail)
-
             // Password row
-            val passRow = LinearLayout(this).apply {
+            val passRow = makeCredRow("🔑", "•".repeat(minOf(acc.password.length, 10)), false) {
+                smartPaste(acc.email, acc.password, "password")
+            }
+
+            // Auto-fill row
+            val fillRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
-            }
-            val maskedPass = "🔑 " + "•".repeat(minOf(acc.password.length, 8))
-            val passTv = TextView(this).apply {
-                text = maskedPass
-                textSize = 12f
-                setTextColor(0xFF555555.toInt())
-                setSingleLine(true)
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            }
-            val pastePass = TextView(this).apply {
-                text = "📋"
-                textSize = 14f
-                setPadding((8*dp).toInt(), 0, 0, 0)
-                setOnClickListener { pasteIntoWebView(acc.password) }
-            }
-            passRow.addView(passTv); passRow.addView(pastePass)
-
-            // Delete button
-            val delBtn = TextView(this).apply {
-                text = "🗑 Xoá"
-                textSize = 10f
-                setTextColor(0xFF888888.toInt())
                 setPadding(0, (4*dp).toInt(), 0, 0)
+            }
+            val fillBtn = TextView(this).apply {
+                text = "⚡ Tự điền tài khoản này"
+                textSize = 11f
+                setTextColor(0xFF1565C0.toInt())
+                background = GradientDrawable().apply {
+                    setColor(0xFFE3EFFF.toInt()); cornerRadius = 4 * dp
+                }
+                setPadding((8*dp).toInt(), (3*dp).toInt(), (8*dp).toInt(), (3*dp).toInt())
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 setOnClickListener {
-                    accounts.remove(acc)
-                    saveAccounts()
-                    refreshAccountList()
+                    autoEmail = acc.email; autoPassword = acc.password
+                    tabs.getOrNull(activeTabIndex)?.webView?.let { wv ->
+                        injectLoginForm(wv, acc.email, acc.password)
+                    }
+                    toast("Đang điền: ${acc.email.take(20)}")
                 }
             }
+            val copyBtn = TextView(this).apply {
+                text = "  📋"
+                textSize = 14f
+                setOnClickListener { copyToClipboard(acc.email + "\n" + acc.password, "Đã copy thông tin") }
+            }
+            val delBtn = TextView(this).apply {
+                text = "  🗑"
+                textSize = 14f
+                setOnClickListener {
+                    accounts.remove(acc); saveAccounts(); refreshAccountList()
+                }
+            }
+            fillRow.addView(fillBtn); fillRow.addView(copyBtn); fillRow.addView(delBtn)
 
-            card.addView(emailRow); card.addView(passRow); card.addView(delBtn)
+            card.addView(emailRow); card.addView(passRow); card.addView(fillRow)
             list.addView(card)
         }
     }
 
-    private fun pasteIntoWebView(value: String) {
+    private fun makeCredRow(icon: String, text: String, isEmail: Boolean, onTap: () -> Unit): LinearLayout {
+        val dp = resources.displayMetrics.density
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding(0, (2*dp).toInt(), 0, (2*dp).toInt())
+            val label = TextView(this@MainActivity).apply {
+                this.text = "$icon $text"
+                textSize = 12f
+                setTextColor(if (isEmail) 0xFF1565C0.toInt() else 0xFF555555.toInt())
+                setSingleLine(true)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            val btn = TextView(this@MainActivity).apply {
+                this.text = "📋"
+                textSize = 14f
+                setPadding((8*dp).toInt(), 0, 0, 0)
+                setOnClickListener { onTap() }
+            }
+            addView(label); addView(btn)
+        }
+    }
+
+    /** Smart paste: injects the right value based on focused field type */
+    private fun smartPaste(email: String, password: String, prefer: String) {
         val activeWv = tabs.getOrNull(activeTabIndex)?.webView ?: return
-        val js = """
+        val value = when {
+            focusedFieldType == "email" || (prefer == "email" && focusedFieldType.isEmpty()) -> email
+            focusedFieldType == "password" || (prefer == "password" && focusedFieldType.isEmpty()) -> password
+            else -> if (prefer == "email") email else password
+        }
+        val js = buildPasteJs(value)
+        activeWv.evaluateJavascript(js, null)
+        copyToClipboard(value, "Đã dán: ${value.take(20)}")
+    }
+
+    private fun buildPasteJs(value: String): String {
+        val escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+        return """
 (function(){
-  var el = document.activeElement;
-  if(!el || !['INPUT','TEXTAREA'].includes(el.tagName)) {
-    // find last focused visible input
-    el = document.querySelector('input:focus,textarea:focus');
+  var el=document.activeElement;
+  if(!el||!['INPUT','TEXTAREA'].includes(el.tagName)){
+    el=document.querySelector('input:focus,textarea:focus')||
+       document.querySelector('input[type="email"]:not([disabled]),input[type="password"]:not([disabled])');
   }
-  if(el) {
-    try {
+  if(el){
+    try{
       var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');
-      if(s&&s.set){s.set.call(el,'${value.replace("'","\\'")}');}
-      else{el.value='${value.replace("'","\\'")}'}
-      el.dispatchEvent(new Event('input',{bubbles:true}));
-      el.dispatchEvent(new Event('change',{bubbles:true}));
-    } catch(e) { el.value='${value.replace("'","\\'")}'; }
+      if(s&&s.set){s.set.call(el,'$escaped');}else{el.value='$escaped';}
+      ['input','change','blur'].forEach(function(ev){el.dispatchEvent(new Event(ev,{bubbles:true}));});
+    }catch(e){el.value='$escaped';}
   }
 })();
         """.trimIndent()
-        activeWv.evaluateJavascript(js, null)
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        cm.setPrimaryClip(ClipData.newPlainText("rem2", value))
-        toast("Đã dán: ${value.take(20)}")
+    }
+
+    private fun injectLoginForm(wv: WebView, email: String, password: String) {
+        val escapedEmail = email.replace("'", "\\'")
+        val escapedPass  = password.replace("'", "\\'")
+        val js = """
+(function(){
+  function fill(el,v){
+    try{var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');
+    if(s&&s.set)s.set.call(el,v);else el.value=v;
+    ['input','change','blur'].forEach(function(e){el.dispatchEvent(new Event(e,{bubbles:true}));});}
+    catch(e){el.value=v;}
+  }
+  var em=document.querySelector('input[type="email"],input[name="email"],input[autocomplete="email"]');
+  var pw=document.querySelector('input[type="password"]');
+  if(em)fill(em,'$escapedEmail');
+  if(pw)fill(pw,'$escapedPass');
+})();
+        """.trimIndent()
+        wv.evaluateJavascript(js, null)
     }
 
     // ─── Draggable Mail FAB ────────────────────────────────────────────────────
@@ -711,42 +800,34 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("ClickableViewAccessibility")
     private fun setupMailFab() {
         val dp = resources.displayMetrics.density
-        val size = (48 * dp).toInt()
+        val size = (52 * dp).toInt()
 
         val fab = TextView(this).apply {
             text = "📧"
-            textSize = 20f
+            textSize = 22f
             gravity = android.view.Gravity.CENTER
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
                 setColor(0xFF1565C0.toInt())
+                setStroke((2*dp).toInt(), 0xFF90CAF9.toInt())
             }
-            elevation = 12 * dp
-            layoutParams = android.view.WindowManager.LayoutParams(size, size)
+            elevation = 14 * dp
         }
         mailFab = fab
 
-        // Add to root view
         val root = binding.root
         root.addView(fab, ViewGroup.LayoutParams(size, size))
 
-        // Restore saved position or place bottom-right near main FAB
         fab.post {
             val sx = prefs.getFloat("mailfab_x", -1f)
             val sy = prefs.getFloat("mailfab_y", -1f)
             val maxX = (resources.displayMetrics.widthPixels - size).toFloat()
             val maxY = (resources.displayMetrics.heightPixels - size).toFloat()
-            if (sx >= 0 && sy >= 0) {
-                fab.x = sx.coerceIn(0f, maxX)
-                fab.y = sy.coerceIn(0f, maxY)
-            } else {
-                fab.x = maxX - (16 * dp)
-                fab.y = maxY - (90 * dp)
-            }
+            fab.x = if (sx >= 0) sx.coerceIn(0f, maxX) else maxX - (16 * dp)
+            fab.y = if (sy >= 0) sy.coerceIn(0f, maxY) else maxY - (100 * dp)
         }
 
-        var dX = 0f; var dY = 0f; var isDragging = false
-        val slop = 10f
+        var dX = 0f; var dY = 0f; var isDragging = false; val slop = 12f
 
         fab.setOnTouchListener { v, event ->
             when (event.actionMasked) {
@@ -754,15 +835,14 @@ class MainActivity : AppCompatActivity() {
                     dX = v.x - event.rawX; dY = v.y - event.rawY; isDragging = false; true
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val movedX = Math.abs(event.rawX + dX - v.x)
-                    val movedY = Math.abs(event.rawY + dY - v.y)
-                    if (movedX > slop || movedY > slop) isDragging = true
+                    val mx = Math.abs(event.rawX + dX - v.x)
+                    val my = Math.abs(event.rawY + dY - v.y)
+                    if (mx > slop || my > slop) isDragging = true
                     if (isDragging) {
                         val maxX = (resources.displayMetrics.widthPixels - v.width).toFloat()
                         val maxY = (resources.displayMetrics.heightPixels - v.height).toFloat()
                         v.x = (event.rawX + dX).coerceIn(0f, maxX)
                         v.y = (event.rawY + dY).coerceIn(0f, maxY)
-                        v.performHapticFeedback(android.view.HapticFeedbackConstants.TEXT_HANDLE_MOVE)
                     }
                     true
                 }
@@ -770,14 +850,10 @@ class MainActivity : AppCompatActivity() {
                     if (isDragging) {
                         prefs.edit().putFloat("mailfab_x", v.x).putFloat("mailfab_y", v.y).apply()
                     } else {
-                        // Tap → mở/đóng panel mail
                         if (binding.mailPanel.visibility == View.GONE) {
                             openPanel(); switchPanelSection(0)
-                        } else {
-                            closePanel()
-                        }
-                        unreadCount = 0
-                        updateMailBadge()
+                        } else closePanel()
+                        unreadCount = 0; updateMailBadge()
                     }
                     isDragging = false; true
                 }
@@ -786,10 +862,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun updateMailBadge() {
-        runOnUiThread {
-            mailFab?.text = if (unreadCount > 0) "📧${unreadCount}" else "📧"
-        }
+    private fun updateMailBadge() = runOnUiThread {
+        mailFab?.text = if (unreadCount > 0) "📧$unreadCount" else "📧"
     }
 
     // ─── JavaScript injections ─────────────────────────────────────────────────
@@ -797,11 +871,12 @@ class MainActivity : AppCompatActivity() {
     private fun buildFieldFocusJs(): String = """
 (function(){
   function detectType(el){
-    var t=el.type||'',n=(el.name||'').toLowerCase(),p=(el.placeholder||'').toLowerCase();
-    if(t==='email'||n.includes('email')||p.includes('email')) return 'email';
-    if(t==='password'||n.includes('pass')||p.includes('pass')) return 'password';
-    if(n.includes('user')||p.includes('user')||n.includes('username')) return 'username';
-    return 'text';
+    var t=el.type||'',n=(el.name||'').toLowerCase(),p=(el.placeholder||'').toLowerCase(),
+        id=(el.id||'').toLowerCase(),ac=(el.autocomplete||'').toLowerCase();
+    if(t==='email'||n.includes('email')||p.includes('email')||id.includes('email')||ac==='email')return'email';
+    if(t==='password'||n.includes('pass')||p.includes('pass'))return'password';
+    if(n.includes('user')||p.includes('user')||id.includes('user'))return'username';
+    return'text';
   }
   function attach(el){
     if(el._rem2)return; el._rem2=true;
@@ -811,91 +886,133 @@ class MainActivity : AppCompatActivity() {
   document.querySelectorAll('input').forEach(attach);
   new MutationObserver(function(){
     document.querySelectorAll('input:not([data-rem2])').forEach(function(el){
-      el.setAttribute('data-rem2','1'); attach(el);
+      el.setAttribute('data-rem2','1');attach(el);
     });
   }).observe(document.body||document.documentElement,{childList:true,subtree:true});
 })();
     """.trimIndent()
 
+    /**
+     * CAPTCHA fix v2: covers hCaptcha (used by Replit), reCAPTCHA, and Turnstile.
+     * Main fix for "Your captcha token is invalid. Please refresh and try again. (code:1)":
+     *   — Wait for hcaptcha widget to be ready before allowing form submit
+     *   — Intercept errors and re-trigger widget
+     *   — Remove requestAnimationFrame throttle that breaks hCaptcha in WebView
+     */
     private fun buildCaptchaFixJs(): String = """
 (function(){
-  // Patch fetch to detect captcha errors and auto-refresh
-  var _fetch = window.fetch;
-  window.fetch = function(url, opts) {
-    return _fetch.apply(this, arguments).then(function(r) {
-      var c = r.clone();
-      c.text().then(function(t) {
-        if(t.indexOf('captcha token is invalid') >= 0 || t.indexOf('code:1') >= 0) {
-          // Try to click retry button
-          setTimeout(function() {
-            document.querySelectorAll('button').forEach(function(b) {
-              var bt = (b.textContent||'').toLowerCase();
-              if(bt.indexOf('refresh') >= 0 || bt.indexOf('retry') >= 0 || bt.indexOf('try again') >= 0) b.click();
-            });
-            // Reload captcha iframe if present
-            document.querySelectorAll('iframe[src*="recaptcha"],iframe[src*="hcaptcha"]').forEach(function(f) {
-              f.src = f.src;
-            });
-          }, 500);
-        }
-      }).catch(function(){});
-      return r;
-    });
-  };
+  if(window._rem2CaptchaFixed)return; window._rem2CaptchaFixed=true;
 
-  // Patch XMLHttpRequest for same detection
-  var _XHRopen = XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open = function() {
-    this.addEventListener('load', function() {
-      try {
-        if(this.responseText && this.responseText.indexOf('captcha token is invalid') >= 0) {
-          setTimeout(function() {
-            var f = document.querySelector('form');
-            if(f) f.dispatchEvent(new Event('submit',{bubbles:true}));
-          }, 1000);
-        }
-      } catch(e){}
-    });
-    return _XHRopen.apply(this, arguments);
-  };
+  // Fix 1: Patch fetch to catch captcha errors and retry form
+  var _origFetch=window.fetch;
+  if(_origFetch){
+    window.fetch=function(url,opts){
+      return _origFetch.apply(this,arguments).then(function(r){
+        r.clone().text().then(function(t){
+          if(t&&(t.indexOf('captcha token is invalid')>=0||t.indexOf('"code":1')>=0||t.indexOf('code:1')>=0)){
+            setTimeout(function(){
+              // Reset hCaptcha
+              if(window.hcaptcha){try{window.hcaptcha.reset();}catch(e){}}
+              if(window.grecaptcha){try{window.grecaptcha.reset();}catch(e){}}
+              // Click retry buttons
+              document.querySelectorAll('button').forEach(function(b){
+                var bt=(b.textContent||'').toLowerCase();
+                if(bt.indexOf('retry')>=0||bt.indexOf('refresh')>=0||bt.indexOf('try again')>=0)b.click();
+              });
+            },300);
+          }
+        }).catch(function(){});
+        return r;
+      });
+    };
+  }
 
-  // Ensure grecaptcha timing
-  var _grc = window.grecaptcha;
-  Object.defineProperty(window, 'grecaptcha', {
-    get: function() { return _grc; },
-    set: function(v) {
-      _grc = v;
-      if(v && v.ready) {
-        var _r = v.ready.bind(v);
-        v.ready = function(cb) { setTimeout(function() { _r(cb); }, 150); };
-      }
-    }, configurable: true
+  // Fix 2: hCaptcha — ensure token is submitted with form
+  function patchHcaptcha(){
+    if(!window.hcaptcha)return;
+    var _execute=window.hcaptcha.execute;
+    window.hcaptcha.execute=function(){
+      return _execute.apply(this,arguments);
+    };
+  }
+  if(window.hcaptcha){patchHcaptcha();}
+  Object.defineProperty(window,'hcaptcha',{
+    set:function(v){
+      Object.defineProperty(window,'hcaptcha',{value:v,writable:true,configurable:true});
+      setTimeout(patchHcaptcha,100);
+    },configurable:true
   });
+
+  // Fix 3: reCAPTCHA timing fix (v2 checkbox)
+  function patchRecaptcha(){
+    if(!window.grecaptcha||!window.grecaptcha.ready)return;
+    var _ready=window.grecaptcha.ready.bind(window.grecaptcha);
+    window.grecaptcha.ready=function(cb){return _ready(function(){setTimeout(cb,200);});};
+  }
+  if(window.grecaptcha){patchRecaptcha();}
+  Object.defineProperty(window,'grecaptcha',{
+    set:function(v){
+      Object.defineProperty(window,'grecaptcha',{value:v,writable:true,configurable:true});
+      setTimeout(patchRecaptcha,100);
+    },configurable:true
+  });
+
+  // Fix 4: Turnstile (Cloudflare)
+  function patchTurnstile(){
+    if(!window.turnstile)return;
+    var _render=window.turnstile.render;
+    window.turnstile.render=function(el,params){
+      if(params&&params.callback){var _cb=params.callback;params.callback=function(tk){
+        setTimeout(function(){_cb(tk);},100);
+      };}
+      return _render.apply(this,arguments);
+    };
+  }
+  if(window.turnstile){patchTurnstile();}
+
+  // Fix 5: XMLHttpRequest captcha error detection
+  var _XHRopen=XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open=function(){
+    this.addEventListener('load',function(){
+      try{
+        if(this.responseText&&(this.responseText.indexOf('captcha token is invalid')>=0||
+           this.responseText.indexOf('"code":1')>=0)){
+          setTimeout(function(){
+            if(window.hcaptcha)try{window.hcaptcha.reset();}catch(e){}
+            if(window.grecaptcha)try{window.grecaptcha.reset();}catch(e){}
+          },300);
+        }
+      }catch(e){}
+    });
+    return _XHRopen.apply(this,arguments);
+  };
 })();
     """.trimIndent()
 
     private fun buildAntiDetectJs(d: DeviceProfile): String {
         val noise = (1..8).random()
-        val lang = if (d.timezone.startsWith("Asia/Ho_Chi_Minh")) "vi-VN" else "en-US"
+        val lang = if (d.timezone.contains("Ho_Chi_Minh")) "vi-VN" else "en-US"
         return """
 (function(){
   try{Object.defineProperty(navigator,'webdriver',{get:()=>undefined,configurable:true});}catch(e){}
   try{Object.defineProperty(navigator,'platform',{get:()=>'Linux armv8l',configurable:true});}catch(e){}
   try{Object.defineProperty(navigator,'userAgent',{get:()=>'${d.ua}',configurable:true});}catch(e){}
-  var lang='$lang';
-  try{Object.defineProperty(navigator,'language',{get:()=>lang,configurable:true});}catch(e){}
-  try{Object.defineProperty(navigator,'languages',{get:()=>[lang,'en-US','en'],configurable:true});}catch(e){}
+  var _lang='$lang';
+  try{Object.defineProperty(navigator,'language',{get:()=>_lang,configurable:true});}catch(e){}
+  try{Object.defineProperty(navigator,'languages',{get:()=>[_lang,'en-US','en'],configurable:true});}catch(e){}
   try{Object.defineProperty(navigator,'deviceMemory',{get:()=>${d.deviceMemory},configurable:true});}catch(e){}
   try{Object.defineProperty(navigator,'hardwareConcurrency',{get:()=>${d.hardwareConcurrency},configurable:true});}catch(e){}
   try{
-    var fp=[{name:'Chrome PDF Plugin',filename:'internal-pdf-viewer',description:'PDF'},{name:'Chrome PDF Viewer',filename:'mhjfbmdgcfjbbpaeojofohoefgiehjai',description:''},{name:'Native Client',filename:'internal-nacl-plugin',description:''}];
-    Object.defineProperty(navigator,'plugins',{get:()=>Object.assign(fp,{item:function(i){return fp[i];},namedItem:function(n){return fp.find(function(p){return p.name===n;})||null;},length:fp.length}),configurable:true});
+    var _fp=[{name:'Chrome PDF Plugin',filename:'internal-pdf-viewer',description:'PDF'},
+      {name:'Chrome PDF Viewer',filename:'mhjfbmdgcfjbbpaeojofohoefgiehjai',description:''},
+      {name:'Native Client',filename:'internal-nacl-plugin',description:''}];
+    Object.defineProperty(navigator,'plugins',{get:()=>Object.assign(_fp,{item:function(i){return _fp[i];},namedItem:function(n){return _fp.find(function(p){return p.name===n;})||null;},length:_fp.length}),configurable:true});
     Object.defineProperty(navigator,'mimeTypes',{get:()=>({length:2,item:function(){return null;}}),configurable:true});
   }catch(e){}
   try{Object.defineProperty(screen,'width',{get:()=>${d.screenW},configurable:true});}catch(e){}
   try{Object.defineProperty(screen,'height',{get:()=>${d.screenH},configurable:true});}catch(e){}
   try{Object.defineProperty(screen,'availWidth',{get:()=>${d.screenW},configurable:true});}catch(e){}
-  try{Object.defineProperty(screen,'availHeight',{get:()=>${d.screenH - 48},configurable:true});}catch(e){}
+  try{Object.defineProperty(screen,'availHeight',{get:()=>${d.screenH-48},configurable:true});}catch(e){}
   try{Object.defineProperty(window,'outerWidth',{get:()=>${d.screenW},configurable:true});}catch(e){}
   try{Object.defineProperty(window,'outerHeight',{get:()=>${d.screenH},configurable:true});}catch(e){}
   try{
@@ -908,12 +1025,16 @@ class MainActivity : AppCompatActivity() {
   }catch(e){}
   try{
     var _wgl=WebGLRenderingContext.prototype.getParameter;
-    WebGLRenderingContext.prototype.getParameter=function(param){
-      if(param===37445)return 'Qualcomm Technologies, Inc.';
-      if(param===37446)return 'Adreno (TM) 740';
-      return _wgl.call(this,param);
+    WebGLRenderingContext.prototype.getParameter=function(p){
+      if(p===37445)return'Qualcomm Technologies, Inc.';
+      if(p===37446)return'Adreno (TM) 740';
+      return _wgl.call(this,p);
     };
   }catch(e){}
+  // Remove automation indicators
+  try{delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;}catch(e){}
+  try{delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;}catch(e){}
+  try{delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;}catch(e){}
 })();
         """.trimIndent()
     }
@@ -922,27 +1043,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun injectSignupForm(webView: WebView, email: String, username: String, password: String, fullName: String) {
         if (email.isEmpty()) return
+        val eE = email.replace("'", "\\'")
+        val eU = username.replace("'", "\\'")
+        val eP = password.replace("'", "\\'")
         val js = """
 (function(){
-  if(window._rem2AutoFill) return 'running';
-  window._rem2AutoFill = true;
-  var OAUTH=['google','github','facebook','apple','microsoft','twitter','x ','with x'];
+  if(window._rem2AutoFill)return'running';
+  window._rem2AutoFill=true;
+  var OAUTH=['google','github','facebook','apple','microsoft','twitter','with x','x login'];
   function fill(el,val){
     try{var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');
     if(s&&s.set){s.set.call(el,val);}else{el.value=val;}
     ['input','change','blur'].forEach(function(ev){el.dispatchEvent(new Event(ev,{bubbles:true}));});}
     catch(e){el.value=val;}
   }
-  function findVisible(selectors){
-    for(var i=0;i<selectors.length;i++){
-      var els=document.querySelectorAll(selectors[i]);
-      for(var j=0;j<els.length;j++){
-        var r=els[j].getBoundingClientRect();
-        if(r.width>10&&r.height>10&&r.top>=0&&r.top<window.innerHeight)return els[j];
-      }
-    }
-    return null;
-  }
+  function vis(el){var r=el.getBoundingClientRect();return r.width>8&&r.height>8&&r.top>=0&&r.top<window.innerHeight;}
+  function findEl(sels){for(var i=0;i<sels.length;i++){var els=document.querySelectorAll(sels[i]);for(var j=0;j<els.length;j++){if(vis(els[j]))return els[j];}}return null;}
   function clickNext(){
     var btns=Array.from(document.querySelectorAll('button[type="submit"],button')).filter(function(b){
       if(!b.offsetParent||b.offsetWidth===0)return false;
@@ -951,108 +1067,133 @@ class MainActivity : AppCompatActivity() {
     });
     for(var i=0;i<btns.length;i++){
       var t=(btns[i].textContent||'').toLowerCase().replace(/[→>↪]/g,'').trim();
-      if(t==='next'||t==='continue'||t.indexOf('next')>=0||t.indexOf('get started')>=0||(t.indexOf('continue')>=0&&t.indexOf('with')<0)){
-        btns[i].click();return true;
-      }
+      if(t==='next'||t==='continue'||t.indexOf('next')>=0||t.indexOf('get started')>=0||(t.indexOf('continue')>=0&&t.indexOf('with')<0)){btns[i].click();return true;}
     }
-    var form=document.querySelector('form');
-    if(form){form.dispatchEvent(new Event('submit',{bubbles:true}));return true;}
+    var f=document.querySelector('form');if(f){f.dispatchEvent(new Event('submit',{bubbles:true}));return true;}
     return false;
   }
-  var phase=0,ticks=0,MAX=600;
+  var phase=0,ticks=0;
   var tid=setInterval(function(){
-    ticks++;
-    if(ticks>MAX){clearInterval(tid);window._rem2AutoFill=false;return;}
+    ticks++;if(ticks>500){clearInterval(tid);window._rem2AutoFill=false;return;}
     if(phase===0){
-      var el=findVisible(['input[type="email"]','input[name="email"]','input[autocomplete="email"]','input[placeholder*="mail" i]']);
-      if(el&&el.value!=='$email'){fill(el,'$email');phase=1;setTimeout(function(){clickNext();},800);}
-    } else if(phase===1){
-      var pe=findVisible(['input[type="password"]']);
+      var el=findEl(['input[type="email"]','input[name="email"]','input[autocomplete="email"]','input[placeholder*="mail" i]']);
+      if(el&&el.value!=='$eE'){fill(el,'$eE');phase=1;setTimeout(function(){clickNext();},900);}
+    }else if(phase===1){
+      var pe=findEl(['input[type="password"]']);
       if(pe){
-        fill(pe,'$password');
-        var ue=findVisible(['input[name="username"]','input[autocomplete="username"]','input[placeholder*="username" i]']);
-        if(ue&&ue.value!=='$username')fill(ue,'$username');
-        phase=2;setTimeout(function(){clickNext();},800);
-      } else if(ticks%8===0)clickNext();
-    } else if(phase===2){
-      if(!findVisible(['input[type="password"]'])){clearInterval(tid);window._rem2AutoFill=false;}
+        fill(pe,'$eP');
+        var ue=findEl(['input[name="username"]','input[autocomplete="username"]','input[placeholder*="username" i]']);
+        if(ue&&ue.value!=='$eU')fill(ue,'$eU');
+        phase=2;setTimeout(function(){clickNext();},900);
+      }else if(ticks%10===0)clickNext();
+    }else if(phase===2){
+      if(!findEl(['input[type="password"]'])){clearInterval(tid);window._rem2AutoFill=false;}
     }
   },400);
-  return 'started';
+  return'started';
 })()
         """.trimIndent()
         webView.evaluateJavascript(js, null)
     }
 
+    /**
+     * Auto-onboarding: automatically selects options (radio/checkbox/cards)
+     * and clicks Next/Continue buttons until wizard is complete.
+     */
     private fun injectOnboardingStep(webView: WebView, fullName: String) {
-        val firstName = fullName.substringBefore(" ").ifEmpty { "User" }
-        val lastName  = fullName.substringAfter(" ", "").ifEmpty { "Dev" }
+        val fn = fullName.substringBefore(" ").ifEmpty { "User" }.replace("'", "\\'")
+        val ln = fullName.substringAfter(" ", "").ifEmpty { "Dev" }.replace("'", "\\'")
+        val fq = fullName.replace("'", "\\'")
         val js = """
 (function(){
-  function setVal(el,val){
-    try{var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
-    s.call(el,val);el.dispatchEvent(new Event('input',{bubbles:true}));
-    el.dispatchEvent(new Event('change',{bubbles:true}));el.dispatchEvent(new Event('blur',{bubbles:true}));}
-    catch(e){el.value=val;}
+  function setVal(el,v){
+    try{var s=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');
+    if(s&&s.set){s.set.call(el,v);}else{el.value=v;}
+    ['input','change','blur'].forEach(function(e){el.dispatchEvent(new Event(e,{bubbles:true}));});}
+    catch(e){el.value=v;}
   }
-  function vis(el){return el.offsetParent!==null&&el.style.display!=='none'&&el.offsetWidth>0;}
-  var OB=['google','github','facebook','apple','microsoft','twitter',' x '];
-  function noOb(t){return !OB.some(function(k){return(' '+t+' ').indexOf(k)>=0;});}
+  function vis(el){return el.offsetParent!==null&&el.offsetWidth>0&&el.style.display!=='none';}
 
-  // Select free plan if visible
-  var planClicked=false;
-  document.querySelectorAll('button,a,[role="button"]').forEach(function(el){
-    if(planClicked)return;
+  // Select free plan
+  var planPicked=false;
+  document.querySelectorAll('button,a,[role="button"],[data-testid]').forEach(function(el){
+    if(planPicked)return;
     var t=(el.textContent||'').toLowerCase();
-    if(t.indexOf('starter')>=0||t.indexOf('free')>=0||t.indexOf('continue with free')>=0){el.click();planClicked=true;}
+    if(t.indexOf('starter')>=0||t.indexOf('free')>=0||t.indexOf('continue with free')>=0||t.indexOf('continue for free')>=0){
+      el.click();planPicked=true;
+    }
   });
-  if(planClicked)return 'plan-selected';
+  if(planPicked)return'plan';
 
   // Fill name fields
-  document.querySelectorAll('input[name="full_name"],input[name="fullName"],input[name="name"]').forEach(function(el){if(vis(el))setVal(el,'$fullName');});
-  document.querySelectorAll('input[name="first_name"],input[name="firstName"],input[placeholder*="first" i]').forEach(function(el){if(vis(el))setVal(el,'$firstName');});
-  document.querySelectorAll('input[name="last_name"],input[name="lastName"],input[placeholder*="last" i]').forEach(function(el){if(vis(el))setVal(el,'$lastName');});
+  var nameFields=[
+    ['input[name="full_name"],input[name="fullName"],input[name="name"]','$fq'],
+    ['input[name="first_name"],input[name="firstName"],input[placeholder*="first" i]','$fn'],
+    ['input[name="last_name"],input[name="lastName"],input[placeholder*="last" i]','$ln'],
+  ];
+  nameFields.forEach(function(pair){
+    document.querySelectorAll(pair[0]).forEach(function(el){if(vis(el))setVal(el,pair[1]);});
+  });
 
-  // Click random radio/checkbox options
-  var opts=Array.from(document.querySelectorAll('[data-testid*="option"],[class*="SelectableCard"],[class*="selectable"],[class*="choice"],[role="checkbox"],[role="radio"]'));
-  if(opts.length>0){var pick=Math.min(opts.length,Math.floor(Math.random()*2)+1);for(var ci=0;ci<pick;ci++)opts[Math.floor(Math.random()*opts.length)].click();}
-  var radios=document.querySelectorAll('input[type="radio"]');
-  if(radios.length>0)radios[Math.floor(Math.random()*radios.length)].click();
-
-  // Click Next/Continue
-  var clicked=false;
-  function tryClick(){
-    var candidates=[];
-    Array.from(document.querySelectorAll('button[type="submit"]')).filter(vis).forEach(function(b){candidates.push(b);});
-    Array.from(document.querySelectorAll('button')).filter(vis).forEach(function(b){if(!candidates.includes(b))candidates.push(b);});
-    for(var i=0;i<candidates.length;i++){
-      var t=(candidates[i].textContent||'').toLowerCase().replace(/[→>]/g,'').trim();
-      if(!noOb(t))continue;
-      var ok=t==='next'||t==='continue'||t.indexOf('next')>=0||t.indexOf('get started')>=0
-             ||t.indexOf('finish')>=0||t.indexOf('done')>=0
-             ||(t.indexOf('continue')>=0&&t.indexOf('with')<0&&t.length<22)
-             ||(t.indexOf('start')>=0&&t.indexOf('starter')<0);
-      if(ok){candidates[i].click();clicked=true;break;}
+  // Select ALL visible radio/checkbox/card options (pick random subset)
+  var opts=Array.from(document.querySelectorAll(
+    '[data-testid*="option"],[class*="SelectableCard"],[class*="selectable"],[class*="choice"],' +
+    '[role="checkbox"],[role="radio"],[class*="ChoiceCard"],[class*="option-card"]'
+  )).filter(vis);
+  if(opts.length>0){
+    var pick=Math.min(opts.length,Math.floor(Math.random()*3)+1);
+    var chosen=[];
+    while(chosen.length<pick){
+      var idx=Math.floor(Math.random()*opts.length);
+      if(!chosen.includes(idx)){chosen.push(idx);opts[idx].click();}
     }
-    return clicked;
   }
-  tryClick();
-  if(!clicked)setTimeout(function(){tryClick();},600);
-  setTimeout(function(){if(!clicked)tryClick();},1500);
-  return clicked?'next-clicked':'filled';
+  // Also handle radio inputs
+  var radios=Array.from(document.querySelectorAll('input[type="radio"]')).filter(vis);
+  if(radios.length>0)radios[Math.floor(Math.random()*radios.length)].click();
+  // Checkboxes: click first visible
+  var checks=Array.from(document.querySelectorAll('input[type="checkbox"]')).filter(vis);
+  if(checks.length>0&&!checks[0].checked)checks[0].click();
+
+  // Click Next / Continue / Get Started / Finish
+  var SKIP=['google','github','facebook','apple','microsoft','twitter',' x ','login','sign in'];
+  function noOauth(t){return !SKIP.some(function(k){return(' '+t+' ').indexOf(k)>=0;});}
+  var clicked=false;
+  function tryNext(){
+    if(clicked)return;
+    var btns=Array.from(document.querySelectorAll('button[type="submit"],button,[role="button"]')).filter(vis);
+    // Sort submit buttons first
+    btns.sort(function(a,b){return (a.type==='submit'?0:1)-(b.type==='submit'?0:1);});
+    for(var i=0;i<btns.length;i++){
+      var t=(btns[i].textContent||'').toLowerCase().replace(/[→>↪]/g,'').trim();
+      if(!noOauth(t))continue;
+      if(t==='next'||t==='continue'||t.indexOf('next')>=0||t.indexOf('get started')>=0||
+         t.indexOf('finish')>=0||t.indexOf('done')>=0||t.indexOf('skip')>=0||
+         (t.indexOf('continue')>=0&&t.indexOf('with')<0&&t.length<28)||
+         (t.indexOf('start')>=0&&t.indexOf('starter')<0)){
+        btns[i].click();clicked=true;break;
+      }
+    }
+  }
+  tryNext();
+  if(!clicked)setTimeout(tryNext,700);
+  setTimeout(tryNext,2000);
+  return clicked?'next':'filled';
 })()
         """.trimIndent()
         webView.evaluateJavascript(js) { result ->
             val r = result?.trim('"') ?: ""
-            if (r == "plan-selected") toast("Đã chọn gói miễn phí ✓")
+            if (r == "plan") toast("Đã chọn gói miễn phí ✓")
+            // Keep going if still on onboarding
             webView.postDelayed({
                 webView.evaluateJavascript("window.location.pathname") { path ->
                     val p = path?.trim('"') ?: ""
-                    if (p.contains("onboarding") || p.contains("plans")) {
+                    if (p.contains("onboarding") || p.contains("plans") ||
+                        p.contains("wizard") || p.contains("get-started")) {
                         injectOnboardingStep(webView, fullName)
                     }
                 }
-            }, 5000)
+            }, 5500)
         }
     }
 
@@ -1067,15 +1208,16 @@ class MainActivity : AppCompatActivity() {
             mailEmail = savedEmail; mailPassword = savedPass; mailToken = savedToken
             setupAutoCredentials(savedEmail)
             withContext(Dispatchers.Main) {
-                binding.tvMailStatus.text = "✅ $mailEmail  (nhấn để copy)"
+                binding.tvMailStatus.text = "✅ $mailEmail"
                 binding.tvBottomStatus.text = mailEmail
+                startPolling()
             }
             return
         }
 
         withContext(Dispatchers.Main) {
             binding.pbMail.visibility = View.VISIBLE
-            binding.tvMailStatus.text = "🔄 Đang tạo Mail.tm..."
+            binding.tvMailStatus.text = "⏳ Đang tạo Mail.tm..."
         }
 
         try {
@@ -1084,7 +1226,7 @@ class MainActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) { binding.tvMailStatus.text = "❌ Mail.tm không khả dụng" }
                 return
             }
-            val user  = "rem${(1000..9999).random()}"
+            val user  = "r${(10000..99999).random()}"
             val email = "$user@${domains[0]}"
             val pass  = UUID.randomUUID().toString().replace("-","").take(16)
 
@@ -1104,23 +1246,24 @@ class MainActivity : AppCompatActivity() {
 
             withContext(Dispatchers.Main) {
                 binding.pbMail.visibility = View.GONE
-                binding.tvMailStatus.text = "✅ $email  (nhấn để copy)"
+                binding.tvMailStatus.text = "✅ $email"
                 binding.tvBottomStatus.text = email
-                toast("Mail.tm sẵn sàng: $email")
+                toast("Mail.tm: $email")
+                startPolling()
             }
             addOrUpdateAccount(AccountEntry(email = email, password = pass, username = autoUsername))
 
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
                 binding.pbMail.visibility = View.GONE
-                binding.tvMailStatus.text = "❌ Lỗi: ${e.message?.take(40)}"
+                binding.tvMailStatus.text = "❌ ${e.message?.take(40)}"
             }
         }
     }
 
     private fun setupAutoCredentials(email: String) {
         autoEmail    = email
-        autoUsername = "user${(10000..99999).random()}"
+        autoUsername = randomUsername()
         autoPassword = "Rem2@${(100000..999999).random()}"
         autoFullName = prefs.getString(KEY_REPLIT_NAME, "").let {
             if (it.isNullOrEmpty()) randomFullName()
@@ -1134,7 +1277,8 @@ class MainActivity : AppCompatActivity() {
             val resp = http.newCall(Request.Builder().url("$MAILTM/domains").build()).execute()
             val arr  = JSONObject(resp.body?.string() ?: "{}").optJSONArray("hydra:member")
                 ?: return@withContext emptyList()
-            (0 until arr.length()).map { arr.getJSONObject(it) }
+            (0 until arr.length())
+                .map { arr.getJSONObject(it) }
                 .filter { it.optBoolean("isActive", true) }
                 .map { it.getString("domain") }
         } catch (e: Exception) { emptyList() }
@@ -1161,10 +1305,7 @@ class MainActivity : AppCompatActivity() {
     private fun startPolling() {
         if (pollJob?.isActive == true) return
         pollJob = lifecycleScope.launch {
-            while (isActive) {
-                fetchMail()
-                delay(5000)
-            }
+            while (isActive) { fetchMail(); delay(5000) }
         }
     }
 
@@ -1184,21 +1325,18 @@ class MainActivity : AppCompatActivity() {
                 for (i in 0 until arr.length()) {
                     val msg = arr.getJSONObject(i)
                     val id  = msg.optString("id","")
-                    val sub = msg.optString("subject","(không có tiêu đề)")
+                    val sub = msg.optString("subject","(không tiêu đề)")
                     if (id.isNotEmpty() && !seenIds.contains(id)) {
                         seenIds.add(id); newMsgs.add(id to sub)
                     }
                 }
-                if (newMsgs.isNotEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        addMailItems(newMsgs)
-                        // Auto-open verify section when new mail arrives
-                        if (binding.mailPanel.visibility == View.VISIBLE && panelSection != 1) {
-                            switchPanelSection(1)
-                            toast("📧 Email xác nhận mới!")
-                        } else if (binding.mailPanel.visibility == View.GONE) {
-                            toast("📧 Email xác nhận mới — mở panel để xem")
-                        }
+                if (newMsgs.isNotEmpty()) withContext(Dispatchers.Main) {
+                    addMailItems(newMsgs)
+                    if (binding.mailPanel.visibility == View.VISIBLE && panelSection != 1) {
+                        switchPanelSection(1); toast("📧 Email mới!")
+                    } else if (binding.mailPanel.visibility == View.GONE) {
+                        unreadCount += newMsgs.size; updateMailBadge()
+                        toast("📧 ${newMsgs.size} email mới — nhấn FAB để xem")
                     }
                 }
             } catch (_: Exception) {}
@@ -1207,28 +1345,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun addMailItems(msgs: List<Pair<String,String>>) {
         val dp = resources.displayMetrics.density
-        unreadCount += msgs.size
-        updateMailBadge()
+        unreadCount += msgs.size; updateMailBadge()
         msgs.forEach { (id, subject) ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setPadding((12*dp).toInt(),(10*dp).toInt(),(12*dp).toInt(),(10*dp).toInt())
+                background = GradientDrawable().apply { setColor(0xFFE8F5E9.toInt()); cornerRadius=6*dp }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins((6*dp).toInt(),(3*dp).toInt(),(6*dp).toInt(),(3*dp).toInt()) }
                 setOnClickListener { lifecycleScope.launch { loadVerifyLink(id) } }
             }
             val tv = TextView(this).apply {
                 text = "📨 $subject"
                 textSize = 12f
-                setTextColor(0xFFE0E0E0.toInt())
+                setTextColor(0xFF1B5E20.toInt())
+                setSingleLine(true)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
-            row.addView(tv)
+            val arrow = TextView(this).apply { text = " ›"; textSize = 16f; setTextColor(0xFF388E3C.toInt()) }
+            row.addView(tv); row.addView(arrow)
             binding.mailList.addView(row, 0)
-            val div = View(this).apply {
-                setBackgroundColor(0xFF1F2937.toInt())
-                layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1)
-            }
-            binding.mailList.addView(div, 1)
         }
     }
 
@@ -1243,48 +1381,50 @@ class MainActivity : AppCompatActivity() {
                 msg.optString("text","") + " " + msg.optString("html","")
             } catch (e: Exception) { "" }
         }
-        val keywords = listOf("verify","confirm","activate","click here","account")
+        val keywords = listOf("verify","confirm","activate","click here","account","email")
         val urlRegex = Regex("""https?://[^\s<>"']+""")
         val link = urlRegex.findAll(body)
             .map { it.value.trimEnd('.',')',']','"','\'') }
             .firstOrNull { url -> keywords.any { kw -> url.lowercase().contains(kw) } }
             ?: urlRegex.findAll(body).firstOrNull { it.value.contains("replit.com") }?.value
 
-        if (link != null) {
-            withContext(Dispatchers.Main) {
-                binding.verifyWebView.visibility = View.VISIBLE
+        withContext(Dispatchers.Main) {
+            if (link != null) {
+                binding.verifyWebView.visibility  = View.VISIBLE
                 binding.mailListScroll.visibility = View.GONE
                 binding.verifyWebView.loadUrl(link)
                 switchPanelSection(1)
                 toast("Đang mở link xác nhận...")
-            }
-        } else {
-            withContext(Dispatchers.Main) { toast("Không tìm thấy link xác nhận") }
+            } else toast("Không tìm thấy link xác nhận")
         }
     }
 
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
+    private fun copyToClipboard(text: String, toast: String? = null) {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("rem2", text))
+        toast?.let { toast(it) }
+    }
+
     private fun requestStoragePermissionIfNeeded() {
-        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val perms = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
             arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES,
                     android.Manifest.permission.READ_MEDIA_VIDEO)
-        } else arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        else arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
         val missing = perms.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isNotEmpty()) ActivityCompat.requestPermissions(this, missing.toTypedArray(), 200)
     }
 
-    private fun showKeyboard(view: View) {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        imm.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT)
+    private fun showKeyboard(v: View) {
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+            .showSoftInput(v, InputMethodManager.SHOW_IMPLICIT)
     }
-
     private fun hideKeyboard() {
-        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-        currentFocus?.let { imm.hideSoftInputFromWindow(it.windowToken, 0) }
+        (getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager)
+            .hideSoftInputFromWindow(currentFocus?.windowToken, 0)
     }
-
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
     // ─── Lifecycle ─────────────────────────────────────────────────────────────
@@ -1302,11 +1442,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        stopPolling()
+        super.onDestroy(); stopPolling()
         tabs.forEach { it.webView?.destroy() }
     }
-
-    override fun onPause() { super.onPause(); tabs.forEach { it.webView?.onPause() } }
+    override fun onPause()  { super.onPause();  tabs.forEach { it.webView?.onPause()  } }
     override fun onResume() { super.onResume(); tabs.forEach { it.webView?.onResume() } }
 }

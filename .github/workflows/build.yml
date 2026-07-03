@@ -39,37 +39,63 @@ jobs:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk rem2-v3.4-release.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk rem2-v4.0-release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rem2-v3.4-release
-          path: rem2-v3.4-release.apk
+          name: rem2-v4.0-release
+          path: rem2-v4.0-release.apk
           retention-days: 30
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.4.${{ github.run_number }}
-          name: "Rem2 v3.4.${{ github.run_number }}"
+          tag_name: v4.0.${{ github.run_number }}
+          name: "Rem2 v4.0.${{ github.run_number }}"
           body: |
-            ## Rem2 v3.4.${{ github.run_number }}
+            ## Rem2 v4.0.${{ github.run_number }}
 
-            ⚠️ **Cùng chữ ký với v3.0** — cài đè trực tiếp, không cần gỡ bản cũ
+            ⚠️ **Cùng chữ ký với v3.x** — cài đè trực tiếp, không cần gỡ bản cũ
 
-            ### ✨ Tính năng mới v3.4
-            - 👆 **Vuốt trái/phải nâng cấp** — ngưỡng thấp hơn (60dp, velocity 250), haptic + toast "◀ Quay lại / ▶ Tiến tới"
-            - ↻ **Reload có animation** — nút tải lại xoay 360° khi nhấn
-            - 📧 **FAB Mail riêng** — icon mail kéo độc lập, badge đếm email chưa đọc, nhấn mở thẳng tab Xác thực
-            - 🔒 **Auto-fill chỉ trang đăng ký** — KHÔNG tự điền trên trang đăng nhập (/login)
-            - 📎 **Fix đính kèm file** — dùng ACTION_OPEN_DOCUMENT + createChooser + URI permission flag, không mất chỗ đính kèm
+            ### 🆕 Tính năng v4.0
 
-            ### Tính năng v3.0 (giữ nguyên)
-            - 🗂 Multi-tab, 📋 Smart paste, 👤 Panel Tài khoản
-            - 📧 Panel Xác thực (Mail.tm), ↻ Reload + ＋ Tab mới
-            - 🔧 Fix CAPTCHA, 🤖 Auto-onboarding, 🕵️ Anti-detect
-            - 📎 Upload file + 🖥 Desktop mode
-          files: rem2-v3.4-release.apk
+            #### 🖥 Twin Browser
+            - Màn hình chính là Replit đầy đủ, tương tác như web thật
+            - FAB mail (📧) kéo được bất kỳ đâu trên màn hình
+
+            #### 📋 Smart Paste nâng cấp
+            - Nhận biết loại field đang focus (email/password/username)
+            - Dán đúng thông tin vào đúng ô — không cần chỉ định thủ công
+            - Nút ⚡ Tự điền tài khoản: điền cả form đăng nhập chỉ 1 chạm
+
+            #### 🗂 Tab Manager tích hợp trong panel
+            - Tab thứ 3 trong panel: danh sách tất cả tab đang mở
+            - Ấn để chuyển tab, ✕ để đóng, ＋ để tạo tab mới
+            - Mỗi tab độc lập, tạo nhiều Replit riêng không trùng
+
+            #### 🔍 Panel header nâng cấp
+            - 🔍 Thanh tìm kiếm + URL (tìm Google hoặc mở URL)
+            - 🖥 Desktop mode toggle (giữ trạng thái qua các tab)
+            - ✉+ Tạo mail mới (xoá mail cũ, tạo mail mới tự động)
+            - ✕ Đóng panel
+
+            #### 🛡 Fix CAPTCHA triệt để
+            - Vá hCaptcha (Replit sử dụng) — reset token khi gặp lỗi code:1
+            - Vá reCAPTCHA v2 timing trong WebView
+            - Vá Cloudflare Turnstile
+            - Intercept cả fetch và XMLHttpRequest để detect và retry
+
+            #### 🤖 Auto-Onboarding hoàn thiện
+            - Tự động chọn câu hỏi (radio/checkbox/card options)
+            - Tự động nhấn Next/Continue đến khi hết wizard
+            - Tự chọn gói miễn phí
+            - Loop lại nếu vẫn còn trang onboarding
+
+            #### 🍪 Cookie & Session đầy đủ
+            - Bật third-party cookies (cần cho hCaptcha)
+            - Cookie hoạt động đúng trên mọi WebView
+
+          files: rem2-v4.0-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

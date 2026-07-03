@@ -6,12 +6,12 @@
     android:layout_height="match_parent"
     android:background="#F5F5F5">
 
-    <!-- ── Tab bar: scrollable tabs ────────────────────────────────── -->
+    <!-- ── Tab bar ──────────────────────────────────────────────────────── -->
     <HorizontalScrollView
         android:id="@+id/tabScrollView"
         android:layout_width="0dp"
-        android:layout_height="38dp"
-        android:background="#F5F5F5"
+        android:layout_height="36dp"
+        android:background="#F0F0F0"
         android:scrollbars="none"
         android:fillViewport="false"
         app:layout_constraintTop_toTopOf="parent"
@@ -28,24 +28,24 @@
             android:paddingEnd="4dp"/>
     </HorizontalScrollView>
 
-    <!-- Tab quick actions: Reload + New Tab -->
+    <!-- Reload + New Tab actions -->
     <LinearLayout
         android:id="@+id/tabActions"
         android:layout_width="wrap_content"
-        android:layout_height="38dp"
+        android:layout_height="36dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="#F5F5F5"
+        android:background="#F0F0F0"
         android:paddingEnd="4dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
         <TextView
             android:id="@+id/btnReload"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
             android:text="↻"
-            android:textSize="20sp"
+            android:textSize="19sp"
             android:gravity="center"
             android:textColor="#1565C0"
             android:background="?attr/selectableItemBackgroundBorderless"
@@ -53,10 +53,10 @@
 
         <TextView
             android:id="@+id/btnNewTab"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
             android:text="＋"
-            android:textSize="18sp"
+            android:textSize="17sp"
             android:gravity="center"
             android:textColor="#1565C0"
             android:background="?attr/selectableItemBackgroundBorderless"
@@ -68,12 +68,12 @@
         android:id="@+id/tabDivider"
         android:layout_width="0dp"
         android:layout_height="1dp"
-        android:background="#EEEEEE"
+        android:background="#DDDDDD"
         app:layout_constraintTop_toBottomOf="@+id/tabScrollView"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- ── WebView container: always full height (panel overlays it) ── -->
+    <!-- ── WebView container ─────────────────────────────────────────────── -->
     <FrameLayout
         android:id="@+id/webContainer"
         android:layout_width="0dp"
@@ -83,107 +83,122 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- ── Mail Panel: floating overlay from bottom (55% height) ────── -->
+    <!-- ── Mail Panel: floating overlay from bottom (58% height) ─────────── -->
     <LinearLayout
         android:id="@+id/mailPanel"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:orientation="vertical"
         android:background="#FFFFFF"
+        android:elevation="8dp"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHeight_percent="0.56"
+        app:layout_constraintHeight_percent="0.60"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="1.0">
 
-        <!-- Panel header -->
+        <!-- ── Panel header ── -->
         <LinearLayout
             android:id="@+id/panelHeader"
             android:layout_width="match_parent"
-            android:layout_height="52dp"
-            android:orientation="vertical"
+            android:layout_height="46dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:background="#FFFFFF"
-            android:elevation="3dp">
+            android:elevation="2dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="4dp">
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="52dp"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingStart="14dp"
-                android:paddingEnd="6dp">
+            <!-- Title -->
+            <TextView
+                android:id="@+id/tvPanelTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📨 Rem2"
+                android:textColor="#1565C0"
+                android:textSize="14sp"
+                android:textStyle="bold"/>
 
-                <!-- Title (ẩn khi search đang mở) -->
-                <TextView
-                    android:id="@+id/tvPanelTitle"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="📨 Hộp thư"
-                    android:textColor="#1565C0"
-                    android:textSize="15sp"
-                    android:textStyle="bold"/>
+            <!-- Search input -->
+            <EditText
+                android:id="@+id/etSearch"
+                android:layout_width="0dp"
+                android:layout_height="32dp"
+                android:layout_weight="1"
+                android:visibility="gone"
+                android:background="@drawable/search_bg"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:textColor="#1A237E"
+                android:textColorHint="#9FA8DA"
+                android:textSize="12sp"
+                android:hint="Tìm kiếm hoặc nhập URL..."
+                android:imeOptions="actionGo"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:singleLine="true"/>
 
-                <!-- Search input (hiện khi search active) -->
-                <EditText
-                    android:id="@+id/etSearch"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:visibility="gone"
-                    android:background="#EEF2FF"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:textColor="#1A237E"
-                    android:textColorHint="#9FA8DA"
-                    android:textSize="13sp"
-                    android:hint="Tìm kiếm hoặc nhập URL..."
-                    android:imeOptions="actionGo"
-                    android:inputType="textUri"
-                    android:maxLines="1"
-                    android:singleLine="true"/>
+            <!-- Search icon -->
+            <TextView
+                android:id="@+id/btnToggleSearch"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:text="🔍"
+                android:textSize="15sp"
+                android:gravity="center"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Tìm kiếm"/>
 
-                <!-- Search toggle -->
-                <androidx.appcompat.widget.AppCompatImageButton
-                    android:id="@+id/btnToggleSearch"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:src="@android:drawable/ic_menu_search"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:tint="#1565C0"/>
+            <!-- Desktop mode -->
+            <TextView
+                android:id="@+id/btnDesktop"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:text="🖥"
+                android:textSize="15sp"
+                android:gravity="center"
+                android:textColor="#888888"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Máy tính"/>
 
-                <!-- Tạo mail mới -->
-                <androidx.appcompat.widget.AppCompatButton
-                    android:id="@+id/btnRefresh"
-                    android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:text="✉+"
-                    android:textColor="#1565C0"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:paddingStart="6dp"
-                    android:paddingEnd="6dp"
-                    android:minWidth="0dp"/>
+            <!-- New mail (+) -->
+            <TextView
+                android:id="@+id/btnNewMail"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:text="✉+"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:textColor="#1565C0"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Tạo mail mới"/>
 
-                <!-- Đóng panel -->
-                <androidx.appcompat.widget.AppCompatImageButton
-                    android:id="@+id/btnClose"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:src="@android:drawable/ic_menu_close_clear_cancel"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:tint="#9E9E9E"/>
-
-            </LinearLayout>
+            <!-- Close -->
+            <TextView
+                android:id="@+id/btnClose"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:text="✕"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:textColor="#999999"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Đóng"/>
         </LinearLayout>
 
-        <!-- Section tabs -->
+        <!-- Top divider -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#EEEEEE"/>
+
+        <!-- ── Section tabs ── -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="36dp"
+            android:layout_height="32dp"
             android:orientation="horizontal"
             android:background="#F5F5F5">
 
@@ -193,8 +208,8 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:text="👤 Tài khoản"
-                android:textColor="#90CAF9"
-                android:textSize="12sp"
+                android:textColor="@android:color/white"
+                android:textSize="11sp"
                 android:gravity="center"
                 android:background="#1565C0"/>
 
@@ -204,25 +219,36 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:text="📧 Xác thực"
-                android:textColor="#90CAF9"
-                android:textSize="12sp"
+                android:textColor="#1565C0"
+                android:textSize="11sp"
+                android:gravity="center"
+                android:background="@android:color/transparent"/>
+
+            <TextView
+                android:id="@+id/tabPanelTabs"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="🗂 Tab"
+                android:textColor="#1565C0"
+                android:textSize="11sp"
                 android:gravity="center"
                 android:background="@android:color/transparent"/>
         </LinearLayout>
 
-        <!-- Divider -->
+        <!-- Section tab bottom divider -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#EEEEEE"/>
+            android:background="#E0E0E0"/>
 
-        <!-- Content area -->
+        <!-- ── Content area ── -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <!-- ── Accounts section ── -->
+            <!-- ── SECTION 0: Accounts ── -->
             <LinearLayout
                 android:id="@+id/accountsContainer"
                 android:layout_width="match_parent"
@@ -231,28 +257,37 @@
 
                 <ScrollView
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent">
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp">
 
                     <LinearLayout
-                        android:id="@+id/accountList"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"/>
-                </ScrollView>
+                        android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/tvAccountsEmpty"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_gravity="center"
-                    android:text="Chưa có tài khoản\nĐăng nhập Replit để lưu tự động"
-                    android:textColor="#777777"
-                    android:textSize="13sp"
-                    android:gravity="center"
-                    android:visibility="gone"/>
+                        <LinearLayout
+                            android:id="@+id/accountList"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"/>
+
+                        <TextView
+                            android:id="@+id/tvAccountsEmpty"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="Chưa có tài khoản\nĐăng nhập Replit để lưu"
+                            android:textColor="#999999"
+                            android:textSize="12sp"
+                            android:gravity="center"
+                            android:paddingTop="24dp"
+                            android:visibility="gone"/>
+                    </LinearLayout>
+                </ScrollView>
             </LinearLayout>
 
-            <!-- ── Verify / Inbox section ── -->
+            <!-- ── SECTION 1: Verify / Inbox ── -->
             <LinearLayout
                 android:id="@+id/verifyContainer"
                 android:layout_width="match_parent"
@@ -260,19 +295,34 @@
                 android:orientation="vertical"
                 android:visibility="gone">
 
-                <TextView
-                    android:id="@+id/tvMailStatus"
+                <!-- Mail status bar -->
+                <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="Đang khởi tạo..."
-                    android:textColor="#555555"
-                    android:textSize="11sp"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="2dp"
-                    android:singleLine="true"
-                    android:ellipsize="end"/>
+                    android:layout_height="28dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="8dp"
+                    android:background="#F8F8F8">
+
+                    <TextView
+                        android:id="@+id/tvMailStatus"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Đang khởi tạo..."
+                        android:textColor="#555555"
+                        android:textSize="10.5sp"
+                        android:singleLine="true"
+                        android:ellipsize="end"/>
+
+                    <ProgressBar
+                        android:id="@+id/pbMail"
+                        android:layout_width="14dp"
+                        android:layout_height="14dp"
+                        android:indeterminateTint="#1565C0"
+                        android:visibility="gone"/>
+                </LinearLayout>
 
                 <!-- Mail list + verify WebView stacked -->
                 <FrameLayout
@@ -283,7 +333,10 @@
                     <ScrollView
                         android:id="@+id/mailListScroll"
                         android:layout_width="match_parent"
-                        android:layout_height="match_parent">
+                        android:layout_height="match_parent"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp"
+                        android:clipToPadding="false">
 
                         <LinearLayout
                             android:id="@+id/mailList"
@@ -292,7 +345,7 @@
                             android:orientation="vertical"/>
                     </ScrollView>
 
-                    <!-- Verify WebView (shown when link loaded) -->
+                    <!-- Verify WebView -->
                     <WebView
                         android:id="@+id/verifyWebView"
                         android:layout_width="match_parent"
@@ -300,16 +353,70 @@
                         android:visibility="gone"/>
                 </FrameLayout>
             </LinearLayout>
+
+            <!-- ── SECTION 2: Tabs ── -->
+            <LinearLayout
+                android:id="@+id/tabsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <!-- New tab button -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="36dp"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:background="#F0F4FF">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Các tab đang mở"
+                        android:textColor="#1565C0"
+                        android:textSize="12sp"
+                        android:textStyle="bold"/>
+
+                    <TextView
+                        android:id="@+id/btnPanelNewTab"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="＋ Tab mới"
+                        android:textColor="#1565C0"
+                        android:textSize="11sp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"/>
+                </LinearLayout>
+
+                <ScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent">
+
+                    <LinearLayout
+                        android:id="@+id/panelTabList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp"/>
+                </ScrollView>
+            </LinearLayout>
+
         </FrameLayout>
 
-        <!-- Status bar -->
+        <!-- Bottom status -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="28dp"
+            android:layout_height="24dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:background="#F5F5F5"
-            android:paddingStart="8dp"
+            android:paddingStart="10dp"
             android:paddingEnd="8dp">
 
             <TextView
@@ -318,18 +425,12 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text=""
-                android:textColor="#777777"
-                android:textSize="10sp"
+                android:textColor="#888888"
+                android:textSize="9.5sp"
                 android:ellipsize="end"
                 android:maxLines="1"/>
-
-            <ProgressBar
-                android:id="@+id/pbMail"
-                android:layout_width="14dp"
-                android:layout_height="14dp"
-                android:indeterminateTint="#1565C0"
-                android:visibility="gone"/>
         </LinearLayout>
+
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
