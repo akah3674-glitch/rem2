@@ -39,37 +39,37 @@ jobs:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk rem2-v3.0-release.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk rem2-v3.1-release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rem2-v3.0-release
-          path: rem2-v3.0-release.apk
+          name: rem2-v3.1-release
+          path: rem2-v3.1-release.apk
           retention-days: 30
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.0.${{ github.run_number }}
-          name: "Rem2 v3.0.${{ github.run_number }}"
+          tag_name: v3.1.${{ github.run_number }}
+          name: "Rem2 v3.1.${{ github.run_number }}"
           body: |
-            ## Rem2 v3.0.${{ github.run_number }}
+            ## Rem2 v3.1.${{ github.run_number }}
 
-            ⚠️ **Chữ ký số mới** — cần gỡ bản cũ trước khi cài (nếu đã có rem2 cũ)
+            ⚠️ **Cùng chữ ký với v3.0** — cài đè trực tiếp, không cần gỡ bản cũ
 
-            ### Tính năng v3.0
-            - 🗂 **Multi-tab** — nhiều tab Replit độc lập, nút ✕ để đóng từng tab
-            - 📋 **Smart paste** — ấn tài khoản trong panel → tự dán vào ô đang focus
-            - 👤 **Panel Tài khoản** — lưu và quản lý danh sách email/pass
-            - 📧 **Panel Xác thực** — inbox Mail.tm, tự mở khi có email mới
-            - ↻ **Nút Reload** + **＋ Tab mới** cố định trên thanh tab
-            - 🟰 **FAB hamburger ≡** kéo được, bật/tắt panel
-            - 🔧 **Fix CAPTCHA** "captcha token is invalid (code:1)"
-            - 🤖 **Auto-onboarding** — tự chọn câu hỏi và nhấn Next
-            - 🕵️ **Anti-detect** — giả lập thiết bị thật (DeviceProfile)
-            - 📱 **Vuốt trái/phải** — back/forward trong trình duyệt
-            - 📎 **Upload file** + 🖥 Desktop mode
-          files: rem2-v3.0-release.apk
+            ### ✨ Tính năng mới v3.1
+            - 👆 **Vuốt trái/phải nâng cấp** — ngưỡng thấp hơn (60dp, velocity 250), haptic + toast "◀ Quay lại / ▶ Tiến tới"
+            - ↻ **Reload có animation** — nút tải lại xoay 360° khi nhấn
+            - 📧 **FAB Mail riêng** — icon mail kéo độc lập, badge đếm email chưa đọc, nhấn mở thẳng tab Xác thực
+            - 🔒 **Auto-fill chỉ trang đăng ký** — KHÔNG tự điền trên trang đăng nhập (/login)
+            - 📎 **Fix đính kèm file** — dùng ACTION_OPEN_DOCUMENT + createChooser + URI permission flag, không mất chỗ đính kèm
+
+            ### Tính năng v3.0 (giữ nguyên)
+            - 🗂 Multi-tab, 📋 Smart paste, 👤 Panel Tài khoản
+            - 📧 Panel Xác thực (Mail.tm), ↻ Reload + ＋ Tab mới
+            - 🔧 Fix CAPTCHA, 🤖 Auto-onboarding, 🕵️ Anti-detect
+            - 📎 Upload file + 🖥 Desktop mode
+          files: rem2-v3.1-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

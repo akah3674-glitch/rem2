@@ -1,6 +1,7 @@
 @file:Suppress("DEPRECATION")
 package com.rem2.browser
 
+import android.animation.ObjectAnimator
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.ClipData
@@ -159,6 +160,10 @@ class MainActivity : AppCompatActivity() {
     private val accounts = mutableListOf<AccountEntry>()
     private var focusedFieldType = "" // "email" | "password" | "username" | ""
 
+    // ── Mail FAB ─────────────────────────────────────────────────────────────
+    private var unreadCount = 0
+    private var mailFab: TextView? = null
+
     // ── Device & UA ──────────────────────────────────────────────────────────
     private var currentDevice: DeviceProfile = DEVICE_PROFILES.random()
     private var isDesktopMode = false
@@ -209,6 +214,7 @@ class MainActivity : AppCompatActivity() {
         setupPanel()
         setupTabActions()
         setupDraggableFab()
+        setupMailFab()
         setupVerifyWebView()
 
         addNewTab("https://replit.com", select = true)
@@ -295,6 +301,11 @@ class MainActivity : AppCompatActivity() {
     private fun setupTabActions() {
         binding.btnReload.setOnClickListener {
             tabs.getOrNull(activeTabIndex)?.webView?.reload()
+            // Spin animation 360°
+            ObjectAnimator.ofFloat(binding.btnReload, "rotation", 0f, 360f).apply {
+                duration = 600
+                start()
+            }
         }
         binding.btnNewTab.setOnClickListener {
             addNewTab(); closePanel()
@@ -349,8 +360,10 @@ class MainActivity : AppCompatActivity() {
                 // CAPTCHA fix on signup pages
                 if (url.contains("replit.com")) {
                     view.evaluateJavascript(buildCaptchaFixJs(), null)
-                    // Auto-fill on signup
-                    if ((url.contains("/signup") || url.contains("/join")) && autoEmail.isNotEmpty()) {
+                    // Auto-fill ONLY on registration page (skip login)
+                    val isSignup = (url.contains("/signup") || url.contains("/join"))
+                        && !url.contains("/login") && !url.contains("/signin")
+                    if (isSignup && autoEmail.isNotEmpty()) {
                         view.postDelayed({
                             injectSignupForm(view, autoEmail, autoUsername, autoPassword, autoFullName)
                         }, 1500)
@@ -377,12 +390,16 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 fileUploadCallback?.onReceiveValue(null)
                 fileUploadCallback = filePathCallback
-                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                // Use ACTION_OPEN_DOCUMENT for persistent URI access across process boundaries
+                val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "*/*"
                     putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                             Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
-                return try { filePickerLauncher.launch(intent); true }
+                val chooser = Intent.createChooser(pick, "Chọn file đính kèm")
+                return try { filePickerLauncher.launch(chooser); true }
                 catch (e: Exception) {
                     fileUploadCallback?.onReceiveValue(null); fileUploadCallback = null; false
                 }
@@ -395,11 +412,22 @@ class MainActivity : AppCompatActivity() {
                 if (e1 == null) return false
                 val dx = e2.x - e1.x
                 val dy = e2.y - e1.y
-                if (Math.abs(dx) < Math.abs(dy) * 1.5f || Math.abs(vX) < 400) return false
-                return if (dx > 80) {
-                    if (wv.canGoBack()) { wv.goBack(); true } else false
-                } else if (dx < -80) {
-                    if (wv.canGoForward()) { wv.goForward(); true } else false
+                // Easier trigger: |dx| > |dy| (not 1.5x), velocity > 250
+                if (Math.abs(dx) < Math.abs(dy) || Math.abs(vX) < 250) return false
+                return if (dx > 60) {
+                    if (wv.canGoBack()) {
+                        wv.goBack()
+                        wv.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                        runOnUiThread { toast("◀ Quay lại") }
+                        true
+                    } else false
+                } else if (dx < -60) {
+                    if (wv.canGoForward()) {
+                        wv.goForward()
+                        wv.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
+                        runOnUiThread { toast("▶ Tiến tới") }
+                        true
+                    } else false
                 } else false
             }
         })
@@ -693,7 +721,97 @@ class MainActivity : AppCompatActivity() {
         toast("Đã dán: ${value.take(20)}")
     }
 
-    // ─── Draggable FAB ─────────────────────────────────────────────────────────
+
+    // ─── Draggable Mail FAB ────────────────────────────────────────────────────
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupMailFab() {
+        val dp = resources.displayMetrics.density
+        val size = (48 * dp).toInt()
+
+        val fab = TextView(this).apply {
+            text = "📧"
+            textSize = 20f
+            gravity = android.view.Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xFF1565C0.toInt())
+            }
+            elevation = 12 * dp
+            layoutParams = android.view.WindowManager.LayoutParams(size, size)
+        }
+        mailFab = fab
+
+        // Add to root view
+        val root = binding.root
+        root.addView(fab, android.widget.FrameLayout.LayoutParams(size, size).also { it.gravity = android.view.Gravity.TOP or android.view.Gravity.START })
+
+        // Restore saved position or place bottom-right near main FAB
+        fab.post {
+            val sx = prefs.getFloat("mailfab_x", -1f)
+            val sy = prefs.getFloat("mailfab_y", -1f)
+            val maxX = (resources.displayMetrics.widthPixels - size).toFloat()
+            val maxY = (resources.displayMetrics.heightPixels - size).toFloat()
+            if (sx >= 0 && sy >= 0) {
+                fab.x = sx.coerceIn(0f, maxX)
+                fab.y = sy.coerceIn(0f, maxY)
+            } else {
+                fab.x = maxX - (16 * dp)
+                fab.y = maxY - (90 * dp)
+            }
+        }
+
+        var dX = 0f; var dY = 0f; var isDragging = false
+        val slop = 10f
+
+        fab.setOnTouchListener { v, event ->
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    dX = v.x - event.rawX; dY = v.y - event.rawY; isDragging = false; true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val movedX = Math.abs(event.rawX + dX - v.x)
+                    val movedY = Math.abs(event.rawY + dY - v.y)
+                    if (movedX > slop || movedY > slop) isDragging = true
+                    if (isDragging) {
+                        val maxX = (resources.displayMetrics.widthPixels - v.width).toFloat()
+                        val maxY = (resources.displayMetrics.heightPixels - v.height).toFloat()
+                        v.x = (event.rawX + dX).coerceIn(0f, maxX)
+                        v.y = (event.rawY + dY).coerceIn(0f, maxY)
+                        v.performHapticFeedback(android.view.HapticFeedbackConstants.TEXT_HANDLE_MOVE)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (isDragging) {
+                        prefs.edit().putFloat("mailfab_x", v.x).putFloat("mailfab_y", v.y).apply()
+                    } else {
+                        // Open panel on mail section and clear badge
+                        if (binding.mailPanel.visibility == View.GONE) {
+                            openPanel()
+                            switchPanelSection(1)
+                        } else if (panelSection != 1) {
+                            switchPanelSection(1)
+                        } else {
+                            closePanel()
+                        }
+                        unreadCount = 0
+                        updateMailBadge()
+                    }
+                    isDragging = false; true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun updateMailBadge() {
+        runOnUiThread {
+            mailFab?.text = if (unreadCount > 0) "📧${unreadCount}" else "📧"
+        }
+    }
+
+    // ─── Draggable FAB (hamburger ≡) ─────────────────────────────────────────────
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupDraggableFab() {
@@ -1154,6 +1272,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun addMailItems(msgs: List<Pair<String,String>>) {
         val dp = resources.displayMetrics.density
+        unreadCount += msgs.size
+        updateMailBadge()
         msgs.forEach { (id, subject) ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
