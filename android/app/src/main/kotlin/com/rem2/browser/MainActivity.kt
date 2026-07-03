@@ -234,6 +234,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun closeTab(index: Int) {
+        if (index !in tabs.indices) return
         if (tabs.size <= 1) { toast("Không thể đóng tab cuối"); return }
         tabs[index].webView?.let { binding.webContainer.removeView(it); it.destroy() }
         tabs.removeAt(index)
@@ -928,7 +929,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onDestroy() { super.onDestroy(); stopPolling(); tabs.forEach { it.webView?.destroy() } }
+    override fun onDestroy() {
+        super.onDestroy(); stopPolling()
+        binding.verifyWebView.stopLoading(); binding.verifyWebView.destroy()
+        tabs.forEach { it.webView?.destroy() }
+    }
     override fun onPause()   { super.onPause();   tabs.forEach { it.webView?.onPause() } }
     override fun onResume()  { super.onResume();  tabs.forEach { it.webView?.onResume() } }
 }
