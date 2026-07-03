@@ -33,7 +33,7 @@ jobs:
 
       - name: Build Release APK
         working-directory: android
-        run: gradle assembleRelease
+        run: ./gradlew assembleRelease
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -50,20 +50,14 @@ jobs:
             ## Rem2 v5.0 — Manual CAPTCHA + App Mode + UI mới
 
             ### ✨ Tính năng mới
-            - **🔐 CAPTCHA thủ công**: tự giải trên màn hình, token lưu tự động vào bộ nhớ
-            - **💾 Token CAPTCHA lưu lại**: nếu OTP thất bại (code:1), inject lại token cũ không cần giải lại
-            - **🤖 App Mode**: giả lập Replit native app UA + headers — đôi khi bypass CAPTCHA hoàn toàn
-            - **📱 UI mới sáng + tương phản tốt**: panel bo tròn góc trên, card nổi, màu rõ ràng
+            - **🔐 CAPTCHA thủ công**: tự giải trên màn hình, token lưu tự động
+            - **💾 Token lưu lại**: nếu code:1, inject lại token cũ không cần giải lại
+            - **🤖 App Mode**: giả lập Replit native app UA + headers — có thể bypass CAPTCHA
+            - **📱 UI mới sáng + tương phản tốt**: panel bo tròn, card nổi, màu rõ ràng
             - **🗂 Panel 3 tab**: Tài khoản / Xác thực+CAPTCHA / Tab manager
-            - **Drag handle** thanh kéo đẹp trên đầu panel
-            - **Tab indicator**: gạch xanh dưới tab đang chọn
-
-            ### 🗑 Đã xoá
-            - Không còn tự động reset CAPTCHA hay click retry
-            - Không còn tạo WebView rác chỉ để set cookie
 
             ### 📦 Cài đặt
-            Tải `rem2-v5.0-release.apk` bên dưới · Android 7.0+
+            Tải `app-release.apk` bên dưới · Android 7.0+
           files: android/app/build/outputs/apk/release/app-release.apk
           draft: false
           prerelease: false
