@@ -59,7 +59,7 @@
                 android:textSize="12sp"
                 android:textColor="#111827"
                 android:hint="Tìm kiếm hoặc nhập URL..."
-                android:hintTextColor="#9CA3AF"
+                android:textColorHint="#9CA3AF"
                 android:singleLine="true"
                 android:imeOptions="actionGo"
                 android:inputType="textUri" />
@@ -248,7 +248,7 @@
                     android:textSize="12sp"
                     android:textColor="#111827"
                     android:hint="Tìm kiếm..."
-                    android:hintTextColor="#9CA3AF"
+                    android:textColorHint="#9CA3AF"
                     android:singleLine="true"
                     android:imeOptions="actionGo"
                     android:inputType="text" />
