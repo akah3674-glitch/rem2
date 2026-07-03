@@ -44,15 +44,15 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v5.0.${{ github.run_number }}
-          name: "Rem2 v5.0.${{ github.run_number }}"
+          tag_name: v5.1.${{ github.run_number }}
+          name: "Rem2 v5.1.${{ github.run_number }}"
           body: |
-            ## Rem2 v5.0 — Manual CAPTCHA + App Mode + UI mới
+            ## Rem2 v5.1 — Cốc Cốc UA mặc định
 
             ### ✨ Tính năng mới
             - **🔐 CAPTCHA thủ công**: tự giải trên màn hình, token lưu tự động
             - **💾 Token lưu lại**: nếu code:1, inject lại token cũ không cần giải lại
-            - **🤖 App Mode**: giả lập Replit native app UA + headers — có thể bypass CAPTCHA
+            - **🌐 Cốc Cốc UA**: trình duyệt Cốc Cốc làm UA mặc định (thay random Chrome)
             - **📱 UI mới sáng + tương phản tốt**: panel bo tròn, card nổi, màu rõ ràng
             - **🗂 Panel 3 tab**: Tài khoản / Xác thực+CAPTCHA / Tab manager
 

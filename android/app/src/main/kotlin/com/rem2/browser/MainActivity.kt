@@ -85,10 +85,6 @@ class MainActivity : AppCompatActivity() {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
-        // Replit native app UA — đôi khi bỏ qua CAPTCHA vì được nhận diện là app tin cậy
-        private const val REPLIT_APP_UA =
-            "Replit/3.79.0 (Android 13; SM-S911B) WebKit/537.36"
-
         data class DeviceProfile(
             val name: String, val ua: String,
             val screenW: Int, val screenH: Int,
@@ -96,23 +92,12 @@ class MainActivity : AppCompatActivity() {
             val timezone: String
         )
 
-        val DEVICE_PROFILES = listOf(
-            DeviceProfile("Samsung S23",
-                "Mozilla/5.0 (Linux; Android 13; SM-S911B) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
-                393, 851, 8, 8, "Asia/Ho_Chi_Minh"),
-            DeviceProfile("Samsung A54",
-                "Mozilla/5.0 (Linux; Android 13; SM-A546E) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/123.0.6312.118 Mobile Safari/537.36",
-                360, 780, 6, 8, "Asia/Ho_Chi_Minh"),
-            DeviceProfile("Xiaomi 13",
-                "Mozilla/5.0 (Linux; Android 13; 2211133C) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
-                393, 851, 12, 8, "Asia/Bangkok"),
-            DeviceProfile("Redmi Note 12",
-                "Mozilla/5.0 (Linux; Android 13; 23021RAAEG) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/122.0.6261.119 Mobile Safari/537.36",
-                393, 873, 6, 8, "Asia/Jakarta"),
+        // Cốc Cốc — trình duyệt mặc định
+        val COCCOC_DEVICE = DeviceProfile(
+            "Cốc Cốc",
+            "Mozilla/5.0 (Linux; Android 13; SM-S911B) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) coc_coc_browser/116.0.232 Chrome/110.0.5481.177 Mobile Safari/537.36",
+            393, 851, 8, 8, "Asia/Ho_Chi_Minh"
         )
 
         fun randomFullName(): String {
@@ -169,9 +154,8 @@ class MainActivity : AppCompatActivity() {
     private var mailFab: TextView? = null
 
     // ── Device & UA ──────────────────────────────────────────────────────────
-    private var currentDevice: DeviceProfile = DEVICE_PROFILES.random()
+    private var currentDevice: DeviceProfile = COCCOC_DEVICE
     private var isDesktopMode = false
-    private var isAppMode = false  // Giả lập Replit native app — bỏ qua CAPTCHA
 
     // ── Mail state ────────────────────────────────────────────────────────────
     private var mailToken    = ""
@@ -411,7 +395,6 @@ class MainActivity : AppCompatActivity() {
                 view.evaluateJavascript(buildAntiDetectJs(currentDevice), null)
                 if (url.contains("replit.com")) {
                     view.evaluateJavascript(buildCaptureTokenJs(), null)
-                    if (isAppMode) view.evaluateJavascript(buildAppModeHeaderJs(), null)
                 }
             }
 
@@ -496,7 +479,6 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode           = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             mediaPlaybackRequiresUserGesture = false
             userAgentString = when {
-                isAppMode    -> REPLIT_APP_UA
                 isDesktopMode -> DESKTOP_UA
                 else          -> currentDevice.ua
             }
@@ -570,30 +552,11 @@ class MainActivity : AppCompatActivity() {
         // Desktop mode toggle
         binding.btnDesktop.setOnClickListener {
             isDesktopMode = !isDesktopMode
-            if (isDesktopMode) isAppMode = false
-            val ua = when {
-                isDesktopMode -> DESKTOP_UA
-                else          -> currentDevice.ua
-            }
+            val ua = if (isDesktopMode) DESKTOP_UA else currentDevice.ua
             tabs.forEach { it.webView?.settings?.userAgentString = ua }
             tabs.getOrNull(activeTabIndex)?.webView?.reload()
             binding.btnDesktop.setTextColor(if (isDesktopMode) CLR_PRIMARY else CLR_TEXT_HINT)
-            toast(if (isDesktopMode) "🖥 Chế độ máy tính" else "📱 Chế độ di động")
-        }
-
-        // App mode toggle (giả lập Replit native app — có thể bỏ qua CAPTCHA)
-        binding.btnAppMode.setOnClickListener {
-            isAppMode = !isAppMode
-            if (isAppMode) isDesktopMode = false
-            val ua = if (isAppMode) REPLIT_APP_UA else currentDevice.ua
-            // Áp dụng UA + inject header JS vào tất cả tab ngay lập tức
-            tabs.forEach { tab ->
-                tab.webView?.settings?.userAgentString = ua
-                if (isAppMode) tab.webView?.evaluateJavascript(buildAppModeHeaderJs(), null)
-                tab.webView?.reload()
-            }
-            binding.btnAppMode.setTextColor(if (isAppMode) CLR_PRIMARY else CLR_TEXT_HINT)
-            toast(if (isAppMode) "🤖 App mode — tất cả tab đã reload" else "🌐 Web mode thường")
+            toast(if (isDesktopMode) "🖥 Chế độ máy tính" else "📱 Cốc Cốc mặc định")
         }
 
         // + button: tạo mail mới
@@ -1167,33 +1130,6 @@ class MainActivity : AppCompatActivity() {
     _xPatched._rem2Err=true;
     XMLHttpRequest.prototype.open=_xPatched;
   }
-})();
-    """.trimIndent()
-
-    /**
-     * App mode: thêm headers để giả lập Replit native app.
-     * Một số CAPTCHA provider (hCaptcha, Cloudflare) có whitelist
-     * cho trusted mobile apps — đây là kỹ thuật từ APK Replit gốc.
-     */
-    private fun buildAppModeHeaderJs(): String = """
-(function(){
-  if(window._rem2AppMode)return; window._rem2AppMode=true;
-  var _fetch=window.fetch;
-  if(!_fetch)return;
-  window.fetch=function(url,opts){
-    opts=opts||{}; opts.headers=opts.headers||{};
-    var h=opts.headers;
-    if(typeof h.set==='function'){
-      h.set('X-Requested-With','com.replit.app');
-      h.set('X-Replit-Platform','android');
-      h.set('X-Client-Version','3.79.0');
-    } else {
-      h['X-Requested-With']='com.replit.app';
-      h['X-Replit-Platform']='android';
-      h['X-Client-Version']='3.79.0';
-    }
-    return _fetch.call(this,url,opts);
-  };
 })();
     """.trimIndent()
 

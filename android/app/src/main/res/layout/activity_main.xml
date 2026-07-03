@@ -169,17 +169,6 @@
                 android:contentDescription="Tìm kiếm"/>
 
             <TextView
-                android:id="@+id/btnAppMode"
-                android:layout_width="38dp"
-                android:layout_height="38dp"
-                android:text="🤖"
-                android:textSize="14sp"
-                android:gravity="center"
-                android:textColor="#9E9E9E"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:contentDescription="App mode"/>
-
-            <TextView
                 android:id="@+id/btnDesktop"
                 android:layout_width="38dp"
                 android:layout_height="38dp"
