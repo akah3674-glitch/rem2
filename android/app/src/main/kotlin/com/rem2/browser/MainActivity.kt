@@ -471,11 +471,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupFab() {
         val fab = binding.fabMail
-        // Start position: left side, middle of screen
-        post {
-            val sh = resources.displayMetrics.heightPixels
-            fab.x = dp(this, 12f).toFloat()
-            fab.y = sh * 0.45f
+        // Start position: top-right like Cốc Cốc
+        binding.root.post {
+            val sw = resources.displayMetrics.widthPixels
+            fab.x = sw - dp(this, 68f).toFloat()
+            fab.y = dp(this, 110f).toFloat()
         }
         fab.setOnTouchListener { v, event ->
             when (event.action) {
