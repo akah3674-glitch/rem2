@@ -102,43 +102,83 @@
         <LinearLayout
             android:id="@+id/panelHeader"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:background="#F5F5F5"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp">
+            android:layout_height="52dp"
+            android:orientation="vertical"
+            android:background="#FFFFFF"
+            android:elevation="3dp">
 
-            <!-- Drag handle indicator -->
-            <View
-                android:layout_width="32dp"
-                android:layout_height="4dp"
-                android:layout_marginStart="8dp"
-                android:background="#DDDDDD"
-                android:layout_gravity="center_vertical"/>
-            <!-- Desktop mode -->
-            <androidx.appcompat.widget.AppCompatImageButton
-                android:id="@+id/btnDesktop"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:src="@android:drawable/ic_menu_always_landscape_portrait"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#555555"
-                android:alpha="0.5"/>
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:paddingStart="14dp"
+                android:paddingEnd="6dp">
 
-            <!-- New mail (+) -->
-            <androidx.appcompat.widget.AppCompatButton
-                android:id="@+id/btnRefresh"
-                android:layout_width="wrap_content"
-                android:layout_height="30dp"
-                android:text="+"
-                android:textColor="#1565C0"
-                android:textSize="20sp"
-                android:textStyle="bold"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:paddingStart="8dp"
-                android:paddingEnd="4dp"/>
+                <!-- Title (ẩn khi search đang mở) -->
+                <TextView
+                    android:id="@+id/tvPanelTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="📨 Hộp thư"
+                    android:textColor="#1565C0"
+                    android:textSize="15sp"
+                    android:textStyle="bold"/>
+
+                <!-- Search input (hiện khi search active) -->
+                <EditText
+                    android:id="@+id/etSearch"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:visibility="gone"
+                    android:background="#EEF2FF"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="10dp"
+                    android:textColor="#1A237E"
+                    android:textColorHint="#9FA8DA"
+                    android:textSize="13sp"
+                    android:hint="Tìm kiếm hoặc nhập URL..."
+                    android:imeOptions="actionGo"
+                    android:inputType="textUri"
+                    android:maxLines="1"
+                    android:singleLine="true"/>
+
+                <!-- Search toggle -->
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/btnToggleSearch"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@android:drawable/ic_menu_search"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:tint="#1565C0"/>
+
+                <!-- Tạo mail mới -->
+                <androidx.appcompat.widget.AppCompatButton
+                    android:id="@+id/btnRefresh"
+                    android:layout_width="wrap_content"
+                    android:layout_height="34dp"
+                    android:text="✉+"
+                    android:textColor="#1565C0"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:paddingStart="6dp"
+                    android:paddingEnd="6dp"
+                    android:minWidth="0dp"/>
+
+                <!-- Đóng panel -->
+                <androidx.appcompat.widget.AppCompatImageButton
+                    android:id="@+id/btnClose"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:src="@android:drawable/ic_menu_close_clear_cancel"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:tint="#9E9E9E"/>
+
             </LinearLayout>
+        </LinearLayout>
 
         <!-- Section tabs -->
         <LinearLayout

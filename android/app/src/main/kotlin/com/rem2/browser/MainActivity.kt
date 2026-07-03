@@ -507,16 +507,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupPanel() {
         binding.tabAccounts.setOnClickListener { switchPanelSection(0) }
-        binding.tabMailList.setOnClickListener { switchPanelSection(1) }
-        binding.btnDesktop.setOnClickListener {
-            isDesktopMode = !isDesktopMode
-            val ua = if (isDesktopMode) DESKTOP_UA else currentDevice.ua
-            tabs.forEach { t ->
-                t.webView?.settings?.userAgentString = ua
-                t.webView?.reload()
+        binding.tabMailList.setOnClickListener  { switchPanelSection(1) }
+
+        binding.btnClose.setOnClickListener { closePanel() }
+
+        binding.btnToggleSearch.setOnClickListener {
+            if (binding.etSearch.visibility == View.GONE) {
+                binding.tvPanelTitle.visibility = View.GONE
+                binding.etSearch.visibility    = View.VISIBLE
+                binding.etSearch.requestFocus()
+                showKeyboard(binding.etSearch)
+            } else {
+                binding.etSearch.visibility    = View.GONE
+                binding.tvPanelTitle.visibility = View.VISIBLE
+                hideKeyboard()
             }
-            binding.btnDesktop.alpha = if (isDesktopMode) 1.0f else 0.5f
-            toast(if (isDesktopMode) "🖥 Chế độ máy tính" else "📱 Chế độ mobile")
+        }
+
+        binding.etSearch.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_GO ||
+                event?.keyCode == KeyEvent.KEYCODE_ENTER) {
+                val q = binding.etSearch.text.toString().trim()
+                if (q.isNotEmpty()) {
+                    val url = if (q.startsWith("http")) q
+                              else "https://www.google.com/search?q=${Uri.encode(q)}"
+                    tabs.getOrNull(activeTabIndex)?.webView?.loadUrl(url)
+                    closePanel()
+                }
+                true
+            } else false
         }
 
         binding.btnRefresh.setOnClickListener {
@@ -575,7 +594,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun closePanel() {
-        binding.mailPanel.visibility = View.GONE
+        binding.mailPanel.visibility    = View.GONE
+        binding.etSearch.visibility     = View.GONE
+        binding.tvPanelTitle.visibility = View.VISIBLE
         stopPolling()
         hideKeyboard()
     }
@@ -793,8 +814,12 @@ class MainActivity : AppCompatActivity() {
                     if (isDragging) {
                         prefs.edit().putFloat("mailfab_x", v.x).putFloat("mailfab_y", v.y).apply()
                     } else {
-                        // Short tap → auto-inject email+password into current WebView
-                        injectSavedCredentials()
+                        // Tap → mở/đóng panel mail
+                        if (binding.mailPanel.visibility == View.GONE) {
+                            openPanel(); switchPanelSection(0)
+                        } else {
+                            closePanel()
+                        }
                         unreadCount = 0
                         updateMailBadge()
                     }
@@ -803,47 +828,6 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
         }
-
-        // Long-press → open/close mail panel
-        fab.setOnLongClickListener {
-            it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
-            if (binding.mailPanel.visibility == View.GONE) {
-                openPanel(); switchPanelSection(1)
-            } else {
-                closePanel()
-            }
-            true
-        }
-    }
-
-    private fun injectSavedCredentials() {
-        val email = mailEmail
-        val pass  = mailPassword
-        if (email.isEmpty()) { toast("⚠️ Chưa có email được tạo"); return }
-        val activeWv = tabs.getOrNull(activeTabIndex)?.webView ?: run {
-            toast("⚠️ Không có trang nào đang mở"); return
-        }
-        val emailEsc = email.replace("\\", "\\\\").replace("'", "\\'")
-        val passEsc  = pass.replace("\\", "\\\\").replace("'", "\\'")
-        val js = """
-(function(){
-  function fill(el, val) {
-    try {
-      var s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-      if (s && s.set) s.set.call(el, val); else el.value = val;
-    } catch(e) { el.value = val; }
-    el.dispatchEvent(new Event('input',  {bubbles:true}));
-    el.dispatchEvent(new Event('change', {bubbles:true}));
-  }
-  var inputs = Array.from(document.querySelectorAll('input'));
-  var eF = false, pF = false;
-  inputs.forEach(function(el) {
-    var t  = el.type || '';
-    var n  = (el.name        || '').toLowerCase();
-    var p  = (el.placeholder || '').toLowerCase();
-    var id = (el.id          || '').toLowerCase();
-    if (!eF && (t==='email' || n.includes('email') || p.includes('email') || id.includes('email') || n.includes('username') || id.includes('username'))) {
-      fill(el, '${'$'}{emailEsc}'); eF = true;
     }
     if (!pF && (t==='password' || n.includes('pass') || p.includes('pass') || id.includes('pass'))) {
       fill(el, '${'$'}{passEsc}'); pF = true;
