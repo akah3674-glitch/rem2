@@ -194,10 +194,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         // Enable cookies globally (needed for hCaptcha/Cloudflare)
-        CookieManager.getInstance().apply {
-            setAcceptCookie(true)
-            setAcceptThirdPartyCookies(binding.root as? WebView ?: WebView(this@MainActivity), true)
-        }
+        CookieManager.getInstance().setAcceptCookie(true)
 
         requestStoragePermissionIfNeeded()
         loadAccounts()
@@ -927,48 +924,61 @@ class MainActivity : AppCompatActivity() {
     };
   }
 
-  // Fix 2: hCaptcha — ensure token is submitted with form
-  function patchHcaptcha(){
-    if(!window.hcaptcha)return;
-    var _execute=window.hcaptcha.execute;
-    window.hcaptcha.execute=function(){
-      return _execute.apply(this,arguments);
+  // Fix 2: hCaptcha — watch for assignment and patch without breaking reads
+  function patchHcaptcha(hc){
+    if(!hc||hc._rem2Patched)return; hc._rem2Patched=true;
+    // No-op patch; just mark as seen so reset() calls below work
+  }
+  (function watchGlobal(key,patchFn){
+    var _val=window[key];
+    if(_val){patchFn(_val);}
+    try{
+      Object.defineProperty(window,key,{
+        get:function(){return _val;},
+        set:function(v){_val=v; setTimeout(function(){patchFn(v);},50);},
+        configurable:true
+      });
+    }catch(e){}
+  })('hcaptcha',patchHcaptcha);
+
+  // Fix 3: reCAPTCHA timing fix (v2 checkbox) — same safe getter+setter pattern
+  function patchRecaptcha(rc){
+    if(!rc||!rc.ready||rc._rem2Patched)return; rc._rem2Patched=true;
+    var _ready=rc.ready.bind(rc);
+    rc.ready=function(cb){return _ready(function(){setTimeout(cb,200);});};
+  }
+  (function watchGlobal2(key,patchFn){
+    var _val=window[key];
+    if(_val){patchFn(_val);}
+    try{
+      Object.defineProperty(window,key,{
+        get:function(){return _val;},
+        set:function(v){_val=v; setTimeout(function(){patchFn(v);},50);},
+        configurable:true
+      });
+    }catch(e){}
+  })('grecaptcha',patchRecaptcha);
+
+  // Fix 4: Turnstile (Cloudflare) — safe getter+setter
+  function patchTurnstile(ts){
+    if(!ts||!ts.render||ts._rem2Patched)return; ts._rem2Patched=true;
+    var _render=ts.render.bind(ts);
+    ts.render=function(el,params){
+      if(params&&params.callback){var _cb=params.callback;params.callback=function(tk){setTimeout(function(){_cb(tk);},100);};}
+      return _render(el,params);
     };
   }
-  if(window.hcaptcha){patchHcaptcha();}
-  Object.defineProperty(window,'hcaptcha',{
-    set:function(v){
-      Object.defineProperty(window,'hcaptcha',{value:v,writable:true,configurable:true});
-      setTimeout(patchHcaptcha,100);
-    },configurable:true
-  });
-
-  // Fix 3: reCAPTCHA timing fix (v2 checkbox)
-  function patchRecaptcha(){
-    if(!window.grecaptcha||!window.grecaptcha.ready)return;
-    var _ready=window.grecaptcha.ready.bind(window.grecaptcha);
-    window.grecaptcha.ready=function(cb){return _ready(function(){setTimeout(cb,200);});};
-  }
-  if(window.grecaptcha){patchRecaptcha();}
-  Object.defineProperty(window,'grecaptcha',{
-    set:function(v){
-      Object.defineProperty(window,'grecaptcha',{value:v,writable:true,configurable:true});
-      setTimeout(patchRecaptcha,100);
-    },configurable:true
-  });
-
-  // Fix 4: Turnstile (Cloudflare)
-  function patchTurnstile(){
-    if(!window.turnstile)return;
-    var _render=window.turnstile.render;
-    window.turnstile.render=function(el,params){
-      if(params&&params.callback){var _cb=params.callback;params.callback=function(tk){
-        setTimeout(function(){_cb(tk);},100);
-      };}
-      return _render.apply(this,arguments);
-    };
-  }
-  if(window.turnstile){patchTurnstile();}
+  (function watchGlobal3(key,patchFn){
+    var _val=window[key];
+    if(_val){patchFn(_val);}
+    try{
+      Object.defineProperty(window,key,{
+        get:function(){return _val;},
+        set:function(v){_val=v; setTimeout(function(){patchFn(v);},50);},
+        configurable:true
+      });
+    }catch(e){}
+  })('turnstile',patchTurnstile);
 
   // Fix 5: XMLHttpRequest captcha error detection
   var _XHRopen=XMLHttpRequest.prototype.open;
