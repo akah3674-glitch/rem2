@@ -1,508 +1,144 @@
 <?xml version="1.0" encoding="utf-8"?>
-  <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
       android:layout_width="match_parent"
       android:layout_height="match_parent"
+      android:orientation="vertical"
       android:background="@color/bg_dark">
 
-      <!-- ── Main browser shell ─────────────────────────────────────────── -->
+      <!-- ── Blue header (như screenshot: title + 2 icon) ──────────────── -->
       <LinearLayout
           android:layout_width="match_parent"
-          android:layout_height="match_parent"
-          android:orientation="vertical">
+          android:layout_height="50dp"
+          android:orientation="horizontal"
+          android:gravity="center_vertical"
+          android:background="@color/accent_blue"
+          android:paddingStart="14dp"
+          android:paddingEnd="8dp"
+          android:elevation="4dp">
 
-          <!-- ── Blue header (Rem AccountsActivity style) ──────────────── -->
-          <LinearLayout
-              android:layout_width="match_parent"
+          <TextView
+              android:id="@+id/tvTitle"
+              android:layout_width="0dp"
               android:layout_height="wrap_content"
-              android:orientation="vertical"
-              android:background="@color/accent_blue"
-              android:paddingStart="4dp"
-              android:paddingEnd="4dp"
-              android:paddingTop="10dp"
-              android:paddingBottom="0dp"
-              android:elevation="4dp">
+              android:layout_weight="1"
+              android:text="⚡ Rem2 Browser"
+              android:textSize="16sp"
+              android:textStyle="bold"
+              android:textColor="#FFFFFF" />
 
-              <!-- Title row -->
-              <LinearLayout
+          <!-- Toggle log panel (nút dán / clipboard) -->
+          <TextView
+              android:id="@+id/btnToggleLog"
+              android:layout_width="40dp"
+              android:layout_height="40dp"
+              android:text="📋"
+              android:textSize="18sp"
+              android:gravity="center"
+              android:textColor="#FFFFFF"
+              android:padding="6dp" />
+
+          <!-- Clear log (nút thùng rác) -->
+          <TextView
+              android:id="@+id/btnClearLog"
+              android:layout_width="40dp"
+              android:layout_height="40dp"
+              android:text="🗑"
+              android:textSize="18sp"
+              android:gravity="center"
+              android:textColor="#FFFFFF"
+              android:padding="6dp" />
+      </LinearLayout>
+
+      <!-- ── Log panel (GONE mặc định, bật/tắt bằng btnToggleLog) ─────── -->
+      <LinearLayout
+          android:id="@+id/logPanel"
+          android:layout_width="match_parent"
+          android:layout_height="140dp"
+          android:orientation="vertical"
+          android:background="@color/bg_surface"
+          android:visibility="gone"
+          android:elevation="2dp">
+
+          <ScrollView
+              android:id="@+id/logScroll"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:padding="10dp"
+              android:scrollbars="vertical">
+
+              <TextView
+                  android:id="@+id/tvLog"
                   android:layout_width="match_parent"
-                  android:layout_height="36dp"
-                  android:orientation="horizontal"
-                  android:gravity="center_vertical"
-                  android:paddingStart="8dp"
-                  android:paddingEnd="8dp"
-                  android:layout_marginBottom="6dp">
+                  android:layout_height="wrap_content"
+                  android:textSize="11sp"
+                  android:textColor="@color/text_primary"
+                  android:fontFamily="monospace"
+                  android:lineSpacingExtra="3dp"
+                  android:text="" />
+          </ScrollView>
+      </LinearLayout>
 
-                  <TextView
-                      android:layout_width="0dp"
-                      android:layout_height="wrap_content"
-                      android:layout_weight="1"
-                      android:text="⚡ Rem2 Browser"
-                      android:textSize="17sp"
-                      android:textStyle="bold"
-                      android:textColor="#FFFFFF" />
+      <!-- ── Progress bar ──────────────────────────────────────────────── -->
+      <ProgressBar
+          android:id="@+id/progressBar"
+          style="?android:attr/progressBarStyleHorizontal"
+          android:layout_width="match_parent"
+          android:layout_height="3dp"
+          android:progressTint="@color/accent_blue"
+          android:visibility="gone" />
 
-                  <!-- Mail FAB with badge -->
-                  <FrameLayout
-                      android:id="@+id/fabMail"
-                      android:layout_width="36dp"
-                      android:layout_height="36dp">
-                      <TextView
-                          android:layout_width="36dp"
-                          android:layout_height="36dp"
-                          android:text="✉"
-                          android:textSize="16sp"
-                          android:gravity="center"
-                          android:background="@drawable/fab_bg"
-                          android:textColor="#FFFFFF" />
-                      <TextView
-                          android:id="@+id/tvMailBadge"
-                          android:layout_width="10dp"
-                          android:layout_height="10dp"
-                          android:layout_gravity="top|end"
-                          android:text=""
-                          android:textSize="6sp"
-                          android:textColor="#FFFFFF"
-                          android:gravity="center"
-                          android:background="@drawable/dot_green"
-                          android:visibility="gone" />
-                  </FrameLayout>
-              </LinearLayout>
+      <!-- ── WebView (chiếm hết phần còn lại) ──────────────────────────── -->
+      <FrameLayout
+          android:layout_width="match_parent"
+          android:layout_height="0dp"
+          android:layout_weight="1">
 
-              <!-- URL toolbar row -->
+          <WebView
+              android:id="@+id/webView"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent" />
+
+          <!-- Overlay xác thực email (dùng khi cần) -->
+          <LinearLayout
+              android:id="@+id/verifyOverlay"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:visibility="gone">
+
               <LinearLayout
-                  android:id="@+id/toolbar"
                   android:layout_width="match_parent"
                   android:layout_height="40dp"
                   android:orientation="horizontal"
+                  android:background="@color/accent_blue"
                   android:gravity="center_vertical"
-                  android:paddingStart="2dp"
-                  android:paddingEnd="2dp"
-                  android:layout_marginBottom="4dp">
+                  android:paddingStart="12dp"
+                  android:paddingEnd="8dp">
 
                   <TextView
-                      android:id="@+id/btnBack"
-                      android:layout_width="34dp"
-                      android:layout_height="34dp"
-                      android:text="◀"
-                      android:textSize="13sp"
-                      android:textColor="#AACCFF"
-                      android:gravity="center"
-                      android:padding="6dp" />
-
-                  <TextView
-                      android:id="@+id/btnForward"
-                      android:layout_width="34dp"
-                      android:layout_height="34dp"
-                      android:text="▶"
-                      android:textSize="13sp"
-                      android:textColor="#AACCFF"
-                      android:gravity="center"
-                      android:padding="6dp" />
-
-                  <TextView
-                      android:id="@+id/btnRefresh"
-                      android:layout_width="34dp"
-                      android:layout_height="34dp"
-                      android:text="⟳"
-                      android:textSize="15sp"
-                      android:textColor="#AACCFF"
-                      android:gravity="center"
-                      android:padding="6dp" />
-
-                  <EditText
-                      android:id="@+id/etUrl"
                       android:layout_width="0dp"
-                      android:layout_height="32dp"
+                      android:layout_height="wrap_content"
                       android:layout_weight="1"
-                      android:layout_marginStart="4dp"
-                      android:layout_marginEnd="4dp"
-                      android:background="@drawable/search_bg"
-                      android:paddingStart="10dp"
-                      android:paddingEnd="10dp"
-                      android:textSize="12sp"
-                      android:textColor="@color/text_primary"
-                      android:hint="Tìm kiếm hoặc nhập URL…"
-                      android:textColorHint="@color/text_muted"
-                      android:singleLine="true"
-                      android:imeOptions="actionGo"
-                      android:inputType="textUri" />
-
-                  <TextView
-                      android:id="@+id/btnDesktop"
-                      android:layout_width="34dp"
-                      android:layout_height="34dp"
-                      android:text="🖥"
-                      android:textSize="13sp"
-                      android:textColor="#AACCFF"
-                      android:gravity="center"
-                      android:padding="6dp" />
-              </LinearLayout>
-
-              <!-- Tab bar row (like Rem AccountsActivity tabs) -->
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="32dp"
-                  android:orientation="horizontal"
-                  android:gravity="center_vertical"
-                  android:paddingStart="4dp"
-                  android:paddingEnd="4dp">
-
-                  <HorizontalScrollView
-                      android:layout_width="0dp"
-                      android:layout_height="match_parent"
-                      android:layout_weight="1"
-                      android:scrollbars="none">
-
-                      <LinearLayout
-                          android:id="@+id/tabChipsContainer"
-                          android:layout_width="wrap_content"
-                          android:layout_height="match_parent"
-                          android:orientation="horizontal"
-                          android:gravity="center_vertical"
-                          android:paddingStart="2dp"
-                          android:paddingEnd="2dp" />
-                  </HorizontalScrollView>
-
-                  <TextView
-                      android:id="@+id/btnAddTab"
-                      android:layout_width="28dp"
-                      android:layout_height="28dp"
-                      android:text="+"
-                      android:textSize="16sp"
+                      android:text="📧 Xác thực email"
                       android:textColor="#FFFFFF"
+                      android:textSize="13sp"
+                      android:textStyle="bold" />
+
+                  <TextView
+                      android:id="@+id/btnCloseVerify"
+                      android:layout_width="34dp"
+                      android:layout_height="34dp"
+                      android:text="✕"
+                      android:textColor="#FFFFFF"
+                      android:textSize="14sp"
                       android:gravity="center"
-                      android:background="@drawable/btn_outline_bg" />
+                      android:padding="4dp" />
               </LinearLayout>
-          </LinearLayout>
 
-          <!-- Progress bar -->
-          <ProgressBar
-              android:id="@+id/progressBar"
-              style="?android:attr/progressBarStyleHorizontal"
-              android:layout_width="match_parent"
-              android:layout_height="3dp"
-              android:progressTint="@color/accent_blue"
-              android:visibility="gone" />
-
-          <!-- Browser content area -->
-          <FrameLayout
-              android:layout_width="match_parent"
-              android:layout_height="0dp"
-              android:layout_weight="1">
-
-              <!-- WebView container -->
-              <FrameLayout
-                  android:id="@+id/webContainer"
+              <WebView
+                  android:id="@+id/verifyWebView"
                   android:layout_width="match_parent"
                   android:layout_height="match_parent" />
-
-              <!-- Email verify overlay -->
-              <LinearLayout
-                  android:id="@+id/verifyOverlay"
-                  android:layout_width="match_parent"
-                  android:layout_height="match_parent"
-                  android:orientation="vertical"
-                  android:visibility="gone">
-
-                  <LinearLayout
-                      android:layout_width="match_parent"
-                      android:layout_height="40dp"
-                      android:orientation="horizontal"
-                      android:background="@color/accent_blue"
-                      android:gravity="center_vertical"
-                      android:paddingStart="12dp"
-                      android:paddingEnd="8dp">
-
-                      <TextView
-                          android:layout_width="0dp"
-                          android:layout_height="wrap_content"
-                          android:layout_weight="1"
-                          android:text="📧 Xác thực email"
-                          android:textColor="#FFFFFF"
-                          android:textSize="13sp"
-                          android:textStyle="bold" />
-
-                      <TextView
-                          android:id="@+id/btnCloseVerify"
-                          android:layout_width="34dp"
-                          android:layout_height="34dp"
-                          android:text="✕"
-                          android:textColor="#FFFFFF"
-                          android:textSize="14sp"
-                          android:gravity="center"
-                          android:padding="4dp" />
-                  </LinearLayout>
-
-                  <WebView
-                      android:id="@+id/verifyWebView"
-                      android:layout_width="match_parent"
-                      android:layout_height="match_parent" />
-              </LinearLayout>
-          </FrameLayout>
-      </LinearLayout>
-
-      <!-- ── Mail / Account Panel (Rem AccountsActivity style) ───────────── -->
-      <FrameLayout
-          android:id="@+id/mailPanel"
-          android:layout_width="match_parent"
-          android:layout_height="match_parent"
-          android:visibility="gone">
-
-          <!-- Dim background -->
-          <View
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:background="#80000000" />
-
-          <!-- Panel content — slides up from bottom, same look as Rem -->
-          <LinearLayout
-              android:layout_width="match_parent"
-              android:layout_height="match_parent"
-              android:orientation="vertical"
-              android:layout_marginTop="56dp"
-              android:background="@drawable/panel_bg"
-              android:elevation="12dp">
-
-              <!-- Panel blue header (Rem AccountsActivity header style) -->
-              <LinearLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="wrap_content"
-                  android:orientation="vertical"
-                  android:background="@color/accent_blue"
-                  android:paddingStart="12dp"
-                  android:paddingEnd="8dp"
-                  android:paddingTop="10dp"
-                  android:paddingBottom="0dp">
-
-                  <!-- Panel title row -->
-                  <LinearLayout
-                      android:layout_width="match_parent"
-                      android:layout_height="36dp"
-                      android:orientation="horizontal"
-                      android:gravity="center_vertical">
-
-                      <TextView
-                          android:id="@+id/btnPanelSearch"
-                          android:layout_width="32dp"
-                          android:layout_height="32dp"
-                          android:text="🔍"
-                          android:textSize="14sp"
-                          android:textColor="#AACCFF"
-                          android:gravity="center"
-                          android:padding="4dp" />
-
-                      <TextView
-                          android:id="@+id/tvPanelTitle"
-                          android:layout_width="0dp"
-                          android:layout_height="wrap_content"
-                          android:layout_weight="1"
-                          android:text="GoLike OPS"
-                          android:textColor="#FFFFFF"
-                          android:textSize="15sp"
-                          android:textStyle="bold"
-                          android:paddingStart="4dp" />
-
-                      <EditText
-                          android:id="@+id/etPanelSearch"
-                          android:layout_width="0dp"
-                          android:layout_height="30dp"
-                          android:layout_weight="1"
-                          android:visibility="gone"
-                          android:background="@drawable/search_bg"
-                          android:paddingStart="10dp"
-                          android:paddingEnd="10dp"
-                          android:textSize="12sp"
-                          android:textColor="@color/text_primary"
-                          android:hint="Tìm kiếm…"
-                          android:textColorHint="@color/text_muted"
-                          android:singleLine="true"
-                          android:imeOptions="actionGo"
-                          android:inputType="text" />
-
-                      <TextView
-                          android:id="@+id/btnNewMail"
-                          android:layout_width="32dp"
-                          android:layout_height="32dp"
-                          android:text="+"
-                          android:textColor="#FFFFFF"
-                          android:textSize="20sp"
-                          android:gravity="center"
-                          android:padding="4dp" />
-
-                      <TextView
-                          android:id="@+id/btnPanelClose"
-                          android:layout_width="32dp"
-                          android:layout_height="32dp"
-                          android:text="✕"
-                          android:textColor="#FFFFFF"
-                          android:textSize="14sp"
-                          android:gravity="center"
-                          android:padding="4dp" />
-                  </LinearLayout>
-
-                  <!-- Panel tab bar (exact Rem AccountsActivity tab style) -->
-                  <LinearLayout
-                      android:layout_width="match_parent"
-                      android:layout_height="wrap_content"
-                      android:orientation="horizontal"
-                      android:layout_marginTop="8dp">
-
-                      <TextView
-                          android:id="@+id/tabPanelAccounts"
-                          android:layout_width="0dp"
-                          android:layout_height="wrap_content"
-                          android:layout_weight="1"
-                          android:gravity="center"
-                          android:text="👤 Tài khoản"
-                          android:textSize="12sp"
-                          android:textStyle="bold"
-                          android:textColor="#FFFFFF"
-                          android:paddingTop="8dp"
-                          android:paddingBottom="8dp"
-                          android:background="@color/accent_blue" />
-
-                      <TextView
-                          android:id="@+id/tabPanelMail"
-                          android:layout_width="0dp"
-                          android:layout_height="wrap_content"
-                          android:layout_weight="1"
-                          android:gravity="center"
-                          android:text="📧 Mail"
-                          android:textSize="12sp"
-                          android:textStyle="bold"
-                          android:textColor="#AACCFF"
-                          android:paddingTop="8dp"
-                          android:paddingBottom="8dp"
-                          android:background="@color/accent_blue" />
-
-                      <TextView
-                          android:id="@+id/tabPanelTabs"
-                          android:layout_width="0dp"
-                          android:layout_height="wrap_content"
-                          android:layout_weight="1"
-                          android:gravity="center"
-                          android:text="🗂 Tab"
-                          android:textSize="12sp"
-                          android:textStyle="bold"
-                          android:textColor="#AACCFF"
-                          android:paddingTop="8dp"
-                          android:paddingBottom="8dp"
-                          android:background="@color/accent_blue" />
-                  </LinearLayout>
-              </LinearLayout>
-
-              <!-- Panel content (3 sections, switch by visibility) -->
-              <FrameLayout
-                  android:layout_width="match_parent"
-                  android:layout_height="0dp"
-                  android:layout_weight="1">
-
-                  <!-- Section 1: Tài khoản -->
-                  <LinearLayout
-                      android:id="@+id/panelAccounts"
-                      android:layout_width="match_parent"
-                      android:layout_height="match_parent"
-                      android:orientation="vertical">
-
-                      <TextView
-                          android:id="@+id/tvAccountsEmpty"
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:layout_marginTop="40dp"
-                          android:gravity="center"
-                          android:text="Chưa có tài khoản nào.&#10;(Nhấn + để tạo mail.tm mới)"
-                          android:textSize="13sp"
-                          android:textColor="@color/text_muted"
-                          android:lineSpacingExtra="4dp"
-                          android:visibility="gone" />
-
-                      <ScrollView
-                          android:layout_width="match_parent"
-                          android:layout_height="match_parent">
-
-                          <LinearLayout
-                              android:id="@+id/accountList"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:orientation="vertical"
-                              android:paddingTop="6dp"
-                              android:paddingBottom="12dp"
-                              android:paddingStart="12dp"
-                              android:paddingEnd="12dp" />
-                      </ScrollView>
-                  </LinearLayout>
-
-                  <!-- Section 2: Mail info -->
-                  <LinearLayout
-                      android:id="@+id/panelMail"
-                      android:layout_width="match_parent"
-                      android:layout_height="match_parent"
-                      android:orientation="vertical"
-                      android:padding="16dp"
-                      android:visibility="gone">
-
-                      <LinearLayout
-                          android:layout_width="match_parent"
-                          android:layout_height="wrap_content"
-                          android:orientation="vertical"
-                          android:background="@drawable/card_bg"
-                          android:padding="16dp"
-                          android:layout_marginBottom="12dp">
-
-                          <TextView
-                              android:layout_width="wrap_content"
-                              android:layout_height="wrap_content"
-                              android:text="📧 Mail.tm hiện tại"
-                              android:textSize="13sp"
-                              android:textStyle="bold"
-                              android:textColor="@color/accent_blue"
-                              android:layout_marginBottom="8dp" />
-
-                          <TextView
-                              android:id="@+id/tvMailEmail"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:text="—"
-                              android:textSize="13sp"
-                              android:textColor="@color/text_primary"
-                              android:fontFamily="monospace"
-                              android:layout_marginBottom="4dp" />
-
-                          <TextView
-                              android:id="@+id/tvMailStatus"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:text=""
-                              android:textSize="11sp"
-                              android:textColor="@color/text_muted"
-                              android:lineSpacingExtra="2dp" />
-                      </LinearLayout>
-                  </LinearLayout>
-
-                  <!-- Section 3: Tab manager -->
-                  <LinearLayout
-                      android:id="@+id/panelTabsView"
-                      android:layout_width="match_parent"
-                      android:layout_height="match_parent"
-                      android:orientation="vertical"
-                      android:visibility="gone">
-
-                      <ScrollView
-                          android:layout_width="match_parent"
-                          android:layout_height="match_parent">
-
-                          <LinearLayout
-                              android:id="@+id/panelTabList"
-                              android:layout_width="match_parent"
-                              android:layout_height="wrap_content"
-                              android:orientation="vertical"
-                              android:paddingTop="6dp"
-                              android:paddingBottom="12dp"
-                              android:paddingStart="12dp"
-                              android:paddingEnd="12dp" />
-                      </ScrollView>
-                  </LinearLayout>
-              </FrameLayout>
           </LinearLayout>
       </FrameLayout>
-  </FrameLayout>
+  </LinearLayout>
