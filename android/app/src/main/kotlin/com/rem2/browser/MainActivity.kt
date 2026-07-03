@@ -412,18 +412,12 @@ class MainActivity : AppCompatActivity() {
                 val dy = e2.y - e1.y
                 // Easier trigger: |dx| > |dy| (not 1.5x), velocity > 250
                 if (Math.abs(dx) < Math.abs(dy) || Math.abs(vX) < 250) return false
-                return if (dx > 60) {
+                // Both left and right swipe → go back
+                return if (Math.abs(dx) > 60) {
                     if (wv.canGoBack()) {
                         wv.goBack()
                         wv.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
                         runOnUiThread { toast("◀ Quay lại") }
-                        true
-                    } else false
-                } else if (dx < -60) {
-                    if (wv.canGoForward()) {
-                        wv.goForward()
-                        wv.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
-                        runOnUiThread { toast("▶ Tiến tới") }
                         true
                     } else false
                 } else false
