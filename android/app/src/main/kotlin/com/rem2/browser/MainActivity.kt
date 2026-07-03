@@ -21,7 +21,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
-import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
@@ -55,7 +54,6 @@ data class TabEntry(
     var title: String = "Replit",
     var url: String = "https://replit.com",
     var webView: WebView? = null,
-    var cookieSnapshot: String = ""  // cookies saved when tab is backgrounded
 )
 
 data class AccountEntry(
@@ -240,49 +238,8 @@ class MainActivity : AppCompatActivity() {
         return entry
     }
 
-    // Cookie domains cần lưu/khôi phục cho mỗi tab
-    private val SESSION_DOMAINS = listOf(
-        "https://replit.com",
-        "https://replit.com/api",
-        "https://cdn.replit.com"
-    )
-
-    /** Lưu cookie của tab hiện tại vào TabEntry, xoá sạch CookieManager,
-     *  rồi khôi phục cookie của tab mới → mỗi tab là một session độc lập. */
     private fun selectTab(index: Int) {
         if (index < 0 || index >= tabs.size) return
-        val cm = CookieManager.getInstance()
-
-        // 1. Lưu cookie tab đang active
-        tabs.getOrNull(activeTabIndex)?.let { current ->
-            val snapshot = StringBuilder()
-            SESSION_DOMAINS.forEach { domain ->
-                val c = cm.getCookie(domain)
-                if (!c.isNullOrEmpty()) snapshot.append("$domain\t$c\n")
-            }
-            current.cookieSnapshot = snapshot.toString()
-        }
-
-        // 2. Xoá toàn bộ cookie
-        cm.removeAllCookies(null)
-
-        // 3. Khôi phục cookie của tab mới (nếu có)
-        val newTab = tabs[index]
-        if (newTab.cookieSnapshot.isNotEmpty()) {
-            newTab.cookieSnapshot.trim().lines().forEach { line ->
-                val parts = line.split("\t", limit = 2)
-                if (parts.size == 2) {
-                    val (domain, cookieStr) = parts
-                    cookieStr.split(";").forEach { cookie ->
-                        val trimmed = cookie.trim()
-                        if (trimmed.isNotEmpty()) cm.setCookie(domain, trimmed)
-                    }
-                }
-            }
-            cm.flush()
-        }
-
-        // 4. Chuyển visibility
         tabs.forEachIndexed { i, t ->
             t.webView?.visibility = if (i == index) View.VISIBLE else View.GONE
         }
@@ -748,7 +705,6 @@ class MainActivity : AppCompatActivity() {
         cm.setPrimaryClip(ClipData.newPlainText("rem2", value))
         toast("Đã dán: ${value.take(20)}")
     }
-
 
     // ─── Draggable Mail FAB ────────────────────────────────────────────────────
 
