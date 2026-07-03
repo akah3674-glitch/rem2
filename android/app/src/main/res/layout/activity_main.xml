@@ -4,19 +4,22 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5">
+    android:background="#F4F6FF">
 
-    <!-- ── Tab bar ──────────────────────────────────────────────────────── -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- TAB BAR                                                            -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
     <HorizontalScrollView
         android:id="@+id/tabScrollView"
         android:layout_width="0dp"
-        android:layout_height="36dp"
-        android:background="#F0F0F0"
+        android:layout_height="40dp"
+        android:background="#FFFFFF"
         android:scrollbars="none"
         android:fillViewport="false"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/tabActions">
+        app:layout_constraintEnd_toStartOf="@+id/tabActions"
+        android:elevation="2dp">
 
         <LinearLayout
             android:id="@+id/tabBar"
@@ -24,26 +27,27 @@
             android:layout_height="match_parent"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:paddingStart="4dp"
-            android:paddingEnd="4dp"/>
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"/>
     </HorizontalScrollView>
 
-    <!-- Reload + New Tab actions -->
+    <!-- Tab action buttons: Reload + New Tab -->
     <LinearLayout
         android:id="@+id/tabActions"
         android:layout_width="wrap_content"
-        android:layout_height="36dp"
+        android:layout_height="40dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="#F0F0F0"
-        android:paddingEnd="4dp"
+        android:background="#FFFFFF"
+        android:paddingEnd="6dp"
+        android:elevation="2dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
         <TextView
             android:id="@+id/btnReload"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:text="↻"
             android:textSize="19sp"
             android:gravity="center"
@@ -53,10 +57,10 @@
 
         <TextView
             android:id="@+id/btnNewTab"
-            android:layout_width="34dp"
-            android:layout_height="34dp"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
             android:text="＋"
-            android:textSize="17sp"
+            android:textSize="18sp"
             android:gravity="center"
             android:textColor="#1565C0"
             android:background="?attr/selectableItemBackgroundBorderless"
@@ -68,12 +72,14 @@
         android:id="@+id/tabDivider"
         android:layout_width="0dp"
         android:layout_height="1dp"
-        android:background="#DDDDDD"
+        android:background="#E0E4F0"
         app:layout_constraintTop_toBottomOf="@+id/tabScrollView"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- ── WebView container ─────────────────────────────────────────────── -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- WEBVIEW CONTAINER                                                  -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
     <FrameLayout
         android:id="@+id/webContainer"
         android:layout_width="0dp"
@@ -83,32 +89,41 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
-    <!-- ── Mail Panel: floating overlay from bottom (58% height) ─────────── -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
+    <!-- MAIL PANEL — bottom sheet overlay (62% height)                    -->
+    <!-- ═══════════════════════════════════════════════════════════════════ -->
     <LinearLayout
         android:id="@+id/mailPanel"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:orientation="vertical"
-        android:background="#FFFFFF"
-        android:elevation="8dp"
+        android:background="@drawable/panel_bg"
+        android:elevation="12dp"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHeight_percent="0.60"
+        app:layout_constraintHeight_percent="0.62"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="1.0">
 
-        <!-- ── Panel header ── -->
+        <!-- Drag handle -->
+        <View
+            android:layout_width="36dp"
+            android:layout_height="4dp"
+            android:background="@drawable/drag_handle"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="2dp"/>
+
+        <!-- ── Panel header ──────────────────────────────────────────── -->
         <LinearLayout
             android:id="@+id/panelHeader"
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="#FFFFFF"
-            android:elevation="2dp"
-            android:paddingStart="10dp"
+            android:paddingStart="12dp"
             android:paddingEnd="4dp">
 
             <!-- Title -->
@@ -117,10 +132,11 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="📨 Rem2"
-                android:textColor="#1565C0"
-                android:textSize="14sp"
-                android:textStyle="bold"/>
+                android:text="Rem2"
+                android:textColor="#1A1F3C"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.02"/>
 
             <!-- Search input -->
             <EditText
@@ -130,137 +146,193 @@
                 android:layout_weight="1"
                 android:visibility="gone"
                 android:background="@drawable/search_bg"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
                 android:textColor="#1A237E"
                 android:textColorHint="#9FA8DA"
                 android:textSize="12sp"
-                android:hint="Tìm kiếm hoặc nhập URL..."
+                android:hint="Tìm kiếm hoặc nhập URL…"
                 android:imeOptions="actionGo"
                 android:inputType="textUri"
                 android:maxLines="1"
                 android:singleLine="true"/>
 
-            <!-- Search icon -->
+            <!-- Buttons in header -->
             <TextView
                 android:id="@+id/btnToggleSearch"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:text="🔍"
                 android:textSize="15sp"
                 android:gravity="center"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Tìm kiếm"/>
 
-            <!-- Desktop mode -->
+            <TextView
+                android:id="@+id/btnAppMode"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
+                android:text="🤖"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:textColor="#9E9E9E"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="App mode"/>
+
             <TextView
                 android:id="@+id/btnDesktop"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:text="🖥"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 android:gravity="center"
-                android:textColor="#888888"
+                android:textColor="#9E9E9E"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Máy tính"/>
 
-            <!-- New mail (+) -->
             <TextView
                 android:id="@+id/btnNewMail"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:text="✉+"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:gravity="center"
                 android:textColor="#1565C0"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Tạo mail mới"/>
 
-            <!-- Close -->
             <TextView
                 android:id="@+id/btnClose"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
+                android:layout_width="38dp"
+                android:layout_height="38dp"
                 android:text="✕"
-                android:textSize="14sp"
+                android:textSize="13sp"
                 android:gravity="center"
-                android:textColor="#999999"
+                android:textColor="#9E9E9E"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="Đóng"/>
         </LinearLayout>
 
-        <!-- Top divider -->
+        <!-- Header divider -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#EEEEEE"/>
+            android:background="#E8EAEF"/>
 
-        <!-- ── Section tabs ── -->
+        <!-- ── Section tab row ─────────────────────────────────────── -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="32dp"
-            android:orientation="horizontal"
-            android:background="#F5F5F5">
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#FFFFFF">
 
-            <TextView
-                android:id="@+id/tabAccounts"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:text="👤 Tài khoản"
-                android:textColor="@android:color/white"
-                android:textSize="11sp"
-                android:gravity="center"
-                android:background="#1565C0"/>
+            <!-- Tab labels -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/tabMailList"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:text="📧 Xác thực"
-                android:textColor="#1565C0"
-                android:textSize="11sp"
-                android:gravity="center"
-                android:background="@android:color/transparent"/>
+                <TextView
+                    android:id="@+id/tabAccounts"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="👤 Tài khoản"
+                    android:textColor="#1565C0"
+                    android:textSize="11.5sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:background="?attr/selectableItemBackground"/>
 
-            <TextView
-                android:id="@+id/tabPanelTabs"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:text="🗂 Tab"
-                android:textColor="#1565C0"
-                android:textSize="11sp"
-                android:gravity="center"
-                android:background="@android:color/transparent"/>
+                <View android:layout_width="1dp" android:layout_height="20dp"
+                    android:layout_gravity="center_vertical"
+                    android:background="#E0E4F0"/>
+
+                <TextView
+                    android:id="@+id/tabMailList"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="📧 Xác thực"
+                    android:textColor="#5C6280"
+                    android:textSize="11.5sp"
+                    android:gravity="center"
+                    android:background="?attr/selectableItemBackground"/>
+
+                <View android:layout_width="1dp" android:layout_height="20dp"
+                    android:layout_gravity="center_vertical"
+                    android:background="#E0E4F0"/>
+
+                <TextView
+                    android:id="@+id/tabPanelTabs"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:text="🗂 Tab"
+                    android:textColor="#5C6280"
+                    android:textSize="11.5sp"
+                    android:gravity="center"
+                    android:background="?attr/selectableItemBackground"/>
+            </LinearLayout>
+
+            <!-- Underline indicators -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="2dp"
+                android:orientation="horizontal">
+
+                <View
+                    android:id="@+id/tabIndicator0"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="#1565C0"
+                    android:visibility="visible"/>
+
+                <View
+                    android:id="@+id/tabIndicator1"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="#1565C0"
+                    android:visibility="invisible"/>
+
+                <View
+                    android:id="@+id/tabIndicator2"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="#1565C0"
+                    android:visibility="invisible"/>
+            </LinearLayout>
         </LinearLayout>
 
-        <!-- Section tab bottom divider -->
+        <!-- Separator -->
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#E0E0E0"/>
+            android:background="#E8EAEF"/>
 
-        <!-- ── Content area ── -->
+        <!-- ── Content area ────────────────────────────────────────── -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1">
 
-            <!-- ── SECTION 0: Accounts ── -->
+            <!-- ─ SECTION 0: Accounts ─────────────────────────────── -->
             <LinearLayout
                 android:id="@+id/accountsContainer"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
-                android:orientation="vertical">
+                android:orientation="vertical"
+                android:background="#F4F6FF">
 
                 <ScrollView
                     android:layout_width="match_parent"
                     android:layout_height="match_parent"
                     android:clipToPadding="false"
-                    android:paddingTop="4dp"
-                    android:paddingBottom="4dp">
+                    android:paddingTop="6dp"
+                    android:paddingBottom="8dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -277,75 +349,116 @@
                             android:id="@+id/tvAccountsEmpty"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="Chưa có tài khoản\nĐăng nhập Replit để lưu"
-                            android:textColor="#999999"
-                            android:textSize="12sp"
+                            android:text="Chưa có tài khoản nào\n\nĐăng nhập Replit để lưu tự động"
+                            android:textColor="#9FA8DA"
+                            android:textSize="12.5sp"
                             android:gravity="center"
-                            android:paddingTop="24dp"
+                            android:paddingTop="32dp"
+                            android:lineSpacingMultiplier="1.4"
                             android:visibility="gone"/>
                     </LinearLayout>
                 </ScrollView>
             </LinearLayout>
 
-            <!-- ── SECTION 1: Verify / Inbox ── -->
+            <!-- ─ SECTION 1: Verify / Inbox ──────────────────────── -->
             <LinearLayout
                 android:id="@+id/verifyContainer"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical"
+                android:background="#F4F6FF"
                 android:visibility="gone">
 
                 <!-- Mail status bar -->
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="28dp"
+                    android:layout_height="30dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="8dp"
-                    android:background="#F8F8F8">
+                    android:paddingStart="12dp"
+                    android:paddingEnd="10dp"
+                    android:background="#FFFFFF">
+
+                    <View
+                        android:layout_width="6dp"
+                        android:layout_height="6dp"
+                        android:background="@drawable/dot_green"
+                        android:layout_marginEnd="6dp"/>
 
                     <TextView
                         android:id="@+id/tvMailStatus"
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="Đang khởi tạo..."
-                        android:textColor="#555555"
+                        android:text="Đang khởi tạo…"
+                        android:textColor="#5C6280"
                         android:textSize="10.5sp"
                         android:singleLine="true"
                         android:ellipsize="end"/>
 
                     <ProgressBar
                         android:id="@+id/pbMail"
-                        android:layout_width="14dp"
-                        android:layout_height="14dp"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
                         android:indeterminateTint="#1565C0"
                         android:visibility="gone"/>
                 </LinearLayout>
 
-                <!-- Mail list + verify WebView stacked -->
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="#E8EAEF"/>
+
+                <!-- Scrollable content: mail list + verify webview + CAPTCHA panel -->
                 <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="0dp"
                     android:layout_weight="1">
 
+                    <!-- Mail list + CAPTCHA stacked in scroll -->
                     <ScrollView
                         android:id="@+id/mailListScroll"
                         android:layout_width="match_parent"
                         android:layout_height="match_parent"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="4dp"
+                        android:paddingTop="6dp"
+                        android:paddingBottom="6dp"
                         android:clipToPadding="false">
 
                         <LinearLayout
-                            android:id="@+id/mailList"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:orientation="vertical"/>
+                            android:orientation="vertical">
+
+                            <!-- Mail items -->
+                            <LinearLayout
+                                android:id="@+id/mailList"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"/>
+
+                            <!-- Divider before CAPTCHA section -->
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="#DDE3F0"
+                                android:layout_marginTop="8dp"
+                                android:layout_marginStart="12dp"
+                                android:layout_marginEnd="12dp"/>
+
+                            <!-- CAPTCHA token management -->
+                            <LinearLayout
+                                android:id="@+id/captchaContainer"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:background="@drawable/card_bg"
+                                android:layout_marginStart="10dp"
+                                android:layout_marginEnd="10dp"
+                                android:layout_marginTop="8dp"
+                                android:layout_marginBottom="8dp"/>
+
+                        </LinearLayout>
                     </ScrollView>
 
-                    <!-- Verify WebView -->
+                    <!-- Verify WebView overlay -->
                     <WebView
                         android:id="@+id/verifyWebView"
                         android:layout_width="match_parent"
@@ -354,31 +467,32 @@
                 </FrameLayout>
             </LinearLayout>
 
-            <!-- ── SECTION 2: Tabs ── -->
+            <!-- ─ SECTION 2: Tabs ─────────────────────────────────── -->
             <LinearLayout
                 android:id="@+id/tabsContainer"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:orientation="vertical"
+                android:background="#F4F6FF"
                 android:visibility="gone">
 
-                <!-- New tab button -->
+                <!-- Header row -->
                 <LinearLayout
                     android:layout_width="match_parent"
-                    android:layout_height="36dp"
+                    android:layout_height="38dp"
                     android:orientation="horizontal"
                     android:gravity="center_vertical"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:background="#F0F4FF">
+                    android:paddingStart="14dp"
+                    android:paddingEnd="10dp"
+                    android:background="#FFFFFF">
 
                     <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="Các tab đang mở"
-                        android:textColor="#1565C0"
-                        android:textSize="12sp"
+                        android:textColor="#1A1F3C"
+                        android:textSize="12.5sp"
                         android:textStyle="bold"/>
 
                     <TextView
@@ -387,37 +501,43 @@
                         android:layout_height="wrap_content"
                         android:text="＋ Tab mới"
                         android:textColor="#1565C0"
-                        android:textSize="11sp"
-                        android:background="?attr/selectableItemBackgroundBorderless"
-                        android:paddingStart="8dp"
-                        android:paddingEnd="8dp"/>
+                        android:textSize="11.5sp"
+                        android:background="@drawable/btn_outline_bg"
+                        android:paddingStart="10dp"
+                        android:paddingEnd="10dp"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp"/>
                 </LinearLayout>
+
+                <View android:layout_width="match_parent" android:layout_height="1dp"
+                    android:background="#E8EAEF"/>
 
                 <ScrollView
                     android:layout_width="match_parent"
-                    android:layout_height="match_parent">
+                    android:layout_height="match_parent"
+                    android:paddingTop="6dp"
+                    android:paddingBottom="6dp"
+                    android:clipToPadding="false">
 
                     <LinearLayout
                         android:id="@+id/panelTabList"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:paddingTop="4dp"
-                        android:paddingBottom="4dp"/>
+                        android:orientation="vertical"/>
                 </ScrollView>
             </LinearLayout>
 
         </FrameLayout>
 
-        <!-- Bottom status -->
+        <!-- ── Bottom status bar ──────────────────────────────────── -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="24dp"
+            android:layout_height="22dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="#F5F5F5"
-            android:paddingStart="10dp"
-            android:paddingEnd="8dp">
+            android:background="#FFFFFF"
+            android:paddingStart="12dp"
+            android:paddingEnd="10dp">
 
             <TextView
                 android:id="@+id/tvBottomStatus"
@@ -425,7 +545,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text=""
-                android:textColor="#888888"
+                android:textColor="#9FA8DA"
                 android:textSize="9.5sp"
                 android:ellipsize="end"
                 android:maxLines="1"/>

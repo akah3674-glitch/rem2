@@ -70,18 +70,24 @@ data class AccountEntry(
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        private const val PREFS           = "rem2"
-        private const val KEY_ACCOUNTS    = "accounts_json"
-        private const val KEY_MAIL_EMAIL  = "mail_email"
-        private const val KEY_MAIL_PASS   = "mail_pass"
-        private const val KEY_MAIL_TOKEN  = "mail_token"
-        private const val KEY_REPLIT_NAME = "replit_name"
-        private const val MAILTM          = "https://api.mail.tm"
+        private const val PREFS              = "rem2"
+        private const val KEY_ACCOUNTS      = "accounts_json"
+        private const val KEY_MAIL_EMAIL    = "mail_email"
+        private const val KEY_MAIL_PASS     = "mail_pass"
+        private const val KEY_MAIL_TOKEN    = "mail_token"
+        private const val KEY_REPLIT_NAME   = "replit_name"
+        private const val KEY_CAPTCHA_TOKEN = "captcha_token"
+        private const val MAILTM            = "https://api.mail.tm"
         private val JSON_MT = "application/json; charset=utf-8".toMediaType()
 
+        // Desktop UA cho web đầy đủ
         private const val DESKTOP_UA =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
+        // Replit native app UA — đôi khi bỏ qua CAPTCHA vì được nhận diện là app tin cậy
+        private const val REPLIT_APP_UA =
+            "Replit/3.79.0 (Android 13; SM-S911B) WebKit/537.36"
 
         data class DeviceProfile(
             val name: String, val ua: String,
@@ -89,25 +95,24 @@ class MainActivity : AppCompatActivity() {
             val deviceMemory: Int, val hardwareConcurrency: Int,
             val timezone: String
         )
+
         val DEVICE_PROFILES = listOf(
             DeviceProfile("Samsung S23",
-                "Mozilla/5.0 (Linux; Android 13; SM-S911B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; SM-S911B) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
                 393, 851, 8, 8, "Asia/Ho_Chi_Minh"),
             DeviceProfile("Samsung A54",
-                "Mozilla/5.0 (Linux; Android 13; SM-A546E) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.118 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; SM-A546E) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/123.0.6312.118 Mobile Safari/537.36",
                 360, 780, 6, 8, "Asia/Ho_Chi_Minh"),
             DeviceProfile("Xiaomi 13",
-                "Mozilla/5.0 (Linux; Android 13; 2211133C) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; 2211133C) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
                 393, 851, 12, 8, "Asia/Bangkok"),
             DeviceProfile("Redmi Note 12",
-                "Mozilla/5.0 (Linux; Android 13; 23021RAAEG) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.6261.119 Mobile Safari/537.36",
+                "Mozilla/5.0 (Linux; Android 13; 23021RAAEG) AppleWebKit/537.36 " +
+                "(KHTML, like Gecko) Chrome/122.0.6261.119 Mobile Safari/537.36",
                 393, 873, 6, 8, "Asia/Jakarta"),
-            DeviceProfile("OPPO Reno10",
-                "Mozilla/5.0 (Linux; Android 13; CPH2531) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.6312.80 Mobile Safari/537.36",
-                412, 915, 8, 8, "Asia/Singapore"),
-            DeviceProfile("Pixel 7",
-                "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36",
-                412, 915, 8, 8, "America/New_York"),
         )
 
         fun randomFullName(): String {
@@ -124,6 +129,21 @@ class MainActivity : AppCompatActivity() {
             val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOP0123456789!@#"
             return (1..14).map { chars.random() }.joinToString("")
         }
+
+        // Màu sắc UI
+        val CLR_PRIMARY     = 0xFF1565C0.toInt()
+        val CLR_PRIMARY_LT  = 0xFF1976D2.toInt()
+        val CLR_SURFACE     = Color.WHITE
+        val CLR_BG          = 0xFFF8F9FF.toInt()
+        val CLR_CARD        = Color.WHITE
+        val CLR_BORDER      = 0xFFDDE3F0.toInt()
+        val CLR_TEXT_PRI    = 0xFF1A1F3C.toInt()
+        val CLR_TEXT_SEC    = 0xFF5C6280.toInt()
+        val CLR_TEXT_HINT   = 0xFF9FA8DA.toInt()
+        val CLR_ACCENT_GRN  = 0xFF2E7D32.toInt()
+        val CLR_ACCENT_RED  = 0xFFB71C1C.toInt()
+        val CLR_TAB_ACT     = CLR_PRIMARY
+        val CLR_TAG_BG      = 0xFFE8EFF9.toInt()
     }
 
     // ── Binding ──────────────────────────────────────────────────────────────
@@ -142,7 +162,7 @@ class MainActivity : AppCompatActivity() {
 
     // ── Accounts ─────────────────────────────────────────────────────────────
     private val accounts = mutableListOf<AccountEntry>()
-    private var focusedFieldType = "" // "email" | "password" | "username" | ""
+    private var focusedFieldType = ""
 
     // ── Mail FAB ─────────────────────────────────────────────────────────────
     private var unreadCount = 0
@@ -151,6 +171,7 @@ class MainActivity : AppCompatActivity() {
     // ── Device & UA ──────────────────────────────────────────────────────────
     private var currentDevice: DeviceProfile = DEVICE_PROFILES.random()
     private var isDesktopMode = false
+    private var isAppMode = false  // Giả lập Replit native app — bỏ qua CAPTCHA
 
     // ── Mail state ────────────────────────────────────────────────────────────
     private var mailToken    = ""
@@ -159,6 +180,10 @@ class MainActivity : AppCompatActivity() {
     private var pollJob: Job? = null
     private val seenIds = mutableSetOf<String>()
 
+    // ── CAPTCHA token (thủ công) ──────────────────────────────────────────────
+    private var captchaToken = ""
+    private var captchaTokenView: TextView? = null   // hiển thị status trong panel
+
     // ── Auto-fill credentials ─────────────────────────────────────────────────
     private var autoEmail    = ""
     private var autoUsername = ""
@@ -166,7 +191,7 @@ class MainActivity : AppCompatActivity() {
     private var autoFullName = ""
 
     // ── Panel section ─────────────────────────────────────────────────────────
-    private var panelSection = 0 // 0=accounts, 1=verify
+    private var panelSection = 0
 
     // ── File upload ───────────────────────────────────────────────────────────
     private var fileUploadCallback: ValueCallback<Array<Uri>>? = null
@@ -193,8 +218,10 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Enable cookies globally (needed for hCaptcha/Cloudflare)
         CookieManager.getInstance().setAcceptCookie(true)
+
+        // Tải CAPTCHA token đã lưu
+        captchaToken = prefs.getString(KEY_CAPTCHA_TOKEN, "") ?: ""
 
         requestStoragePermissionIfNeeded()
         loadAccounts()
@@ -253,39 +280,40 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 background = if (i == activeTabIndex) GradientDrawable().apply {
-                    setColor(0xFF1565C0.toInt()); cornerRadius = 6 * dp } else null
-                setPadding((6*dp).toInt(), 0, (2*dp).toInt(), 0)
+                    setColor(CLR_PRIMARY); cornerRadius = 7 * dp
+                } else GradientDrawable().apply {
+                    setColor(0xFFEEF2FF.toInt()); cornerRadius = 7 * dp
+                }
+                setPadding((7*dp).toInt(), 0, (3*dp).toInt(), 0)
                 setOnClickListener { selectTab(i); closePanel() }
             }
             val title = TextView(this).apply {
                 text = tab.title.take(14).ifEmpty { "Replit" }
-                textSize = 11.5f
-                setTextColor(if (i == activeTabIndex) Color.WHITE else 0xFF444444.toInt())
+                textSize = 11f
+                setTextColor(if (i == activeTabIndex) Color.WHITE else CLR_TEXT_SEC)
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setSingleLine(true)
-                maxWidth = (110 * dp).toInt()
+                maxWidth = (105 * dp).toInt()
             }
             val closeBtn = TextView(this).apply {
                 text = " ✕"
-                textSize = 10f
-                setTextColor(if (i == activeTabIndex) 0xFFCCCCCC.toInt() else 0xFF888888.toInt())
+                textSize = 9.5f
+                setTextColor(if (i == activeTabIndex) 0xFFCCDDFF.toInt() else 0xFFAABBCC.toInt())
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setPadding((2*dp).toInt(), 0, (4*dp).toInt(), 0)
                 setOnClickListener { closeTab(i) }
             }
-            chip.addView(title)
-            chip.addView(closeBtn)
+            chip.addView(title); chip.addView(closeBtn)
             bar.addView(chip, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
-            ).apply { setMargins((2*dp).toInt(), (3*dp).toInt(), (2*dp).toInt(), (3*dp).toInt()) })
+            ).apply { setMargins((2*dp).toInt(), (4*dp).toInt(), (2*dp).toInt(), (4*dp).toInt()) })
         }
         binding.tabScrollView.post {
             bar.getChildAt(activeTabIndex)?.let { binding.tabScrollView.smoothScrollTo(it.left, 0) }
         }
     }
 
-    /** Panel's tab list (inside mail panel) */
     private fun renderPanelTabList() {
         val container = binding.panelTabList
         container.removeAllViews()
@@ -296,37 +324,36 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 background = if (i == activeTabIndex) GradientDrawable().apply {
-                    setColor(0xFFE3F2FD.toInt()); cornerRadius = 6 * dp } else null
-                setPadding((10*dp).toInt(), (5*dp).toInt(), (6*dp).toInt(), (5*dp).toInt())
+                    setColor(CLR_TAG_BG); cornerRadius = 8 * dp
+                    setStroke(1, CLR_BORDER)
+                } else null
+                setPadding((12*dp).toInt(), (8*dp).toInt(), (8*dp).toInt(), (8*dp).toInt())
                 setOnClickListener { selectTab(i); closePanel() }
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins((4*dp).toInt(), (2*dp).toInt(), (4*dp).toInt(), (2*dp).toInt()) }
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins((8*dp).toInt(), (2*dp).toInt(), (8*dp).toInt(), (2*dp).toInt()) }
             }
-            val indicator = TextView(this).apply {
+            val dot = TextView(this).apply {
                 text = if (i == activeTabIndex) "●" else "○"
                 textSize = 8f
-                setTextColor(if (i == activeTabIndex) 0xFF1565C0.toInt() else 0xFF999999.toInt())
-                setPadding(0, 0, (6*dp).toInt(), 0)
+                setTextColor(if (i == activeTabIndex) CLR_PRIMARY else CLR_TEXT_HINT)
+                setPadding(0, 0, (8*dp).toInt(), 0)
             }
-            val title = TextView(this).apply {
-                text = tab.title.take(24).ifEmpty { "Replit" }
-                textSize = 12f
-                setTextColor(if (i == activeTabIndex) 0xFF1565C0.toInt() else 0xFF333333.toInt())
+            val titleTv = TextView(this).apply {
+                text = tab.title.take(28).ifEmpty { "Replit" }
+                textSize = 12.5f
+                setTextColor(if (i == activeTabIndex) CLR_PRIMARY else CLR_TEXT_PRI)
                 setSingleLine(true)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
             val closeBtn = TextView(this).apply {
                 text = "✕"
                 textSize = 11f
-                setTextColor(0xFF999999.toInt())
-                setPadding((8*dp).toInt(), 0, (4*dp).toInt(), 0)
+                setTextColor(CLR_TEXT_HINT)
+                setPadding((10*dp).toInt(), (4*dp).toInt(), (4*dp).toInt(), (4*dp).toInt())
                 setOnClickListener { closeTab(i) }
             }
-            row.addView(indicator)
-            row.addView(title)
-            row.addView(closeBtn)
+            row.addView(dot); row.addView(titleTv); row.addView(closeBtn)
             container.addView(row)
         }
     }
@@ -338,9 +365,7 @@ class MainActivity : AppCompatActivity() {
                 duration = 600; start()
             }
         }
-        binding.btnNewTab.setOnClickListener {
-            addNewTab(); closePanel()
-        }
+        binding.btnNewTab.setOnClickListener { addNewTab(); closePanel() }
     }
 
     // ─── WebView factory ───────────────────────────────────────────────────────
@@ -354,6 +379,31 @@ class MainActivity : AppCompatActivity() {
         wv.addJavascriptInterface(object : Any() {
             @JavascriptInterface
             fun onFieldFocus(fieldType: String) { focusedFieldType = fieldType }
+
+            /** Gọi khi hCaptcha/reCAPTCHA đã được giải xong — lưu token */
+            @JavascriptInterface
+            fun onCaptchaToken(token: String) {
+                if (token.isBlank()) return
+                captchaToken = token
+                prefs.edit().putString(KEY_CAPTCHA_TOKEN, token).apply()
+                runOnUiThread {
+                    updateCaptchaUi("✅ Token đã lưu (${token.take(16)}…)")
+                    toast("CAPTCHA token đã lưu ✓")
+                }
+            }
+
+            /** Gọi khi server trả về code:1 — thông báo user cần giải lại */
+            @JavascriptInterface
+            fun onCaptchaError() {
+                runOnUiThread {
+                    val hint = if (captchaToken.isNotEmpty()) "Token cũ: ${captchaToken.take(16)}…"
+                               else "Chưa có token"
+                    updateCaptchaUi("⚠️ CAPTCHA lỗi — $hint")
+                    // Tự động mở tab Xác thực để user thấy panel CAPTCHA
+                    if (binding.mailPanel.visibility == View.VISIBLE) switchPanelSection(1)
+                }
+            }
+
             @JavascriptInterface
             fun onPageReady(info: String) {}
         }, "REM2")
@@ -363,9 +413,9 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                 view.evaluateJavascript(buildAntiDetectJs(currentDevice), null)
-                // Inject captcha fix early
                 if (url.contains("replit.com")) {
-                    view.evaluateJavascript(buildCaptchaFixJs(), null)
+                    view.evaluateJavascript(buildCaptureTokenJs(), null)
+                    if (isAppMode) view.evaluateJavascript(buildAppModeHeaderJs(), null)
                 }
             }
 
@@ -378,8 +428,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 view.evaluateJavascript(buildFieldFocusJs(), null)
                 if (url.contains("replit.com")) {
-                    view.evaluateJavascript(buildCaptchaFixJs(), null)
-                    // Auto-fill ONLY on signup pages
+                    view.evaluateJavascript(buildCaptureTokenJs(), null)
                     val isSignup = (url.contains("/signup") || url.contains("/join"))
                         && !url.contains("/login") && !url.contains("/signin")
                     if (isSignup && autoEmail.isNotEmpty()) {
@@ -387,7 +436,6 @@ class MainActivity : AppCompatActivity() {
                             injectSignupForm(view, autoEmail, autoUsername, autoPassword, autoFullName)
                         }, 1800)
                     }
-                    // Auto-onboarding (wizard questions)
                     val isOnboarding = url.contains("onboarding") || url.contains("plans")
                         || url.contains("wizard") || url.contains("get-started")
                     if (isOnboarding) {
@@ -412,17 +460,13 @@ class MainActivity : AppCompatActivity() {
                 fileUploadCallback?.onReceiveValue(null)
                 fileUploadCallback = filePathCallback
                 val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    type = "*/*"
+                    addCategory(Intent.CATEGORY_OPENABLE); type = "*/*"
                     putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
                              Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
-                val chooser = Intent.createChooser(pick, "Chọn file")
-                return try { filePickerLauncher.launch(chooser); true }
-                catch (e: Exception) {
-                    fileUploadCallback?.onReceiveValue(null); fileUploadCallback = null; false
-                }
+                return try { filePickerLauncher.launch(Intent.createChooser(pick, "Chọn file")); true }
+                catch (e: Exception) { fileUploadCallback?.onReceiveValue(null); fileUploadCallback = null; false }
             }
         }
 
@@ -455,16 +499,17 @@ class MainActivity : AppCompatActivity() {
             displayZoomControls        = false
             mixedContentMode           = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             mediaPlaybackRequiresUserGesture = false
-            userAgentString            = if (isDesktopMode) DESKTOP_UA else currentDevice.ua
+            userAgentString = when {
+                isAppMode    -> REPLIT_APP_UA
+                isDesktopMode -> DESKTOP_UA
+                else          -> currentDevice.ua
+            }
             cacheMode                  = WebSettings.LOAD_DEFAULT
             loadWithOverviewMode       = true
             useWideViewPort            = true
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(true)
-            // Important for Replit: loosen sandbox
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                safeBrowsingEnabled = false
-            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) safeBrowsingEnabled = false
         }
         WebView.setWebContentsDebuggingEnabled(false)
     }
@@ -487,8 +532,8 @@ class MainActivity : AppCompatActivity() {
                 } else if (url.contains("replit.com") && !url.contains("verify") &&
                            !url.contains("confirm") && url != "about:blank") {
                     runOnUiThread {
-                        binding.verifyWebView.visibility    = View.GONE
-                        binding.mailListScroll.visibility   = View.VISIBLE
+                        binding.verifyWebView.visibility  = View.GONE
+                        binding.mailListScroll.visibility = View.VISIBLE
                         toast("✅ Xác thực thành công!")
                     }
                 }
@@ -499,10 +544,10 @@ class MainActivity : AppCompatActivity() {
     // ─── Panel setup ───────────────────────────────────────────────────────────
 
     private fun setupPanel() {
-        binding.tabAccounts.setOnClickListener { switchPanelSection(0) }
-        binding.tabMailList.setOnClickListener  { switchPanelSection(1) }
-        binding.tabPanelTabs.setOnClickListener { switchPanelSection(2) }
-        binding.btnClose.setOnClickListener     { closePanel() }
+        binding.tabAccounts.setOnClickListener  { switchPanelSection(0) }
+        binding.tabMailList.setOnClickListener   { switchPanelSection(1) }
+        binding.tabPanelTabs.setOnClickListener  { switchPanelSection(2) }
+        binding.btnClose.setOnClickListener      { closePanel() }
 
         // Search bar submit
         binding.etSearch.setOnEditorActionListener { _, actionId, event ->
@@ -510,7 +555,7 @@ class MainActivity : AppCompatActivity() {
                 val q = binding.etSearch.text.toString().trim()
                 if (q.isNotEmpty()) {
                     val url = if (q.startsWith("http")) q
-                              else "https://www.google.com/search?q=${Uri.encode(q)}"
+                               else "https://www.google.com/search?q=${Uri.encode(q)}"
                     tabs.getOrNull(activeTabIndex)?.webView?.loadUrl(url)
                     closePanel()
                 }
@@ -518,10 +563,9 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
 
-        // Search icon toggle
         binding.btnToggleSearch.setOnClickListener {
             val isOpen = binding.etSearch.visibility == View.VISIBLE
-            binding.etSearch.visibility = if (isOpen) View.GONE else View.VISIBLE
+            binding.etSearch.visibility     = if (isOpen) View.GONE else View.VISIBLE
             binding.tvPanelTitle.visibility = if (isOpen) View.VISIBLE else View.GONE
             if (!isOpen) { binding.etSearch.requestFocus(); showKeyboard(binding.etSearch) }
             else hideKeyboard()
@@ -530,16 +574,29 @@ class MainActivity : AppCompatActivity() {
         // Desktop mode toggle
         binding.btnDesktop.setOnClickListener {
             isDesktopMode = !isDesktopMode
-            val ua = if (isDesktopMode) DESKTOP_UA else currentDevice.ua
+            if (isDesktopMode) isAppMode = false
+            val ua = when {
+                isDesktopMode -> DESKTOP_UA
+                else          -> currentDevice.ua
+            }
             tabs.forEach { it.webView?.settings?.userAgentString = ua }
             tabs.getOrNull(activeTabIndex)?.webView?.reload()
-            binding.btnDesktop.setTextColor(
-                if (isDesktopMode) 0xFF1565C0.toInt() else 0xFF888888.toInt()
-            )
-            toast(if (isDesktopMode) "Chế độ máy tính bật" else "Chế độ di động")
+            binding.btnDesktop.setTextColor(if (isDesktopMode) CLR_PRIMARY else CLR_TEXT_HINT)
+            toast(if (isDesktopMode) "🖥 Chế độ máy tính" else "📱 Chế độ di động")
         }
 
-        // + button: delete old mail, create new mail
+        // App mode toggle (giả lập Replit native app — có thể bỏ qua CAPTCHA)
+        binding.btnAppMode.setOnClickListener {
+            isAppMode = !isAppMode
+            if (isAppMode) isDesktopMode = false
+            val ua = if (isAppMode) REPLIT_APP_UA else currentDevice.ua
+            tabs.forEach { it.webView?.settings?.userAgentString = ua }
+            tabs.getOrNull(activeTabIndex)?.webView?.reload()
+            binding.btnAppMode.setTextColor(if (isAppMode) CLR_PRIMARY else CLR_TEXT_HINT)
+            toast(if (isAppMode) "🤖 App mode (bypass CAPTCHA)" else "🌐 Web mode thường")
+        }
+
+        // + button: tạo mail mới
         binding.btnNewMail.setOnClickListener {
             lifecycleScope.launch {
                 stopPolling()
@@ -563,26 +620,167 @@ class MainActivity : AppCompatActivity() {
             if (mailEmail.isNotEmpty()) copyToClipboard(mailEmail, "Email đã copy")
         }
 
-        // Add tab from panel
-        binding.btnPanelNewTab.setOnClickListener {
-            addNewTab(); closePanel()
-        }
+        binding.btnPanelNewTab.setOnClickListener { addNewTab(); closePanel() }
 
         refreshAccountList()
+        buildCaptchaUiInPanel()
+    }
+
+    /** Tạo UI CAPTCHA token ở dưới section Xác thực */
+    private fun buildCaptchaUiInPanel() {
+        val dp = resources.displayMetrics.density
+        val container = binding.captchaContainer
+
+        // Label
+        val label = TextView(this).apply {
+            text = "🔐 CAPTCHA Token"
+            textSize = 11.5f
+            setTextColor(CLR_TEXT_PRI)
+            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setPadding((12*dp).toInt(), (10*dp).toInt(), (12*dp).toInt(), (4*dp).toInt())
+        }
+        container.addView(label)
+
+        // Status view
+        val statusTv = TextView(this).apply {
+            text = if (captchaToken.isNotEmpty()) "✅ Token đã lưu (${captchaToken.take(16)}…)"
+                   else "⬜ Chưa có token — giải CAPTCHA trên trang để lưu"
+            textSize = 10.5f
+            setTextColor(if (captchaToken.isNotEmpty()) CLR_ACCENT_GRN else CLR_TEXT_SEC)
+            setPadding((12*dp).toInt(), (2*dp).toInt(), (12*dp).toInt(), (4*dp).toInt())
+            setSingleLine(false)
+        }
+        captchaTokenView = statusTv
+        container.addView(statusTv)
+
+        // Hướng dẫn
+        val hint = TextView(this).apply {
+            text = "💡 Khi thấy CAPTCHA trên trang, hãy tự giải bằng tay.\n" +
+                   "Token sẽ được lưu tự động. Nếu gặp lỗi code:1, dùng nút bên dưới."
+            textSize = 10f
+            setTextColor(CLR_TEXT_HINT)
+            setPadding((12*dp).toInt(), 0, (12*dp).toInt(), (6*dp).toInt())
+        }
+        container.addView(hint)
+
+        // Nút hành động
+        val btnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = android.view.Gravity.CENTER_VERTICAL
+            setPadding((8*dp).toInt(), (2*dp).toInt(), (8*dp).toInt(), (8*dp).toInt())
+        }
+
+        val copyBtn = makeActionButton("📋 Copy token", CLR_TAG_BG, CLR_PRIMARY) {
+            if (captchaToken.isNotEmpty()) copyToClipboard(captchaToken, "Token đã copy")
+            else toast("Chưa có token để copy")
+        }
+        val injectBtn = makeActionButton("💉 Inject token", 0xFFE8F5E9.toInt(), CLR_ACCENT_GRN) {
+            if (captchaToken.isNotEmpty()) {
+                injectCaptchaToken(captchaToken)
+            } else toast("Chưa có token")
+        }
+        val clearBtn = makeActionButton("🗑 Xoá", 0xFFFFEBEE.toInt(), CLR_ACCENT_RED) {
+            captchaToken = ""
+            prefs.edit().remove(KEY_CAPTCHA_TOKEN).apply()
+            updateCaptchaUi("⬜ Token đã xoá")
+        }
+
+        btnRow.addView(copyBtn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        btnRow.addView(injectBtn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            .apply { setMargins((4*dp).toInt(), 0, (4*dp).toInt(), 0) })
+        btnRow.addView(clearBtn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        container.addView(btnRow)
+    }
+
+    private fun makeActionButton(label: String, bg: Int, textColor: Int, onClick: () -> Unit): TextView {
+        val dp = resources.displayMetrics.density
+        return TextView(this).apply {
+            text = label
+            textSize = 10.5f
+            gravity = android.view.Gravity.CENTER
+            setTextColor(textColor)
+            background = GradientDrawable().apply {
+                setColor(bg); cornerRadius = 6 * dp
+                setStroke(1, (textColor and 0x33FFFFFF) or 0x33000000)
+            }
+            setPadding((6*dp).toInt(), (6*dp).toInt(), (6*dp).toInt(), (6*dp).toInt())
+            setOnClickListener { onClick() }
+        }
+    }
+
+    private fun updateCaptchaUi(msg: String) {
+        captchaTokenView?.let {
+            it.text = msg
+            it.setTextColor(when {
+                msg.startsWith("✅") -> CLR_ACCENT_GRN
+                msg.startsWith("⚠️") -> 0xFFE65100.toInt()
+                else                 -> CLR_TEXT_SEC
+            })
+        }
+    }
+
+    /** Inject saved CAPTCHA token vào form đang hiển thị */
+    private fun injectCaptchaToken(token: String) {
+        val wv = tabs.getOrNull(activeTabIndex)?.webView ?: return
+        val escaped = token.replace("'", "\\'")
+        val js = """
+(function(){
+  var t='$escaped';
+  // hCaptcha
+  if(window.hcaptcha){
+    try{
+      var w=document.querySelector('textarea[name="h-captcha-response"]');
+      if(w){w.value=t; w.dispatchEvent(new Event('change',{bubbles:true}));}
+    }catch(e){}
+  }
+  // reCAPTCHA
+  if(window.grecaptcha){
+    try{
+      var r=document.querySelector('#g-recaptcha-response,textarea[id*="recaptcha"]');
+      if(r){r.value=t; r.dispatchEvent(new Event('change',{bubbles:true}));}
+    }catch(e){}
+  }
+  // Hidden captcha token inputs
+  document.querySelectorAll('input[name*="captcha"],input[name*="token"],input[name*="h-captcha"]').forEach(function(el){
+    el.value=t; el.dispatchEvent(new Event('input',{bubbles:true}));
+  });
+  return 'injected';
+})()
+        """.trimIndent()
+        wv.evaluateJavascript(js) { toast("Token đã inject vào form") }
     }
 
     private fun switchPanelSection(section: Int) {
         panelSection = section
         val sections = listOf(binding.accountsContainer, binding.verifyContainer, binding.tabsContainer)
         val tabBtns  = listOf(binding.tabAccounts, binding.tabMailList, binding.tabPanelTabs)
+
         sections.forEachIndexed { i, v -> v.visibility = if (i == section) View.VISIBLE else View.GONE }
+
+        val dp = resources.displayMetrics.density
         tabBtns.forEachIndexed { i, tv ->
             if (i == section) {
-                tv.setBackgroundColor(0xFF1565C0.toInt()); tv.setTextColor(Color.WHITE)
+                tv.setTextColor(CLR_PRIMARY)
+                tv.setTypeface(null, android.graphics.Typeface.BOLD)
+                // blue bottom border indicator
+                val bg = GradientDrawable().apply {
+                    setColor(Color.TRANSPARENT)
+                }
+                tv.background = bg
+                // Use a LayerDrawable-style indicator via padding shift
+                tv.setPadding(0, 0, 0, (2*dp).toInt())
             } else {
-                tv.setBackgroundColor(Color.TRANSPARENT); tv.setTextColor(0xFF1565C0.toInt())
+                tv.setTextColor(CLR_TEXT_SEC)
+                tv.setTypeface(null, android.graphics.Typeface.NORMAL)
+                tv.background = null
+                tv.setPadding(0, 0, 0, 0)
             }
         }
+        // Highlight active tab with underline using tag
+        binding.tabIndicator0.visibility = if (section == 0) View.VISIBLE else View.INVISIBLE
+        binding.tabIndicator1.visibility = if (section == 1) View.VISIBLE else View.INVISIBLE
+        binding.tabIndicator2.visibility = if (section == 2) View.VISIBLE else View.INVISIBLE
+
         if (section == 1 && mailToken.isNotEmpty()) startPolling()
         if (section == 2) renderPanelTabList()
     }
@@ -597,8 +795,7 @@ class MainActivity : AppCompatActivity() {
         binding.mailPanel.visibility    = View.GONE
         binding.etSearch.visibility     = View.GONE
         binding.tvPanelTitle.visibility = View.VISIBLE
-        stopPolling()
-        hideKeyboard()
+        stopPolling(); hideKeyboard()
     }
 
     // ─── Accounts ─────────────────────────────────────────────────────────────
@@ -650,68 +847,62 @@ class MainActivity : AppCompatActivity() {
         }
         binding.tvAccountsEmpty.visibility = View.GONE
 
-        accounts.forEach { acc ->
+        accounts.forEachIndexed { _, acc ->
+            // Card container
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
-                setPadding((10*dp).toInt(), (8*dp).toInt(), (10*dp).toInt(), (8*dp).toInt())
+                setPadding((12*dp).toInt(), (10*dp).toInt(), (12*dp).toInt(), (10*dp).toInt())
                 background = GradientDrawable().apply {
-                    setColor(0xFFF0F4FF.toInt()); cornerRadius = 8 * dp
-                    setStroke(1, 0xFFD0D9FF.toInt())
+                    setColor(CLR_CARD); cornerRadius = 10 * dp
+                    setStroke(1, CLR_BORDER)
                 }
+                elevation = 2 * dp
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins((8*dp).toInt(), (3*dp).toInt(), (8*dp).toInt(), (3*dp).toInt()) }
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { setMargins((10*dp).toInt(), (4*dp).toInt(), (10*dp).toInt(), (4*dp).toInt()) }
             }
 
             // Email row
-            val emailRow = makeCredRow("📧", acc.email, true) {
-                // Smart paste: if email field focused → paste email
+            card.addView(makeCredRow("📧", acc.email, true) {
                 smartPaste(acc.email, acc.password, "email")
-            }
+            })
+            // Separator
+            card.addView(View(this).apply {
+                setBackgroundColor(CLR_BORDER)
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 1)
+                    .apply { setMargins(0, (4*dp).toInt(), 0, (4*dp).toInt()) }
+            })
             // Password row
-            val passRow = makeCredRow("🔑", "•".repeat(minOf(acc.password.length, 10)), false) {
+            card.addView(makeCredRow("🔑", "•".repeat(minOf(acc.password.length, 12)), false) {
                 smartPaste(acc.email, acc.password, "password")
-            }
+            })
 
-            // Auto-fill row
-            val fillRow = LinearLayout(this).apply {
+            // Action row
+            val actionRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
-                setPadding(0, (4*dp).toInt(), 0, 0)
+                setPadding(0, (6*dp).toInt(), 0, 0)
             }
-            val fillBtn = TextView(this).apply {
-                text = "⚡ Tự điền tài khoản này"
-                textSize = 11f
-                setTextColor(0xFF1565C0.toInt())
-                background = GradientDrawable().apply {
-                    setColor(0xFFE3EFFF.toInt()); cornerRadius = 4 * dp
+            val fillBtn = makeActionButton("⚡ Tự điền", CLR_TAG_BG, CLR_PRIMARY) {
+                autoEmail = acc.email; autoPassword = acc.password
+                tabs.getOrNull(activeTabIndex)?.webView?.let { wv ->
+                    injectLoginForm(wv, acc.email, acc.password)
                 }
-                setPadding((8*dp).toInt(), (3*dp).toInt(), (8*dp).toInt(), (3*dp).toInt())
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                setOnClickListener {
-                    autoEmail = acc.email; autoPassword = acc.password
-                    tabs.getOrNull(activeTabIndex)?.webView?.let { wv ->
-                        injectLoginForm(wv, acc.email, acc.password)
-                    }
-                    toast("Đang điền: ${acc.email.take(20)}")
-                }
+                toast("Đang điền: ${acc.email.take(22)}")
             }
-            val copyBtn = TextView(this).apply {
-                text = "  📋"
-                textSize = 14f
-                setOnClickListener { copyToClipboard(acc.email + "\n" + acc.password, "Đã copy thông tin") }
+            val copyBtn = makeActionButton("📋 Copy", 0xFFF0F4FF.toInt(), CLR_TEXT_SEC) {
+                copyToClipboard("${acc.email}\n${acc.password}", "Đã copy thông tin")
             }
-            val delBtn = TextView(this).apply {
-                text = "  🗑"
-                textSize = 14f
-                setOnClickListener {
-                    accounts.remove(acc); saveAccounts(); refreshAccountList()
-                }
+            val delBtn = makeActionButton("🗑", 0xFFFFEBEE.toInt(), CLR_ACCENT_RED) {
+                accounts.remove(acc); saveAccounts(); refreshAccountList()
             }
-            fillRow.addView(fillBtn); fillRow.addView(copyBtn); fillRow.addView(delBtn)
+            actionRow.addView(fillBtn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 3f))
+            actionRow.addView(copyBtn, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 2f)
+                .apply { setMargins((4*dp).toInt(), 0, (4*dp).toInt(), 0) })
+            actionRow.addView(delBtn, LinearLayout.LayoutParams((36*dp).toInt(), (28*dp).toInt()))
+            card.addView(actionRow)
 
-            card.addView(emailRow); card.addView(passRow); card.addView(fillRow)
             list.addView(card)
         }
     }
@@ -722,24 +913,28 @@ class MainActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
             setPadding(0, (2*dp).toInt(), 0, (2*dp).toInt())
-            val label = TextView(this@MainActivity).apply {
-                this.text = "$icon $text"
+            val iconTv = TextView(this@MainActivity).apply {
+                this.text = icon
                 textSize = 12f
-                setTextColor(if (isEmail) 0xFF1565C0.toInt() else 0xFF555555.toInt())
+                setPadding(0, 0, (6*dp).toInt(), 0)
+            }
+            val label = TextView(this@MainActivity).apply {
+                this.text = text
+                textSize = 12.5f
+                setTextColor(if (isEmail) CLR_PRIMARY else CLR_TEXT_PRI)
                 setSingleLine(true)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
             val btn = TextView(this@MainActivity).apply {
                 this.text = "📋"
                 textSize = 14f
-                setPadding((8*dp).toInt(), 0, 0, 0)
+                setPadding((10*dp).toInt(), 0, 0, 0)
                 setOnClickListener { onTap() }
             }
-            addView(label); addView(btn)
+            addView(iconTv); addView(label); addView(btn)
         }
     }
 
-    /** Smart paste: injects the right value based on focused field type */
     private fun smartPaste(email: String, password: String, prefer: String) {
         val activeWv = tabs.getOrNull(activeTabIndex)?.webView ?: return
         val value = when {
@@ -747,8 +942,7 @@ class MainActivity : AppCompatActivity() {
             focusedFieldType == "password" || (prefer == "password" && focusedFieldType.isEmpty()) -> password
             else -> if (prefer == "email") email else password
         }
-        val js = buildPasteJs(value)
-        activeWv.evaluateJavascript(js, null)
+        activeWv.evaluateJavascript(buildPasteJs(value), null)
         copyToClipboard(value, "Đã dán: ${value.take(20)}")
     }
 
@@ -773,8 +967,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun injectLoginForm(wv: WebView, email: String, password: String) {
-        val escapedEmail = email.replace("'", "\\'")
-        val escapedPass  = password.replace("'", "\\'")
+        val eE = email.replace("'", "\\'")
+        val eP = password.replace("'", "\\'")
         val js = """
 (function(){
   function fill(el,v){
@@ -785,8 +979,8 @@ class MainActivity : AppCompatActivity() {
   }
   var em=document.querySelector('input[type="email"],input[name="email"],input[autocomplete="email"]');
   var pw=document.querySelector('input[type="password"]');
-  if(em)fill(em,'$escapedEmail');
-  if(pw)fill(pw,'$escapedPass');
+  if(em)fill(em,'$eE');
+  if(pw)fill(pw,'$eP');
 })();
         """.trimIndent()
         wv.evaluateJavascript(js, null)
@@ -797,7 +991,7 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("ClickableViewAccessibility")
     private fun setupMailFab() {
         val dp = resources.displayMetrics.density
-        val size = (52 * dp).toInt()
+        val size = (54 * dp).toInt()
 
         val fab = TextView(this).apply {
             text = "📧"
@@ -805,10 +999,10 @@ class MainActivity : AppCompatActivity() {
             gravity = android.view.Gravity.CENTER
             background = GradientDrawable().apply {
                 shape = GradientDrawable.OVAL
-                setColor(0xFF1565C0.toInt())
+                setColor(CLR_PRIMARY)
                 setStroke((2*dp).toInt(), 0xFF90CAF9.toInt())
             }
-            elevation = 14 * dp
+            elevation = 16 * dp
         }
         mailFab = fab
 
@@ -840,8 +1034,7 @@ class MainActivity : AppCompatActivity() {
                         val maxY = (resources.displayMetrics.heightPixels - v.height).toFloat()
                         v.x = (event.rawX + dX).coerceIn(0f, maxX)
                         v.y = (event.rawY + dY).coerceIn(0f, maxY)
-                    }
-                    true
+                    }; true
                 }
                 MotionEvent.ACTION_UP -> {
                     if (isDragging) {
@@ -890,111 +1083,116 @@ class MainActivity : AppCompatActivity() {
     """.trimIndent()
 
     /**
-     * CAPTCHA fix v2: covers hCaptcha (used by Replit), reCAPTCHA, and Turnstile.
-     * Main fix for "Your captcha token is invalid. Please refresh and try again. (code:1)":
-     *   — Wait for hcaptcha widget to be ready before allowing form submit
-     *   — Intercept errors and re-trigger widget
-     *   — Remove requestAnimationFrame throttle that breaks hCaptcha in WebView
+     * Chụp CAPTCHA token khi user tự giải xong trên màn hình WebView.
+     * KHÔNG tự động reset hay retry — hoàn toàn thủ công.
+     * Khi phát hiện code:1 → báo về Kotlin để hiển thị cảnh báo trong panel.
      */
-    private fun buildCaptchaFixJs(): String = """
+    private fun buildCaptureTokenJs(): String = """
 (function(){
-  if(window._rem2CaptchaFixed)return; window._rem2CaptchaFixed=true;
+  if(window._rem2TokenWatch)return; window._rem2TokenWatch=true;
 
-  // Fix 1: Patch fetch to catch captcha errors and retry form
-  var _origFetch=window.fetch;
-  if(_origFetch){
-    window.fetch=function(url,opts){
-      return _origFetch.apply(this,arguments).then(function(r){
+  // ── Lắng nghe hCaptcha giải xong (user tự làm) ──────────────────────────
+  function watchHcaptcha(hc){
+    if(!hc||hc._rem2Watch)return; hc._rem2Watch=true;
+    // Hook getResponse để bắt token ngay khi có
+    var _gr=hc.getResponse;
+    if(_gr){
+      hc.getResponse=function(){
+        var tok=_gr.apply(this,arguments);
+        if(tok&&tok.length>10&&window.REM2)window.REM2.onCaptchaToken(tok);
+        return tok;
+      };
+    }
+  }
+  (function watch(key,fn){
+    var v=window[key]; if(v){fn(v);}
+    try{Object.defineProperty(window,key,{
+      get:function(){return v;},
+      set:function(nv){v=nv;setTimeout(function(){fn(nv);},50);},
+      configurable:true
+    });}catch(e){}
+  })('hcaptcha',watchHcaptcha);
+
+  // ── Lắng nghe reCAPTCHA token ────────────────────────────────────────────
+  function watchRecaptcha(rc){
+    if(!rc||rc._rem2Watch)return; rc._rem2Watch=true;
+    var _gr2=rc.getResponse;
+    if(_gr2){
+      rc.getResponse=function(){
+        var tok=_gr2.apply(this,arguments);
+        if(tok&&tok.length>10&&window.REM2)window.REM2.onCaptchaToken(tok);
+        return tok;
+      };
+    }
+  }
+  (function watch2(key,fn){
+    var v=window[key]; if(v){fn(v);}
+    try{Object.defineProperty(window,key,{
+      get:function(){return v;},
+      set:function(nv){v=nv;setTimeout(function(){fn(nv);},50);},
+      configurable:true
+    });}catch(e){}
+  })('grecaptcha',watchRecaptcha);
+
+  // ── Phát hiện code:1 từ response — báo về Kotlin ────────────────────────
+  var _fetch=window.fetch;
+  if(_fetch&&!_fetch._rem2Err){
+    var _patched=function(url,opts){
+      return _fetch.apply(this,arguments).then(function(r){
         r.clone().text().then(function(t){
-          if(t&&(t.indexOf('captcha token is invalid')>=0||t.indexOf('"code":1')>=0||t.indexOf('code:1')>=0)){
-            setTimeout(function(){
-              // Reset hCaptcha
-              if(window.hcaptcha){try{window.hcaptcha.reset();}catch(e){}}
-              if(window.grecaptcha){try{window.grecaptcha.reset();}catch(e){}}
-              // Click retry buttons
-              document.querySelectorAll('button').forEach(function(b){
-                var bt=(b.textContent||'').toLowerCase();
-                if(bt.indexOf('retry')>=0||bt.indexOf('refresh')>=0||bt.indexOf('try again')>=0)b.click();
-              });
-            },300);
+          if(t&&(t.indexOf('captcha token is invalid')>=0||t.indexOf('"code":1')>=0)){
+            if(window.REM2)window.REM2.onCaptchaError();
           }
         }).catch(function(){});
         return r;
       });
     };
+    _patched._rem2Err=true;
+    window.fetch=_patched;
   }
-
-  // Fix 2: hCaptcha — watch for assignment and patch without breaking reads
-  function patchHcaptcha(hc){
-    if(!hc||hc._rem2Patched)return; hc._rem2Patched=true;
-    // No-op patch; just mark as seen so reset() calls below work
-  }
-  (function watchGlobal(key,patchFn){
-    var _val=window[key];
-    if(_val){patchFn(_val);}
-    try{
-      Object.defineProperty(window,key,{
-        get:function(){return _val;},
-        set:function(v){_val=v; setTimeout(function(){patchFn(v);},50);},
-        configurable:true
+  var _xOpen=XMLHttpRequest.prototype.open;
+  if(_xOpen&&!_xOpen._rem2Err){
+    var _xPatched=function(){
+      this.addEventListener('load',function(){
+        try{
+          if(this.responseText&&(
+            this.responseText.indexOf('captcha token is invalid')>=0||
+            this.responseText.indexOf('"code":1')>=0)){
+            if(window.REM2)window.REM2.onCaptchaError();
+          }
+        }catch(e){}
       });
-    }catch(e){}
-  })('hcaptcha',patchHcaptcha);
-
-  // Fix 3: reCAPTCHA timing fix (v2 checkbox) — same safe getter+setter pattern
-  function patchRecaptcha(rc){
-    if(!rc||!rc.ready||rc._rem2Patched)return; rc._rem2Patched=true;
-    var _ready=rc.ready.bind(rc);
-    rc.ready=function(cb){return _ready(function(){setTimeout(cb,200);});};
-  }
-  (function watchGlobal2(key,patchFn){
-    var _val=window[key];
-    if(_val){patchFn(_val);}
-    try{
-      Object.defineProperty(window,key,{
-        get:function(){return _val;},
-        set:function(v){_val=v; setTimeout(function(){patchFn(v);},50);},
-        configurable:true
-      });
-    }catch(e){}
-  })('grecaptcha',patchRecaptcha);
-
-  // Fix 4: Turnstile (Cloudflare) — safe getter+setter
-  function patchTurnstile(ts){
-    if(!ts||!ts.render||ts._rem2Patched)return; ts._rem2Patched=true;
-    var _render=ts.render.bind(ts);
-    ts.render=function(el,params){
-      if(params&&params.callback){var _cb=params.callback;params.callback=function(tk){setTimeout(function(){_cb(tk);},100);};}
-      return _render(el,params);
+      return _xOpen.apply(this,arguments);
     };
+    _xPatched._rem2Err=true;
+    XMLHttpRequest.prototype.open=_xPatched;
   }
-  (function watchGlobal3(key,patchFn){
-    var _val=window[key];
-    if(_val){patchFn(_val);}
-    try{
-      Object.defineProperty(window,key,{
-        get:function(){return _val;},
-        set:function(v){_val=v; setTimeout(function(){patchFn(v);},50);},
-        configurable:true
-      });
-    }catch(e){}
-  })('turnstile',patchTurnstile);
+})();
+    """.trimIndent()
 
-  // Fix 5: XMLHttpRequest captcha error detection
-  var _XHRopen=XMLHttpRequest.prototype.open;
-  XMLHttpRequest.prototype.open=function(){
-    this.addEventListener('load',function(){
-      try{
-        if(this.responseText&&(this.responseText.indexOf('captcha token is invalid')>=0||
-           this.responseText.indexOf('"code":1')>=0)){
-          setTimeout(function(){
-            if(window.hcaptcha)try{window.hcaptcha.reset();}catch(e){}
-            if(window.grecaptcha)try{window.grecaptcha.reset();}catch(e){}
-          },300);
-        }
-      }catch(e){}
-    });
-    return _XHRopen.apply(this,arguments);
+    /**
+     * App mode: thêm headers để giả lập Replit native app.
+     * Một số CAPTCHA provider (hCaptcha, Cloudflare) có whitelist
+     * cho trusted mobile apps — đây là kỹ thuật từ APK Replit gốc.
+     */
+    private fun buildAppModeHeaderJs(): String = """
+(function(){
+  if(window._rem2AppMode)return; window._rem2AppMode=true;
+  var _fetch=window.fetch;
+  if(!_fetch)return;
+  window.fetch=function(url,opts){
+    opts=opts||{}; opts.headers=opts.headers||{};
+    var h=opts.headers;
+    if(typeof h.set==='function'){
+      h.set('X-Requested-With','com.replit.app');
+      h.set('X-Replit-Platform','android');
+      h.set('X-Client-Version','3.79.0');
+    } else {
+      h['X-Requested-With']='com.replit.app';
+      h['X-Replit-Platform']='android';
+      h['X-Client-Version']='3.79.0';
+    }
+    return _fetch.call(this,url,opts);
   };
 })();
     """.trimIndent()
@@ -1006,30 +1204,24 @@ class MainActivity : AppCompatActivity() {
 (function(){
   try{Object.defineProperty(navigator,'webdriver',{get:()=>undefined,configurable:true});}catch(e){}
   try{Object.defineProperty(navigator,'platform',{get:()=>'Linux armv8l',configurable:true});}catch(e){}
-  try{Object.defineProperty(navigator,'userAgent',{get:()=>'${d.ua}',configurable:true});}catch(e){}
+  var _ua='${d.ua}';
+  try{Object.defineProperty(navigator,'userAgent',{get:()=>_ua,configurable:true});}catch(e){}
   var _lang='$lang';
   try{Object.defineProperty(navigator,'language',{get:()=>_lang,configurable:true});}catch(e){}
-  try{Object.defineProperty(navigator,'languages',{get:()=>[_lang,'en-US','en'],configurable:true});}catch(e){}
+  try{Object.defineProperty(navigator,'languages',{get:()=>[_lang,'en'],configurable:true});}catch(e){}
   try{Object.defineProperty(navigator,'deviceMemory',{get:()=>${d.deviceMemory},configurable:true});}catch(e){}
   try{Object.defineProperty(navigator,'hardwareConcurrency',{get:()=>${d.hardwareConcurrency},configurable:true});}catch(e){}
-  try{
-    var _fp=[{name:'Chrome PDF Plugin',filename:'internal-pdf-viewer',description:'PDF'},
-      {name:'Chrome PDF Viewer',filename:'mhjfbmdgcfjbbpaeojofohoefgiehjai',description:''},
-      {name:'Native Client',filename:'internal-nacl-plugin',description:''}];
-    Object.defineProperty(navigator,'plugins',{get:()=>Object.assign(_fp,{item:function(i){return _fp[i];},namedItem:function(n){return _fp.find(function(p){return p.name===n;})||null;},length:_fp.length}),configurable:true});
-    Object.defineProperty(navigator,'mimeTypes',{get:()=>({length:2,item:function(){return null;}}),configurable:true});
-  }catch(e){}
   try{Object.defineProperty(screen,'width',{get:()=>${d.screenW},configurable:true});}catch(e){}
   try{Object.defineProperty(screen,'height',{get:()=>${d.screenH},configurable:true});}catch(e){}
   try{Object.defineProperty(screen,'availWidth',{get:()=>${d.screenW},configurable:true});}catch(e){}
   try{Object.defineProperty(screen,'availHeight',{get:()=>${d.screenH-48},configurable:true});}catch(e){}
-  try{Object.defineProperty(window,'outerWidth',{get:()=>${d.screenW},configurable:true});}catch(e){}
-  try{Object.defineProperty(window,'outerHeight',{get:()=>${d.screenH},configurable:true});}catch(e){}
   try{
     var _tdu=HTMLCanvasElement.prototype.toDataURL;
     HTMLCanvasElement.prototype.toDataURL=function(type){
       var ctx=this.getContext('2d');
-      if(ctx){var img=ctx.getImageData(0,0,this.width,this.height);for(var i=0;i<img.data.length;i+=4){img.data[i]^=(${noise}&3);img.data[i+1]^=((${noise}>>1)&3);}ctx.putImageData(img,0,0);}
+      if(ctx){var img=ctx.getImageData(0,0,this.width,this.height);
+        for(var i=0;i<img.data.length;i+=4){img.data[i]^=(${noise}&3);img.data[i+1]^=((${noise}>>1)&3);}
+        ctx.putImageData(img,0,0);}
       return _tdu.apply(this,arguments);
     };
   }catch(e){}
@@ -1041,7 +1233,6 @@ class MainActivity : AppCompatActivity() {
       return _wgl.call(this,p);
     };
   }catch(e){}
-  // Remove automation indicators
   try{delete window.cdc_adoQpoasnfa76pfcZLmcfl_Array;}catch(e){}
   try{delete window.cdc_adoQpoasnfa76pfcZLmcfl_Promise;}catch(e){}
   try{delete window.cdc_adoQpoasnfa76pfcZLmcfl_Symbol;}catch(e){}
@@ -1106,10 +1297,6 @@ class MainActivity : AppCompatActivity() {
         webView.evaluateJavascript(js, null)
     }
 
-    /**
-     * Auto-onboarding: automatically selects options (radio/checkbox/cards)
-     * and clicks Next/Continue buttons until wizard is complete.
-     */
     private fun injectOnboardingStep(webView: WebView, fullName: String) {
         val fn = fullName.substringBefore(" ").ifEmpty { "User" }.replace("'", "\\'")
         val ln = fullName.substringAfter(" ", "").ifEmpty { "Dev" }.replace("'", "\\'")
@@ -1123,8 +1310,6 @@ class MainActivity : AppCompatActivity() {
     catch(e){el.value=v;}
   }
   function vis(el){return el.offsetParent!==null&&el.offsetWidth>0&&el.style.display!=='none';}
-
-  // Select free plan
   var planPicked=false;
   document.querySelectorAll('button,a,[role="button"],[data-testid]').forEach(function(el){
     if(planPicked)return;
@@ -1134,8 +1319,6 @@ class MainActivity : AppCompatActivity() {
     }
   });
   if(planPicked)return'plan';
-
-  // Fill name fields
   var nameFields=[
     ['input[name="full_name"],input[name="fullName"],input[name="name"]','$fq'],
     ['input[name="first_name"],input[name="firstName"],input[placeholder*="first" i]','$fn'],
@@ -1144,8 +1327,6 @@ class MainActivity : AppCompatActivity() {
   nameFields.forEach(function(pair){
     document.querySelectorAll(pair[0]).forEach(function(el){if(vis(el))setVal(el,pair[1]);});
   });
-
-  // Select ALL visible radio/checkbox/card options (pick random subset)
   var opts=Array.from(document.querySelectorAll(
     '[data-testid*="option"],[class*="SelectableCard"],[class*="selectable"],[class*="choice"],' +
     '[role="checkbox"],[role="radio"],[class*="ChoiceCard"],[class*="option-card"]'
@@ -1153,26 +1334,18 @@ class MainActivity : AppCompatActivity() {
   if(opts.length>0){
     var pick=Math.min(opts.length,Math.floor(Math.random()*3)+1);
     var chosen=[];
-    while(chosen.length<pick){
-      var idx=Math.floor(Math.random()*opts.length);
-      if(!chosen.includes(idx)){chosen.push(idx);opts[idx].click();}
-    }
+    while(chosen.length<pick){var idx=Math.floor(Math.random()*opts.length);if(!chosen.includes(idx)){chosen.push(idx);opts[idx].click();}}
   }
-  // Also handle radio inputs
   var radios=Array.from(document.querySelectorAll('input[type="radio"]')).filter(vis);
   if(radios.length>0)radios[Math.floor(Math.random()*radios.length)].click();
-  // Checkboxes: click first visible
   var checks=Array.from(document.querySelectorAll('input[type="checkbox"]')).filter(vis);
   if(checks.length>0&&!checks[0].checked)checks[0].click();
-
-  // Click Next / Continue / Get Started / Finish
   var SKIP=['google','github','facebook','apple','microsoft','twitter',' x ','login','sign in'];
   function noOauth(t){return !SKIP.some(function(k){return(' '+t+' ').indexOf(k)>=0;});}
   var clicked=false;
   function tryNext(){
     if(clicked)return;
     var btns=Array.from(document.querySelectorAll('button[type="submit"],button,[role="button"]')).filter(vis);
-    // Sort submit buttons first
     btns.sort(function(a,b){return (a.type==='submit'?0:1)-(b.type==='submit'?0:1);});
     for(var i=0;i<btns.length;i++){
       var t=(btns[i].textContent||'').toLowerCase().replace(/[→>↪]/g,'').trim();
@@ -1194,7 +1367,6 @@ class MainActivity : AppCompatActivity() {
         webView.evaluateJavascript(js) { result ->
             val r = result?.trim('"') ?: ""
             if (r == "plan") toast("Đã chọn gói miễn phí ✓")
-            // Keep going if still on onboarding
             webView.postDelayed({
                 webView.evaluateJavascript("window.location.pathname") { path ->
                     val p = path?.trim('"') ?: ""
@@ -1318,7 +1490,6 @@ class MainActivity : AppCompatActivity() {
             while (isActive) { fetchMail(); delay(5000) }
         }
     }
-
     private fun stopPolling() { pollJob?.cancel(); pollJob = null }
 
     private suspend fun fetchMail() {
@@ -1346,7 +1517,7 @@ class MainActivity : AppCompatActivity() {
                         switchPanelSection(1); toast("📧 Email mới!")
                     } else if (binding.mailPanel.visibility == View.GONE) {
                         unreadCount += newMsgs.size; updateMailBadge()
-                        toast("📧 ${newMsgs.size} email mới — nhấn FAB để xem")
+                        toast("📧 ${newMsgs.size} email mới")
                     }
                 }
             } catch (_: Exception) {}
@@ -1355,27 +1526,43 @@ class MainActivity : AppCompatActivity() {
 
     private fun addMailItems(msgs: List<Pair<String,String>>) {
         val dp = resources.displayMetrics.density
-        unreadCount += msgs.size; updateMailBadge()
         msgs.forEach { (id, subject) ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
-                setPadding((12*dp).toInt(),(10*dp).toInt(),(12*dp).toInt(),(10*dp).toInt())
-                background = GradientDrawable().apply { setColor(0xFFE8F5E9.toInt()); cornerRadius=6*dp }
+                setPadding((12*dp).toInt(), (10*dp).toInt(), (10*dp).toInt(), (10*dp).toInt())
+                background = GradientDrawable().apply {
+                    setColor(CLR_CARD); cornerRadius = 8 * dp
+                    setStroke(1, CLR_BORDER)
+                }
+                elevation = 1 * dp
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { setMargins((6*dp).toInt(),(3*dp).toInt(),(6*dp).toInt(),(3*dp).toInt()) }
+                ).apply { setMargins((8*dp).toInt(), (3*dp).toInt(), (8*dp).toInt(), (3*dp).toInt()) }
                 setOnClickListener { lifecycleScope.launch { loadVerifyLink(id) } }
             }
+            // Left blue dot
+            val dot = View(this).apply {
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL; setColor(CLR_PRIMARY)
+                }
+                layoutParams = LinearLayout.LayoutParams((8*dp).toInt(), (8*dp).toInt())
+                    .apply { setMargins(0, 0, (10*dp).toInt(), 0); gravity = android.view.Gravity.CENTER_VERTICAL }
+            }
             val tv = TextView(this).apply {
-                text = "📨 $subject"
-                textSize = 12f
-                setTextColor(0xFF1B5E20.toInt())
+                text = subject
+                textSize = 12.5f
+                setTextColor(CLR_TEXT_PRI)
                 setSingleLine(true)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
-            val arrow = TextView(this).apply { text = " ›"; textSize = 16f; setTextColor(0xFF388E3C.toInt()) }
-            row.addView(tv); row.addView(arrow)
+            val arrow = TextView(this).apply {
+                text = "›"
+                textSize = 18f
+                setTextColor(CLR_TEXT_HINT)
+                setPadding((8*dp).toInt(), 0, 0, 0)
+            }
+            row.addView(dot); row.addView(tv); row.addView(arrow)
             binding.mailList.addView(row, 0)
         }
     }
@@ -1404,7 +1591,7 @@ class MainActivity : AppCompatActivity() {
                 binding.mailListScroll.visibility = View.GONE
                 binding.verifyWebView.loadUrl(link)
                 switchPanelSection(1)
-                toast("Đang mở link xác nhận...")
+                toast("Đang mở link xác nhận…")
             } else toast("Không tìm thấy link xác nhận")
         }
     }
