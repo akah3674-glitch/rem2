@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-  <resources>
-      <color name="design_default_color_primary_dark">#1A237E</color>
-      <color name="design_default_color_background">#FAFAFA</color>
-      <color name="white">#FFFFFF</color>
-  </resources>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="bg_primary">#F3F4F6</color>
+    <color name="bg_surface">#FFFFFF</color>
+    <color name="text_primary">#111827</color>
+    <color name="text_secondary">#6B7280</color>
+    <color name="border">#E5E7EB</color>
+    <color name="accent_blue">#1D4ED8</color>
+    <color name="accent_blue_light">#2563EB</color>
+    <color name="accent_green">#16A34A</color>
+    <color name="accent_red">#DC2626</color>
+    <color name="tag_bg">#EFF6FF</color>
+</resources>
