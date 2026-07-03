@@ -829,23 +829,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    if (!pF && (t==='password' || n.includes('pass') || p.includes('pass') || id.includes('pass'))) {
-      fill(el, '${'$'}{passEsc}'); pF = true;
-    }
-  });
-  return (eF || pF) ? 'ok' : 'none';
-})();
-        """.trimIndent()
-        activeWv.evaluateJavascript(js) { result ->
-            runOnUiThread {
-                if (result?.contains("ok") == true)
-                    toast("✅ Đã điền email & mật khẩu vào trang")
-                else
-                    toast("⚠️ Không tìm thấy ô nhập liệu")
-            }
-        }
-    }
-
 
     private fun updateMailBadge() {
         runOnUiThread {
