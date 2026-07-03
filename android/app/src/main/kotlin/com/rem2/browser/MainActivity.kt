@@ -10,7 +10,6 @@ import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.view.KeyEvent
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -140,10 +139,7 @@ class MainActivity : AppCompatActivity() {
     private var autoUsername = ""
     private var autoFullName = ""
 
-    // ── FAB drag ──────────────────────────────────────────────────────────────
-    private var fabInitX = 0f
-    private var fabInitY = 0f
-    private var fabMoved = false
+
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -471,27 +467,7 @@ class MainActivity : AppCompatActivity() {
     // ─── FAB ─────────────────────────────────────────────────────────────────
 
     private fun setupFab() {
-        val fab = binding.fabMail
-        // Start position: top-right like Cốc Cốc
-        binding.root.post {
-            val sw = resources.displayMetrics.widthPixels
-            fab.x = sw - dp(this, 68f).toFloat()
-            fab.y = dp(this, 110f).toFloat()
-        }
-        fab.setOnTouchListener { v, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    fabInitX = event.rawX - v.x; fabInitY = event.rawY - v.y; fabMoved = false; true
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val nx = event.rawX - fabInitX; val ny = event.rawY - fabInitY
-                    if (Math.abs(nx - v.x) + Math.abs(ny - v.y) > 8f) fabMoved = true
-                    v.x = nx; v.y = ny; true
-                }
-                MotionEvent.ACTION_UP -> { if (!fabMoved) togglePanel(); true }
-                else -> false
-            }
-        }
+        binding.fabMail.setOnClickListener { togglePanel() }
     }
 
     private fun post(fn: () -> Unit) = binding.root.post(fn)
