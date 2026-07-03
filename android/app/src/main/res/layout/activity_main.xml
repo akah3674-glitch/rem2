@@ -4,14 +4,14 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0D1117">
+    android:background="#F5F5F5">
 
     <!-- ── Tab bar: scrollable tabs ────────────────────────────────── -->
     <HorizontalScrollView
         android:id="@+id/tabScrollView"
         android:layout_width="0dp"
         android:layout_height="38dp"
-        android:background="#0D1117"
+        android:background="#F5F5F5"
         android:scrollbars="none"
         android:fillViewport="false"
         app:layout_constraintTop_toTopOf="parent"
@@ -35,7 +35,7 @@
         android:layout_height="38dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:background="#0D1117"
+        android:background="#F5F5F5"
         android:paddingEnd="4dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
@@ -47,7 +47,7 @@
             android:text="↻"
             android:textSize="20sp"
             android:gravity="center"
-            android:textColor="#4FC3F7"
+            android:textColor="#1565C0"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Tải lại"/>
 
@@ -58,7 +58,7 @@
             android:text="＋"
             android:textSize="18sp"
             android:gravity="center"
-            android:textColor="#4FC3F7"
+            android:textColor="#1565C0"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="Tab mới"/>
     </LinearLayout>
@@ -68,7 +68,7 @@
         android:id="@+id/tabDivider"
         android:layout_width="0dp"
         android:layout_height="1dp"
-        android:background="#21262D"
+        android:background="#EEEEEE"
         app:layout_constraintTop_toBottomOf="@+id/tabScrollView"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
@@ -89,7 +89,7 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:orientation="vertical"
-        android:background="#161B22"
+        android:background="#FFFFFF"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
@@ -105,7 +105,7 @@
             android:layout_height="44dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="#0D1117"
+            android:background="#F5F5F5"
             android:paddingStart="4dp"
             android:paddingEnd="4dp">
 
@@ -114,45 +114,8 @@
                 android:layout_width="32dp"
                 android:layout_height="4dp"
                 android:layout_marginStart="8dp"
-                android:background="#30363D"
+                android:background="#DDDDDD"
                 android:layout_gravity="center_vertical"/>
-
-            <!-- Search button -->
-            <androidx.appcompat.widget.AppCompatImageButton
-                android:id="@+id/btnToggleSearch"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:src="@android:drawable/ic_menu_search"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#8B949E"
-                android:layout_marginStart="4dp"/>
-
-            <!-- Search input -->
-            <EditText
-                android:id="@+id/etSearch"
-                android:layout_width="0dp"
-                android:layout_height="32dp"
-                android:layout_weight="1"
-                android:visibility="gone"
-                android:background="#21262D"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:textColor="#FFFFFF"
-                android:textColorHint="#6B7280"
-                android:textSize="13sp"
-                android:hint="Tìm kiếm hoặc nhập URL..."
-                android:imeOptions="actionGo"
-                android:inputType="textUri"
-                android:maxLines="1"
-                android:singleLine="true"/>
-
-            <!-- Spacer -->
-            <View
-                android:id="@+id/panelSpacer"
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="1"/>
-
             <!-- Desktop mode -->
             <androidx.appcompat.widget.AppCompatImageButton
                 android:id="@+id/btnDesktop"
@@ -160,7 +123,7 @@
                 android:layout_height="36dp"
                 android:src="@android:drawable/ic_menu_always_landscape_portrait"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#8B949E"
+                android:tint="#555555"
                 android:alpha="0.5"/>
 
             <!-- New mail (+) -->
@@ -169,29 +132,20 @@
                 android:layout_width="wrap_content"
                 android:layout_height="30dp"
                 android:text="+"
-                android:textColor="#4FC3F7"
+                android:textColor="#1565C0"
                 android:textSize="20sp"
                 android:textStyle="bold"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:paddingStart="8dp"
                 android:paddingEnd="4dp"/>
-
-            <!-- Close panel -->
-            <androidx.appcompat.widget.AppCompatImageButton
-                android:id="@+id/btnClose"
-                android:layout_width="36dp"
-                android:layout_height="36dp"
-                android:src="@android:drawable/ic_menu_close_clear_cancel"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:tint="#6E7681"/>
-        </LinearLayout>
+            </LinearLayout>
 
         <!-- Section tabs -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="36dp"
             android:orientation="horizontal"
-            android:background="#0D1117">
+            android:background="#F5F5F5">
 
             <TextView
                 android:id="@+id/tabAccounts"
@@ -220,7 +174,7 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#21262D"/>
+            android:background="#EEEEEE"/>
 
         <!-- Content area -->
         <FrameLayout
@@ -252,7 +206,7 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:text="Chưa có tài khoản\nĐăng nhập Replit để lưu tự động"
-                    android:textColor="#6E7681"
+                    android:textColor="#777777"
                     android:textSize="13sp"
                     android:gravity="center"
                     android:visibility="gone"/>
@@ -271,7 +225,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Đang khởi tạo..."
-                    android:textColor="#8B949E"
+                    android:textColor="#555555"
                     android:textSize="11sp"
                     android:paddingStart="12dp"
                     android:paddingEnd="12dp"
@@ -314,7 +268,7 @@
             android:layout_height="28dp"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:background="#0D1117"
+            android:background="#F5F5F5"
             android:paddingStart="8dp"
             android:paddingEnd="8dp">
 
@@ -324,7 +278,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text=""
-                android:textColor="#6E7681"
+                android:textColor="#777777"
                 android:textSize="10sp"
                 android:ellipsize="end"
                 android:maxLines="1"/>
@@ -333,23 +287,9 @@
                 android:id="@+id/pbMail"
                 android:layout_width="14dp"
                 android:layout_height="14dp"
-                android:indeterminateTint="#4FC3F7"
+                android:indeterminateTint="#1565C0"
                 android:visibility="gone"/>
         </LinearLayout>
     </LinearLayout>
-
-    <!-- ── FAB: hamburger ≡ (draggable) ─────────────────────────────── -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fabMenu"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginEnd="16dp"
-        android:layout_marginBottom="24dp"
-        android:src="@android:drawable/ic_menu_more"
-        android:contentDescription="Menu"
-        app:backgroundTint="#1976D2"
-        app:fabSize="mini"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -36,7 +36,6 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.GestureDetectorCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.rem2.browser.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -205,7 +204,7 @@ class MainActivity : AppCompatActivity() {
     // ─────────────────────────────────────────────────────────────────────────
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -213,7 +212,6 @@ class MainActivity : AppCompatActivity() {
         loadAccounts()
         setupPanel()
         setupTabActions()
-        setupDraggableFab()
         setupMailFab()
         setupVerifyWebView()
 
@@ -264,14 +262,14 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 background = if (i == activeTabIndex) GradientDrawable().apply {
-                    setColor(0xFF21262D.toInt()); cornerRadius = 6 * dp } else null
+                    setColor(0xFFEEEEEE.toInt()); cornerRadius = 6 * dp } else null
                 setPadding((6*dp).toInt(), 0, (2*dp).toInt(), 0)
                 setOnClickListener { selectTab(i); closePanel() }
             }
             val title = TextView(this).apply {
                 text = (if (i == activeTabIndex) "● " else "") + tab.title.take(12).ifEmpty { "Replit" }
                 textSize = 12f
-                setTextColor(if (i == activeTabIndex) Color.WHITE else 0xFF8B949E.toInt())
+                setTextColor(if (i == activeTabIndex) Color.WHITE else 0xFF555555.toInt())
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setSingleLine(true)
                 maxWidth = (120 * dp).toInt()
@@ -470,35 +468,6 @@ class MainActivity : AppCompatActivity() {
     private fun setupPanel() {
         binding.tabAccounts.setOnClickListener { switchPanelSection(0) }
         binding.tabMailList.setOnClickListener { switchPanelSection(1) }
-
-        binding.btnClose.setOnClickListener { closePanel() }
-
-        binding.btnToggleSearch.setOnClickListener {
-            if (binding.etSearch.visibility == View.GONE) {
-                binding.etSearch.visibility = View.VISIBLE
-                binding.panelSpacer.visibility = View.GONE
-                binding.etSearch.requestFocus()
-                showKeyboard(binding.etSearch)
-            } else {
-                binding.etSearch.visibility = View.GONE
-                binding.panelSpacer.visibility = View.VISIBLE
-                hideKeyboard()
-            }
-        }
-
-        binding.etSearch.setOnEditorActionListener { _, actionId, event ->
-            if (actionId == EditorInfo.IME_ACTION_GO || event?.keyCode == KeyEvent.KEYCODE_ENTER) {
-                val q = binding.etSearch.text.toString().trim()
-                if (q.isNotEmpty()) {
-                    val url = if (q.startsWith("http")) q
-                    else "https://www.google.com/search?q=${Uri.encode(q)}"
-                    tabs.getOrNull(activeTabIndex)?.webView?.loadUrl(url)
-                    closePanel()
-                }
-                true
-            } else false
-        }
-
         binding.btnDesktop.setOnClickListener {
             isDesktopMode = !isDesktopMode
             val ua = if (isDesktopMode) DESKTOP_UA else currentDevice.ua
@@ -547,14 +516,14 @@ class MainActivity : AppCompatActivity() {
             binding.tabAccounts.setBackgroundColor(0xFF1565C0.toInt())
             binding.tabAccounts.setTextColor(Color.WHITE)
             binding.tabMailList.setBackgroundColor(Color.TRANSPARENT)
-            binding.tabMailList.setTextColor(0xFF90CAF9.toInt())
+            binding.tabMailList.setTextColor(0xFF1565C0.toInt())
         } else {
             binding.accountsContainer.visibility = View.GONE
             binding.verifyContainer.visibility = View.VISIBLE
             binding.tabMailList.setBackgroundColor(0xFF1565C0.toInt())
             binding.tabMailList.setTextColor(Color.WHITE)
             binding.tabAccounts.setBackgroundColor(Color.TRANSPARENT)
-            binding.tabAccounts.setTextColor(0xFF90CAF9.toInt())
+            binding.tabAccounts.setTextColor(0xFF1565C0.toInt())
             if (mailToken.isNotEmpty()) startPolling()
         }
     }
@@ -567,8 +536,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun closePanel() {
         binding.mailPanel.visibility = View.GONE
-        binding.etSearch.visibility = View.GONE
-        binding.panelSpacer.visibility = View.VISIBLE
         stopPolling()
         hideKeyboard()
     }
@@ -629,7 +596,7 @@ class MainActivity : AppCompatActivity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding((12*dp).toInt(), (8*dp).toInt(), (12*dp).toInt(), (8*dp).toInt())
                 background = GradientDrawable().apply {
-                    setColor(0xFF21262D.toInt()); cornerRadius = 8 * dp }
+                    setColor(0xFFEEEEEE.toInt()); cornerRadius = 8 * dp }
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -644,7 +611,7 @@ class MainActivity : AppCompatActivity() {
             val emailTv = TextView(this).apply {
                 text = "📧 " + acc.email
                 textSize = 12f
-                setTextColor(0xFF4FC3F7.toInt())
+                setTextColor(0xFF1565C0.toInt())
                 setSingleLine(true)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
@@ -665,7 +632,7 @@ class MainActivity : AppCompatActivity() {
             val passTv = TextView(this).apply {
                 text = maskedPass
                 textSize = 12f
-                setTextColor(0xFF8B949E.toInt())
+                setTextColor(0xFF555555.toInt())
                 setSingleLine(true)
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             }
@@ -681,7 +648,7 @@ class MainActivity : AppCompatActivity() {
             val delBtn = TextView(this).apply {
                 text = "🗑 Xoá"
                 textSize = 10f
-                setTextColor(0xFF6E7681.toInt())
+                setTextColor(0xFF888888.toInt())
                 setPadding(0, (4*dp).toInt(), 0, 0)
                 setOnClickListener {
                     accounts.remove(acc)
@@ -786,15 +753,8 @@ class MainActivity : AppCompatActivity() {
                     if (isDragging) {
                         prefs.edit().putFloat("mailfab_x", v.x).putFloat("mailfab_y", v.y).apply()
                     } else {
-                        // Open panel on mail section and clear badge
-                        if (binding.mailPanel.visibility == View.GONE) {
-                            openPanel()
-                            switchPanelSection(1)
-                        } else if (panelSection != 1) {
-                            switchPanelSection(1)
-                        } else {
-                            closePanel()
-                        }
+                        // Short tap → auto-inject email+password into current WebView
+                        injectSavedCredentials()
                         unreadCount = 0
                         updateMailBadge()
                     }
@@ -803,57 +763,69 @@ class MainActivity : AppCompatActivity() {
                 else -> false
             }
         }
+
+        // Long-press → open/close mail panel
+        fab.setOnLongClickListener {
+            it.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+            if (binding.mailPanel.visibility == View.GONE) {
+                openPanel(); switchPanelSection(1)
+            } else {
+                closePanel()
+            }
+            true
+        }
     }
+
+    private fun injectSavedCredentials() {
+        val email = mailEmail
+        val pass  = mailPassword
+        if (email.isEmpty()) { toast("⚠️ Chưa có email được tạo"); return }
+        val activeWv = tabs.getOrNull(activeTabIndex)?.webView ?: run {
+            toast("⚠️ Không có trang nào đang mở"); return
+        }
+        val emailEsc = email.replace("\\", "\\\\").replace("'", "\\'")
+        val passEsc  = pass.replace("\\", "\\\\").replace("'", "\\'")
+        val js = """
+(function(){
+  function fill(el, val) {
+    try {
+      var s = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+      if (s && s.set) s.set.call(el, val); else el.value = val;
+    } catch(e) { el.value = val; }
+    el.dispatchEvent(new Event('input',  {bubbles:true}));
+    el.dispatchEvent(new Event('change', {bubbles:true}));
+  }
+  var inputs = Array.from(document.querySelectorAll('input'));
+  var eF = false, pF = false;
+  inputs.forEach(function(el) {
+    var t  = el.type || '';
+    var n  = (el.name        || '').toLowerCase();
+    var p  = (el.placeholder || '').toLowerCase();
+    var id = (el.id          || '').toLowerCase();
+    if (!eF && (t==='email' || n.includes('email') || p.includes('email') || id.includes('email') || n.includes('username') || id.includes('username'))) {
+      fill(el, '${'$'}{emailEsc}'); eF = true;
+    }
+    if (!pF && (t==='password' || n.includes('pass') || p.includes('pass') || id.includes('pass'))) {
+      fill(el, '${'$'}{passEsc}'); pF = true;
+    }
+  });
+  return (eF || pF) ? 'ok' : 'none';
+})();
+        """.trimIndent()
+        activeWv.evaluateJavascript(js) { result ->
+            runOnUiThread {
+                if (result?.contains("ok") == true)
+                    toast("✅ Đã điền email & mật khẩu vào trang")
+                else
+                    toast("⚠️ Không tìm thấy ô nhập liệu")
+            }
+        }
+    }
+
 
     private fun updateMailBadge() {
         runOnUiThread {
             mailFab?.text = if (unreadCount > 0) "📧${unreadCount}" else "📧"
-        }
-    }
-
-    // ─── Draggable FAB (hamburger ≡) ─────────────────────────────────────────────
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun setupDraggableFab() {
-        val fab = binding.fabMenu
-        var dX = 0f; var dY = 0f; var isDragging = false
-        val slop = 12f
-
-        fab.post {
-            val sx = prefs.getFloat("fab_x", -1f)
-            val sy = prefs.getFloat("fab_y", -1f)
-            if (sx >= 0 && sy >= 0) { fab.x = sx; fab.y = sy }
-        }
-
-        fab.setOnTouchListener { v, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    dX = v.x - event.rawX; dY = v.y - event.rawY; isDragging = false; false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val movedX = Math.abs(event.rawX + dX - v.x)
-                    val movedY = Math.abs(event.rawY + dY - v.y)
-                    if (movedX > slop || movedY > slop) isDragging = true
-                    if (isDragging) {
-                        val maxX = (resources.displayMetrics.widthPixels - v.width).toFloat()
-                        val maxY = (resources.displayMetrics.heightPixels - v.height).toFloat()
-                        v.x = (event.rawX + dX).coerceIn(0f, maxX)
-                        v.y = (event.rawY + dY).coerceIn(0f, maxY)
-                        v.performHapticFeedback(android.view.HapticFeedbackConstants.TEXT_HANDLE_MOVE)
-                    }
-                    isDragging
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (isDragging) {
-                        prefs.edit().putFloat("fab_x", v.x).putFloat("fab_y", v.y).apply()
-                    } else {
-                        if (binding.mailPanel.visibility == View.GONE) openPanel()
-                        else closePanel()
-                    }
-                    isDragging = false; isDragging
-                }
-                else -> false
-            }
         }
     }
 
