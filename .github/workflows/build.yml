@@ -39,26 +39,26 @@ jobs:
           ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
       - name: Rename APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk rem2-v3.1-release.apk
+        run: cp android/app/build/outputs/apk/release/app-release.apk rem2-v3.2-release.apk
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rem2-v3.1-release
-          path: rem2-v3.1-release.apk
+          name: rem2-v3.2-release
+          path: rem2-v3.2-release.apk
           retention-days: 30
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v3.1.${{ github.run_number }}
-          name: "Rem2 v3.1.${{ github.run_number }}"
+          tag_name: v3.2.${{ github.run_number }}
+          name: "Rem2 v3.2.${{ github.run_number }}"
           body: |
-            ## Rem2 v3.1.${{ github.run_number }}
+            ## Rem2 v3.2.${{ github.run_number }}
 
             ⚠️ **Cùng chữ ký với v3.0** — cài đè trực tiếp, không cần gỡ bản cũ
 
-            ### ✨ Tính năng mới v3.1
+            ### ✨ Tính năng mới v3.2
             - 👆 **Vuốt trái/phải nâng cấp** — ngưỡng thấp hơn (60dp, velocity 250), haptic + toast "◀ Quay lại / ▶ Tiến tới"
             - ↻ **Reload có animation** — nút tải lại xoay 360° khi nhấn
             - 📧 **FAB Mail riêng** — icon mail kéo độc lập, badge đếm email chưa đọc, nhấn mở thẳng tab Xác thực
@@ -70,6 +70,6 @@ jobs:
             - 📧 Panel Xác thực (Mail.tm), ↻ Reload + ＋ Tab mới
             - 🔧 Fix CAPTCHA, 🤖 Auto-onboarding, 🕵️ Anti-detect
             - 📎 Upload file + 🖥 Desktop mode
-          files: rem2-v3.1-release.apk
+          files: rem2-v3.2-release.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
