@@ -38,14 +38,14 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rem2-v5.0-release
+          name: rem2-v6.0-release
           path: android/app/build/outputs/apk/release/app-release.apk
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v5.1.${{ github.run_number }}
-          name: "Rem2 v5.1.${{ github.run_number }}"
+          tag_name: v6.0.${{ github.run_number }}
+          name: "Rem2 v6.0.${{ github.run_number }}"
           body: |
             ## Rem2 v5.1 — Cốc Cốc UA mặc định
 
