@@ -380,7 +380,6 @@ class MainActivity : AppCompatActivity() {
             @JavascriptInterface
             fun onFieldFocus(fieldType: String) { focusedFieldType = fieldType }
 
-            /** Gọi khi hCaptcha/reCAPTCHA đã được giải xong — lưu token */
             @JavascriptInterface
             fun onCaptchaToken(token: String) {
                 if (token.isBlank()) return
@@ -392,7 +391,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            /** Gọi khi server trả về code:1 — thông báo user cần giải lại */
             @JavascriptInterface
             fun onCaptchaError() {
                 runOnUiThread {
@@ -404,8 +402,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            @JavascriptInterface
-            fun onPageReady(info: String) {}
         }, "REM2")
 
         wv.webViewClient = object : WebViewClient() {
@@ -590,10 +586,14 @@ class MainActivity : AppCompatActivity() {
             isAppMode = !isAppMode
             if (isAppMode) isDesktopMode = false
             val ua = if (isAppMode) REPLIT_APP_UA else currentDevice.ua
-            tabs.forEach { it.webView?.settings?.userAgentString = ua }
-            tabs.getOrNull(activeTabIndex)?.webView?.reload()
+            // Áp dụng UA + inject header JS vào tất cả tab ngay lập tức
+            tabs.forEach { tab ->
+                tab.webView?.settings?.userAgentString = ua
+                if (isAppMode) tab.webView?.evaluateJavascript(buildAppModeHeaderJs(), null)
+                tab.webView?.reload()
+            }
             binding.btnAppMode.setTextColor(if (isAppMode) CLR_PRIMARY else CLR_TEXT_HINT)
-            toast(if (isAppMode) "🤖 App mode (bypass CAPTCHA)" else "🌐 Web mode thường")
+            toast(if (isAppMode) "🤖 App mode — tất cả tab đã reload" else "🌐 Web mode thường")
         }
 
         // + button: tạo mail mới
