@@ -9,8 +9,8 @@ android {
         applicationId 'com.rem2.browser'
         minSdk 24
         targetSdk 34
-        versionCode 15
-        versionName '6.4'
+        versionCode 16
+        versionName '6.5'
     }
     signingConfigs {
         release {
