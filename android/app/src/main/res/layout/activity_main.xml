@@ -6,7 +6,7 @@
       android:layout_height="match_parent"
       android:background="#F3F4F6">
 
-      <!-- ══ HEADER ══ -->
+      <!-- ══ HEADER (top) ══ -->
       <LinearLayout
           android:id="@+id/header"
           android:layout_width="0dp"
@@ -31,7 +31,6 @@
               android:textSize="18sp"
               android:textStyle="bold" />
 
-          <!-- Toggle log/web panel -->
           <ImageButton
               android:id="@+id/btnToggleLog"
               android:layout_width="44dp"
@@ -41,7 +40,6 @@
               android:tint="#FFFFFF"
               android:contentDescription="Toggle panel" />
 
-          <!-- Clear log -->
           <ImageButton
               android:id="@+id/btnClearLog"
               android:layout_width="44dp"
@@ -53,7 +51,7 @@
 
       </LinearLayout>
 
-      <!-- ══ PROGRESS BAR ══ -->
+      <!-- ══ PROGRESS BAR (below header) ══ -->
       <ProgressBar
           android:id="@+id/progressBar"
           style="?android:attr/progressBarStyleHorizontal"
@@ -66,7 +64,17 @@
           app:layout_constraintStart_toStartOf="parent"
           app:layout_constraintEnd_toEndOf="parent" />
 
-      <!-- ══ LOG + VERIFY PANEL (collapsible, top) ══ -->
+      <!-- ══ MAIN WEBVIEW fills between header and bottom panel ══ -->
+      <WebView
+          android:id="@+id/webView"
+          android:layout_width="0dp"
+          android:layout_height="0dp"
+          app:layout_constraintTop_toBottomOf="@id/progressBar"
+          app:layout_constraintBottom_toTopOf="@id/logPanel"
+          app:layout_constraintStart_toStartOf="parent"
+          app:layout_constraintEnd_toEndOf="parent" />
+
+      <!-- ══ LOG + VERIFY PANEL (BOTTOM, collapsible) ══ -->
       <LinearLayout
           android:id="@+id/logPanel"
           android:layout_width="0dp"
@@ -74,12 +82,12 @@
           android:orientation="vertical"
           android:visibility="gone"
           android:background="#FFFFFF"
-          android:elevation="2dp"
-          app:layout_constraintTop_toBottomOf="@id/progressBar"
+          android:elevation="6dp"
+          app:layout_constraintBottom_toBottomOf="parent"
           app:layout_constraintStart_toStartOf="parent"
           app:layout_constraintEnd_toEndOf="parent">
 
-          <!-- Tab row inside panel -->
+          <!-- Tab row: Log | Xác thực -->
           <LinearLayout
               android:id="@+id/panelTabRow"
               android:layout_width="match_parent"
@@ -113,7 +121,7 @@
 
           </LinearLayout>
 
-          <!-- Log scroll area -->
+          <!-- Log area -->
           <ScrollView
               android:id="@+id/logScroll"
               android:layout_width="match_parent"
@@ -132,7 +140,7 @@
                   android:lineSpacingExtra="2dp" />
           </ScrollView>
 
-          <!-- Verify WebView (same panel, initially GONE) -->
+          <!-- Verify mini WebView (same panel, tab-switched) -->
           <WebView
               android:id="@+id/verifyWebView"
               android:layout_width="match_parent"
@@ -141,15 +149,5 @@
               android:visibility="gone" />
 
       </LinearLayout>
-
-      <!-- ══ MAIN WEBVIEW ══ -->
-      <WebView
-          android:id="@+id/webView"
-          android:layout_width="0dp"
-          android:layout_height="0dp"
-          app:layout_constraintTop_toBottomOf="@id/logPanel"
-          app:layout_constraintBottom_toBottomOf="parent"
-          app:layout_constraintStart_toStartOf="parent"
-          app:layout_constraintEnd_toEndOf="parent" />
 
   </androidx.constraintlayout.widget.ConstraintLayout>
