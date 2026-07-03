@@ -744,7 +744,7 @@ class MainActivity : AppCompatActivity() {
 
         // Add to root view
         val root = binding.root
-        root.addView(fab, android.widget.FrameLayout.LayoutParams(size, size).also { it.gravity = android.view.Gravity.TOP or android.view.Gravity.START })
+        root.addView(fab, ViewGroup.LayoutParams(size, size))
 
         // Restore saved position or place bottom-right near main FAB
         fab.post {
