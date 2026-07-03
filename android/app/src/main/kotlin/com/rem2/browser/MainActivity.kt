@@ -3,8 +3,12 @@ package com.rem2.browser
 
 import android.annotation.SuppressLint
 import android.os.Bundle
+import android.view.GestureDetector
+import android.view.MotionEvent
 import android.view.View
 import android.webkit.*
+import androidx.core.view.GestureDetectorCompat
+import kotlin.math.abs
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
@@ -139,6 +143,7 @@ class MainActivity : AppCompatActivity() {
         loadAccounts()
         setupHeader()
         setupWebView()
+        setupSwipeAndGestures()
         setupVerifyWebView()
         lifecycleScope.launch { ensureAccount() }
     }
@@ -234,6 +239,7 @@ class MainActivity : AppCompatActivity() {
 
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String) {
+                runOnUiThread { binding.swipeRefresh.isRefreshing = false }
                 val isSignup = url.contains("signup") || url.contains("login") || url.contains("register")
                 if (isSignup && autoEmail.isNotEmpty()) {
                     // Inject immediately and again after 1s, 2s, 4s
@@ -301,7 +307,31 @@ class MainActivity : AppCompatActivity() {
         wv.evaluateJavascript(js.toString(), null)
     }
 
-    // ─── Verify WebView (mini browser inside panel) ───────────────────────────
+      // ─── Pull-to-refresh + swipe left/right navigation ────────────────────────
+
+      @SuppressLint("ClickableViewAccessibility")
+      private fun setupSwipeAndGestures() {
+          binding.swipeRefresh.setColorSchemeColors(0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
+          binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
+          binding.webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
+              binding.swipeRefresh.isEnabled = scrollY == 0
+          }
+          val gestureDet = GestureDetectorCompat(this, object : GestureDetector.SimpleOnGestureListener() {
+              override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                  val dx = (e2.x) - (e1?.x ?: 0f)
+                  val dy = abs((e2.y) - (e1?.y ?: 0f))
+                  if (dy > 80f) return false
+                  return when {
+                      dx > 120f && binding.webView.canGoBack()    -> { binding.webView.goBack();    true }
+                      dx < -120f && binding.webView.canGoForward() -> { binding.webView.goForward(); true }
+                      else -> false
+                  }
+              }
+          })
+          binding.webView.setOnTouchListener { _, event -> gestureDet.onTouchEvent(event); false }
+      }
+
+      // ─── Verify WebView (mini browser inside panel) ───────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupVerifyWebView() {
