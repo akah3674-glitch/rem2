@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <string name="app_name">Rem2</string>
-</resources>
+  <resources>
+      <string name="app_name">Rem2 Browser</string>
+      <string name="search_hint">Tìm kiếm hoặc nhập URL…</string>
+      <string name="tab_accounts">👤 Tài khoản</string>
+      <string name="tab_mail">📧 Mail</string>
+      <string name="tab_tabs">🗂 Tab</string>
+      <string name="no_accounts">Chưa có tài khoản nào.
+(Nhấn + để tạo mail.tm mới)</string>
+  </resources>
