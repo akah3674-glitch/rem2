@@ -65,14 +65,21 @@
           app:layout_constraintEnd_toEndOf="parent" />
 
       <!-- ══ MAIN WEBVIEW fills between header and bottom panel ══ -->
-      <WebView
-          android:id="@+id/webView"
+      <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+          android:id="@+id/swipeRefresh"
           android:layout_width="0dp"
           android:layout_height="0dp"
           app:layout_constraintTop_toBottomOf="@id/progressBar"
           app:layout_constraintBottom_toTopOf="@id/logPanel"
           app:layout_constraintStart_toStartOf="parent"
-          app:layout_constraintEnd_toEndOf="parent" />
+          app:layout_constraintEnd_toEndOf="parent">
+
+          <WebView
+              android:id="@+id/webView"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent" />
+
+      </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
       <!-- ══ LOG + VERIFY PANEL (BOTTOM, collapsible) ══ -->
       <LinearLayout
@@ -137,7 +144,8 @@
                   android:fontFamily="monospace"
                   android:textSize="11sp"
                   android:textColor="#111827"
-                  android:lineSpacingExtra="2dp" />
+                  android:lineSpacingExtra="2dp"
+                android:textIsSelectable="true" />
           </ScrollView>
 
           <!-- Verify mini WebView (same panel, tab-switched) -->
