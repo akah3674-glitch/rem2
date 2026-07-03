@@ -1,8 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-  <resources>
-      <style name="Theme.Rem2" parent="Theme.MaterialComponents.Light.NoActionBar">
-          <item name="colorPrimary">#1976D2</item>
-          <item name="colorPrimaryVariant">#1565C0</item>
-          <item name="colorOnPrimary">#FFFFFF</item>
-      </style>
-  </resources>
+<resources>
+    <style name="Theme.Rem2" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">@color/accent_blue</item>
+        <item name="colorPrimaryVariant">@color/accent_blue_light</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/accent_green</item>
+        <item name="android:windowBackground">@color/bg_primary</item>
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>
