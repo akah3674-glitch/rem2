@@ -72,6 +72,32 @@
                 android:textColor="#9CA3AF"
                 android:gravity="center"
                 android:padding="6dp" />
+            <FrameLayout
+                android:id="@+id/fabMail"
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="2dp">
+                <TextView
+                    android:layout_width="34dp"
+                    android:layout_height="34dp"
+                    android:text="✉"
+                    android:textSize="16sp"
+                    android:gravity="center"
+                    android:background="@drawable/fab_bg"
+                    android:textColor="#FFFFFF" />
+                <TextView
+                    android:id="@+id/tvMailBadge"
+                    android:layout_width="10dp"
+                    android:layout_height="10dp"
+                    android:layout_gravity="top|end"
+                    android:text=""
+                    android:textSize="6sp"
+                    android:textColor="#FFFFFF"
+                    android:gravity="center"
+                    android:background="@drawable/dot_green"
+                    android:visibility="gone" />
+            </FrameLayout>
         </LinearLayout>
 
         <ProgressBar
@@ -166,32 +192,6 @@
         </FrameLayout>
 
     </LinearLayout>
-
-    <FrameLayout
-        android:id="@+id/fabMail"
-        android:layout_width="52dp"
-        android:layout_height="52dp"
-        android:elevation="10dp">
-        <TextView
-            android:layout_width="52dp"
-            android:layout_height="52dp"
-            android:text="📧"
-            android:textSize="22sp"
-            android:gravity="center"
-            android:background="@drawable/fab_bg"
-            android:elevation="10dp" />
-        <TextView
-            android:id="@+id/tvMailBadge"
-            android:layout_width="14dp"
-            android:layout_height="14dp"
-            android:layout_gravity="top|end"
-            android:text=""
-            android:textSize="8sp"
-            android:textColor="#FFFFFF"
-            android:gravity="center"
-            android:background="@drawable/dot_green"
-            android:visibility="gone" />
-    </FrameLayout>
 
     <FrameLayout
         android:id="@+id/mailPanel"
