@@ -6,7 +6,10 @@ import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.webkit.*
+import android.widget.Toast
 import androidx.core.view.GestureDetectorCompat
 import kotlin.math.abs
 import androidx.appcompat.app.AppCompatActivity
@@ -131,6 +134,8 @@ class MainActivity : AppCompatActivity() {
     private var autoEmail    = ""
     private var autoUsername = ""
     private var mailtmToken  = ""
+    private var flowRunning  = false
+    private val inboxMessages = mutableListOf<Pair<String, String>>()
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -145,19 +150,44 @@ class MainActivity : AppCompatActivity() {
         setupWebView()
         setupSwipeAndGestures()
         setupVerifyWebView()
-        lifecycleScope.launch { ensureAccount() }
+        log("San sang. Nhan 'Tao tai khoan Replit tu dong' de bat dau.")
     }
 
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
-        binding.btnToggleLog.setOnClickListener {
-            panelOpen = !panelOpen
-            binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
-        }
+        binding.btnToggleLog.setOnClickListener { copyLogToClipboard() }
         binding.btnClearLog.setOnClickListener { binding.tvLog.text = "" }
         binding.tabLog.setOnClickListener    { switchTab(false) }
         binding.tabVerify.setOnClickListener { switchTab(true)  }
+        binding.btnCreateAccount.setOnClickListener { startCreateAccountFlow() }
+    }
+
+    private fun copyLogToClipboard() {
+        val text = binding.tvLog.text.toString()
+        if (text.isBlank()) { Toast.makeText(this, "Chua co log de copy", Toast.LENGTH_SHORT).show(); return }
+        val cm = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText("rem2_log", text))
+        Toast.makeText(this, "Da copy log", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun startCreateAccountFlow() {
+        if (flowRunning) { Toast.makeText(this, "Dang xu ly, vui long doi...", Toast.LENGTH_SHORT).show(); return }
+        flowRunning = true
+        inboxMessages.clear()
+        renderVerifyPanel()
+        binding.btnCreateAccount.isEnabled = false
+        binding.btnCreateAccount.text = "\u23F3 Dang tao tai khoan..."
+        binding.tvLog.text = ""
+        switchTab(false)
+        lifecycleScope.launch {
+            ensureAccount()
+            flowRunning = false
+            withContext(Dispatchers.Main) {
+                binding.btnCreateAccount.isEnabled = true
+                binding.btnCreateAccount.text = "\uD83D\uDD04 Tao tai khoan moi"
+            }
+        }
     }
 
     private fun switchTab(toVerify: Boolean) {
@@ -345,27 +375,46 @@ class MainActivity : AppCompatActivity() {
         val vwv = binding.verifyWebView
         vwv.settings.apply {
             javaScriptEnabled = true
-            domStorageEnabled = true
-            mixedContentMode  = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            userAgentString   = COCCOC_UA
+            domStorageEnabled = false
         }
-        CookieManager.getInstance().setAcceptThirdPartyCookies(vwv, true)
-
+        // Man hinh nho CHI hien thi noi dung hop thu mail.tm da lay qua API —
+        // khong bao gio duoc phep dieu huong / tai bat ky trang nao khac (kem ca Replit).
         vwv.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(v: WebView, url: String) {
-                // O be chi show mail.tm inbox — khong can xu ly Replit o day
+            override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean = true
+            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = true
+        }
+        renderVerifyPanel()
+    }
+
+    // Ve lai noi dung hop thu mail.tm (tu du lieu da fetch qua API) vao man hinh nho.
+    // Day la trang HTML tinh, khong co link dieu huong ra ngoai.
+    private fun renderVerifyPanel() = runOnUiThread {
+        val sb = StringBuilder()
+        sb.append("<html><body style='font-family:sans-serif;margin:10px;color:#111827'>")
+        sb.append("<h3 style='color:#1D4ED8;margin:0 0 6px 0;font-size:15px'>\uD83D\uDCEC Hop thu Mail.tm</h3>")
+        if (autoEmail.isNotEmpty()) {
+            sb.append("<p style='color:#6B7280;font-size:11px;margin:0 0 10px 0'>").append(autoEmail).append("</p>")
+        }
+        if (inboxMessages.isEmpty()) {
+            sb.append("<p style='color:#9CA3AF;font-size:12px'>Chua co email nao...</p>")
+        } else {
+            inboxMessages.forEach { (from, subject) ->
+                sb.append("<div style='border-bottom:1px solid #E5E7EB;padding:8px 0'>")
+                sb.append("<div style='color:#6B7280;font-size:11px'>").append(from).append("</div>")
+                sb.append("<div style='font-weight:600;font-size:13px'>").append(subject).append("</div>")
+                sb.append("</div>")
             }
         }
+        sb.append("</body></html>")
+        binding.verifyWebView.loadDataWithBaseURL(null, sb.toString(), "text/html", "UTF-8", null)
     }
 
     private fun openVerifyTab(url: String) = runOnUiThread {
-        log("Tim thay link xac thuc — dang xac minh trong WebView chinh...")
-        // Load verify URL vao MAIN WebView → Replit tu xac minh & chuyen huong
+        log("Tim thay link xac thuc — tu dong xac minh trong man hinh Replit...")
+        // Man hinh TO (webView chinh) tu dong load link xac thuc — day la noi duy nhat chay Replit
         binding.webView.loadUrl(url)
-        // verifyWebView chi show hop thu mail.tm de xem email
-        if (binding.verifyWebView.url == null || binding.verifyWebView.url == "about:blank") {
-            binding.verifyWebView.loadUrl("https://mail.tm")
-        }
+        // Man hinh nho chi cap nhat lai danh sach email, KHONG dieu huong sang Replit
+        renderVerifyPanel()
         panelOpen = true
         binding.logPanel.visibility = View.VISIBLE
         switchTab(true)
@@ -496,6 +545,13 @@ class MainActivity : AppCompatActivity() {
 
                 if (msgs.length() > 0) {
                     log("${msgs.length()} email trong hop thu")
+                    inboxMessages.clear()
+                    for (i in 0 until msgs.length()) {
+                        val m2 = msgs.getJSONObject(i)
+                        val fromAddr = m2.optJSONObject("from")?.optString("address", "") ?: ""
+                        inboxMessages.add(Pair(fromAddr, m2.optString("subject", "(khong tieu de)")))
+                    }
+                    withContext(Dispatchers.Main) { renderVerifyPanel() }
                     for (i in 0 until msgs.length()) {
                         val msg  = msgs.getJSONObject(i)
                         val subj = msg.optString("subject", "")
