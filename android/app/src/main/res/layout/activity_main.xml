@@ -51,7 +51,7 @@
                 android:textCursorDrawable="@null"
                 android:layout_marginEnd="6dp" />
 
-            <!-- Tab switcher: hình vuông, số bên trong, trắng trong suốt -->
+            <!-- Tab switcher: nhấn để chuyển tab 1↔2, số hiện = tab đang xem -->
             <TextView
                 android:id="@+id/btnTabCount"
                 android:layout_width="30dp"
@@ -81,15 +81,6 @@
                 android:src="@drawable/ic_refresh"
                 android:tint="#FFFFFF"
                 android:contentDescription="Tai lai trang" />
-
-            <ImageButton
-                android:id="@+id/btnClearLog"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_trash"
-                android:tint="#FFFFFF"
-                android:contentDescription="Clear log" />
 
         </LinearLayout>
 
@@ -138,7 +129,9 @@
                     android:textSize="13sp"
                     android:textColor="#1D4ED8"
                     android:textStyle="bold"
-                    android:background="#FFFFFF" />
+                    android:background="#FFFFFF"
+                    android:clickable="true"
+                    android:focusable="true" />
 
                 <TextView
                     android:id="@+id/tabVerify"
@@ -149,7 +142,9 @@
                     android:gravity="center"
                     android:textSize="13sp"
                     android:textColor="#6B7280"
-                    android:background="#F3F4F6" />
+                    android:background="#F3F4F6"
+                    android:clickable="true"
+                    android:focusable="true" />
 
             </LinearLayout>
 
@@ -205,11 +200,12 @@
 
         </LinearLayout>
 
-        <!-- ══ MÀN HÌNH TO — WebView Replit, mặc định chạy Replit, nằm DƯỚI panel Log/Xác thực ══ -->
+        <!-- ══ TAB 1 — WebView chính, chạy Replit / tạo tài khoản ══ -->
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipeRefresh"
             android:layout_width="0dp"
             android:layout_height="0dp"
+            android:visibility="visible"
             app:layout_constraintTop_toBottomOf="@id/logPanel"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -222,5 +218,22 @@
 
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
+        <!-- ══ TAB 2 — WebView phụ, session hoàn toàn độc lập ══ -->
+        <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+            android:id="@+id/swipeRefresh2"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:visibility="gone"
+            app:layout_constraintTop_toBottomOf="@id/logPanel"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <WebView
+                android:id="@+id/webView2"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+        </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
     </androidx.constraintlayout.widget.ConstraintLayout>
-  
