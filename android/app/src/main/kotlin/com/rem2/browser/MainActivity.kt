@@ -237,23 +237,24 @@ class MainActivity : AppCompatActivity() {
         fun mapToJson(m: Map<String, String>): String =
             JSONObject().also { o -> m.forEach { (k, v) -> o.put(k, v) } }.toString()
 
+        // commit() thay vì apply() — đảm bảo ghi xong disk trước khi process bị kill
         prefs.edit()
-            .putInt   (KEY_TAB_CURRENT,  currentTab)
-            .putString(KEY_TAB1_URL,     binding.webView.url?.takeIf  { it != "about:blank" } ?: "")
-            .putString(KEY_TAB2_URL,     binding.webView2.url?.takeIf { it != "about:blank" } ?: "")
-            .putBoolean(KEY_TAB2_INIT,   tab2Initialized)
-            .putString(KEY_TAB1_CK_JSON, mapToJson(tab1Cookies))
-            .putString(KEY_TAB2_CK_JSON, mapToJson(tab2Cookies))
-            .apply()
+            .putInt    (KEY_TAB_CURRENT,  currentTab)
+            .putString (KEY_TAB1_URL,     binding.webView.url?.takeIf  { it != "about:blank" } ?: "")
+            .putString (KEY_TAB2_URL,     binding.webView2.url?.takeIf { it != "about:blank" } ?: "")
+            .putBoolean(KEY_TAB2_INIT,    tab2Initialized)
+            .putString (KEY_TAB1_CK_JSON, mapToJson(tab1Cookies))
+            .putString (KEY_TAB2_CK_JSON, mapToJson(tab2Cookies))
+            .commit()
     }
 
     private fun restoreSessionState() {
-        val savedTab = prefs.getInt   (KEY_TAB_CURRENT, 1)
-        val tab1Url  = prefs.getString(KEY_TAB1_URL, "") ?: ""
-        val tab2Url  = prefs.getString(KEY_TAB2_URL, "") ?: ""
+        val savedTab = prefs.getInt    (KEY_TAB_CURRENT, 1)
+        val tab1Url  = prefs.getString (KEY_TAB1_URL, "") ?: ""
+        val tab2Url  = prefs.getString (KEY_TAB2_URL, "") ?: ""
         val tab2Init = prefs.getBoolean(KEY_TAB2_INIT, false)
-        val ck1Json  = prefs.getString(KEY_TAB1_CK_JSON, "{}") ?: "{}"
-        val ck2Json  = prefs.getString(KEY_TAB2_CK_JSON, "{}") ?: "{}"
+        val ck1Json  = prefs.getString (KEY_TAB1_CK_JSON, "{}") ?: "{}"
+        val ck2Json  = prefs.getString (KEY_TAB2_CK_JSON, "{}") ?: "{}"
 
         // Nạp lại cookie maps từ prefs vào bộ nhớ
         fun loadMap(json: String, target: MutableMap<String, String>) {
@@ -266,18 +267,16 @@ class MainActivity : AppCompatActivity() {
         loadMap(ck2Json, tab2Cookies)
         tab2Initialized = tab2Init
 
-        // Không có gì để khôi phục (lần chạy đầu)
+        // Không có gì để khôi phục (lần chạy đầu tiên)
         if (tab1Url.isEmpty() && tab2Url.isEmpty()) return
 
+        // QUAN TRỌNG: KHÔNG preload tab inactive ở đây để tránh race condition cookie.
+        // loadUrl() là async — nếu swap cookie trước rồi swap lại ngay, request thực sự
+        // gửi đi sau khi cookie đã bị đổi → session sai. Thay vào đó: chỉ load tab active;
+        // tab inactive sẽ được load đúng cookie khi user thực sự chuyển (switchBrowserTab đã xử lý).
+
         if (savedTab == 2 && tab2Init) {
-            // Lần cuối đang ở Tab 2 → CookieManager trên disk đang có cookie Tab 2
-            // Pre-load Tab 1 ở nền (invisible) với cookie của nó
-            if (tab1Url.isNotEmpty()) {
-                restoreCookies(tab1Cookies)          // tạm đặt cookie Tab 1
-                binding.webView.loadUrl(tab1Url)     // load nền Tab 1
-                restoreCookies(tab2Cookies)          // khôi phục lại cookie Tab 2
-            }
-            // Hiển thị Tab 2
+            // Lần cuối ở Tab 2 → CookieManager disk đang có cookie Tab 2 → đúng, load thẳng
             binding.swipeRefresh.visibility  = View.GONE
             binding.swipeRefresh2.visibility = View.VISIBLE
             currentTab = 2
@@ -286,14 +285,7 @@ class MainActivity : AppCompatActivity() {
             binding.webView2.loadUrl(urlToShow)
             binding.etUrl.setText(urlToShow)
         } else {
-            // Tab 1 (mặc định) → CookieManager trên disk đang có cookie Tab 1
-            // Pre-load Tab 2 ở nền (invisible) nếu đã từng mở
-            if (tab2Init && tab2Url.isNotEmpty()) {
-                restoreCookies(tab2Cookies)          // tạm đặt cookie Tab 2
-                binding.webView2.loadUrl(tab2Url)    // load nền Tab 2
-                restoreCookies(tab1Cookies)          // khôi phục lại cookie Tab 1
-            }
-            // Hiển thị Tab 1
+            // Tab 1 (mặc định) → CookieManager disk đang có cookie Tab 1 → đúng, load thẳng
             if (tab1Url.isNotEmpty()) {
                 binding.webView.loadUrl(tab1Url)
                 binding.etUrl.setText(tab1Url)
