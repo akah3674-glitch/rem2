@@ -6,8 +6,11 @@ import android.os.Bundle
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
+import android.net.Uri
 import android.webkit.*
 import android.widget.Toast
 import androidx.core.view.GestureDetectorCompat
@@ -149,7 +152,27 @@ class MainActivity : AppCompatActivity() {
     private var autoUsername = ""
     private var mailtmToken  = ""
     private var flowRunning  = false
-    private val inboxMessages = mutableListOf<Pair<String, String>>()
+      private val inboxMessages = mutableListOf<Pair<String, String>>()
+
+      // Ho tro upload file trong WebView (vd: nut "Upload a file" trong Replit Agent chat)
+      private var filePathCallback: ValueCallback<Array<Uri>>? = null
+      private val fileChooserLauncher =
+          registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+              val callback = filePathCallback
+              filePathCallback = null
+              if (callback == null) return@registerForActivityResult
+              val data = result.data
+              val uris: Array<Uri>? = when {
+                  result.resultCode != Activity.RESULT_OK -> null
+                  data?.clipData != null -> {
+                      val clip = data.clipData!!
+                      Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
+                  }
+                  data?.data != null -> arrayOf(data.data!!)
+                  else -> null
+              }
+              callback.onReceiveValue(uris)
+          }
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -174,6 +197,11 @@ class MainActivity : AppCompatActivity() {
         binding.btnToggleLog.setOnClickListener {
             panelOpen = !panelOpen
             binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
+        }
+        // Nut Tai lai trang — thay cho keo-de-tai lai (da tat vi qua nhay, vuot nhe la tai lai)
+        binding.btnRefresh.setOnClickListener {
+            binding.swipeRefresh.isRefreshing = true
+            binding.webView.reload()
         }
         binding.btnClearLog.setOnClickListener { binding.tvLog.text = "" }
         binding.tabLog.setOnClickListener    { switchTab(false) }
@@ -264,6 +292,8 @@ class MainActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         val wv = binding.webView
+        // Vuot nhe cung tai lai trang (qua nhay) -> tat keo-de-tai lai, dung nut Tai lai canh icon dan tren dinh
+        binding.swipeRefresh.isEnabled = false
         wv.settings.apply {
             javaScriptEnabled        = true
             domStorageEnabled        = true
@@ -314,6 +344,26 @@ class MainActivity : AppCompatActivity() {
             override fun onProgressChanged(view: WebView, newProgress: Int) {
                 binding.progressBar.visibility = if (newProgress < 100) View.VISIBLE else View.GONE
                 binding.progressBar.progress   = newProgress
+            }
+
+            // Ho tro nut "Upload a file" / <input type=file> trong Replit web (vd: Agent chat)
+            override fun onShowFileChooser(
+                view: WebView?,
+                callback: ValueCallback<Array<Uri>>?,
+                params: FileChooserParams?
+            ): Boolean {
+                filePathCallback?.onReceiveValue(null)
+                filePathCallback = callback
+                val intent = params?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply { type = "*/*" }
+                intent.addCategory(Intent.CATEGORY_OPENABLE)
+                return try {
+                    fileChooserLauncher.launch(intent)
+                    true
+                } catch (e: Exception) {
+                    filePathCallback = null
+                    log("Loi mo file chooser: ${e.message}")
+                    false
+                }
             }
         }
 
@@ -388,42 +438,95 @@ class MainActivity : AppCompatActivity() {
       // Tu dong bam qua cac man hinh "cau hoi" onboarding (Welcome / Continue / Next / Skip...)
       // Dung setInterval vi Replit dashboard la SPA, khong reload trang giua cac buoc.
       private fun injectAutoContinue(wv: WebView) {
-          val js = """
-              (function(){
-                if (window.__rem2AutoContinue) return;
-                window.__rem2AutoContinue = true;
-                var KEYWORDS = ['continue','next','skip','get started','let\'s go','done','finish','i agree','agree','ok','got it'];
-                function tryClick(){
-                  try {
-                    var els = document.querySelectorAll('button, a[role="button"], [role="button"], input[type=submit]');
-                    for (var i=0;i<els.length;i++){
-                      var el = els[i];
-                      if (el.disabled) continue;
-                      var txt = (el.innerText || el.value || '').trim().toLowerCase();
-                      if (!txt) continue;
-                      for (var k=0;k<KEYWORDS.length;k++){
-                        if (txt === KEYWORDS[k] || txt.indexOf(KEYWORDS[k]) !== -1) {
-                          el.click();
-                          return true;
+            val js = """
+                (function(){
+                  if (window.__rem2AutoContinue) return;
+                  window.__rem2AutoContinue = true;
+                  var KEYWORDS = ['continue','next','skip','get started','let\'s go','done','finish','i agree','agree','ok','got it'];
+                  // Cac cau hoi onboarding da biet — CHI tu chon dap an tren cac man hinh nay,
+                  // tuyet doi khong dong tren man hinh chinh (vd "What do you want to make?")
+                  // de tranh bam nham nut Upload file / goi y prompt cua Agent chat.
+                  var ONBOARDING_HEADINGS = [
+                    'how did you hear about replit',
+                    'what best describes you',
+                    'what is your role',
+                    'what\'s your role',
+                    'select all that apply',
+                    'tell us about yourself',
+                    'what brings you to replit'
+                  ];
+                  var STOP_HEADINGS = ['what do you want to make', 'what should we build', 'what are we building'];
+                  var EXCLUDE_KW = ['back','log in','login','create account','upgrade','sign in','sign up','close','cancel','upload'];
+
+                  function headingText(){
+                    var hs = document.querySelectorAll('h1,h2,h3');
+                    var txt = '';
+                    for (var i=0;i<hs.length;i++) txt += ' ' + (hs[i].innerText||'').toLowerCase();
+                    return txt;
+                  }
+
+                  function tryClickContinue(){
+                    try {
+                      var els = document.querySelectorAll('button, a[role="button"], [role="button"], input[type=submit]');
+                      for (var i=0;i<els.length;i++){
+                        var el = els[i];
+                        if (el.disabled) continue;
+                        var txt = (el.innerText || el.value || '').trim().toLowerCase();
+                        if (!txt) continue;
+                        for (var k=0;k<KEYWORDS.length;k++){
+                          if (txt === KEYWORDS[k] || txt.indexOf(KEYWORDS[k]) !== -1) {
+                            el.click();
+                            return true;
+                          }
                         }
                       }
-                    }
-                  } catch(e) {}
-                  return false;
-                }
-                var count = 0;
-                var iv = setInterval(function(){
-                  count++;
-                  tryClick();
-                  if (count > 200) clearInterval(iv); // ~4 phut la dung, tranh chay mai
-                }, 1200);
-              })();
-          """.trimIndent()
-          wv.evaluateJavascript(js, null)
-      }
-  
+                    } catch(e) {}
+                    return false;
+                  }
 
-      // ─── Verify WebView (mini browser inside panel) ───────────────────────────
+                  function tryClickOnboardingChoice(){
+                    try {
+                      var h = headingText();
+                      for (var s=0;s<STOP_HEADINGS.length;s++){
+                        if (h.indexOf(STOP_HEADINGS[s]) !== -1) return 'stop';
+                      }
+                      var isKnownQuestion = false;
+                      for (var q=0;q<ONBOARDING_HEADINGS.length;q++){
+                        if (h.indexOf(ONBOARDING_HEADINGS[q]) !== -1) { isKnownQuestion = true; break; }
+                      }
+                      if (!isKnownQuestion) return false;
+                      var els = document.querySelectorAll('button, [role="button"]');
+                      for (var i=0;i<els.length;i++){
+                        var el = els[i];
+                        if (el.disabled) continue;
+                        var txt = (el.innerText || '').trim().toLowerCase();
+                        if (!txt || txt.length > 40) continue;
+                        var bad = false;
+                        for (var e2=0;e2<EXCLUDE_KW.length;e2++){
+                          if (txt.indexOf(EXCLUDE_KW[e2]) !== -1) { bad = true; break; }
+                        }
+                        if (bad) continue;
+                        el.click();
+                        return true;
+                      }
+                    } catch(e) {}
+                    return false;
+                  }
+
+                  var count = 0;
+                  var iv = setInterval(function(){
+                    count++;
+                    var stop = tryClickOnboardingChoice();
+                    if (stop === 'stop') { clearInterval(iv); return; }
+                    tryClickContinue();
+                    if (count > 50) clearInterval(iv); // ~60s la du cho onboarding, tranh dong lau tren trang chinh
+                  }, 1200);
+                })();
+            """.trimIndent()
+            wv.evaluateJavascript(js, null)
+        }
+
+        // ─── Verify WebView (mini browser inside panel) ───────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupVerifyWebView() {
