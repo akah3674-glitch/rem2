@@ -396,6 +396,17 @@ class MainActivity : AppCompatActivity() {
                 binding.swipeRefresh2.visibility = View.VISIBLE
                 currentTab = 2
                 binding.btnTabCount.text = "2"
+                // Nếu flow đang chạy và Tab 2 đang ở trang signup mà chưa được fill
+                // → inject ngay sau khi trang hiển thị (500ms để DOM ổn định)
+                if (autoEmail.isNotEmpty()) {
+                    val wv2url = binding.webView2.url ?: ""
+                    val onSignup = wv2url.contains("signup") || wv2url.contains("login") || wv2url.contains("register")
+                    if (onSignup) {
+                        binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
+                        binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
+                        binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 3000)
+                    }
+                }
             } else {
                 // Chuyển về Tab 1
                 saveCookies(tab2Cookies)
@@ -959,7 +970,13 @@ class MainActivity : AppCompatActivity() {
         log("User Replit: $autoUsername")
 
         withContext(Dispatchers.Main) {
+            // Load signup trên Tab 1
             binding.webView.loadUrl("https://replit.com/signup")
+            // Nếu Tab 2 đã được mở → reload signup để onPageFinished kích auto-fill
+            // (Tab 2 có thể đang ở trang signup cũ load trước khi autoEmail được set)
+            if (tab2Initialized) {
+                binding.webView2.loadUrl("https://replit.com/signup")
+            }
         }
 
         // 3. Đăng nhập mail.tm lấy token
