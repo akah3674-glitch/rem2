@@ -12,6 +12,8 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.webkit.*
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.core.view.GestureDetectorCompat
 import kotlin.math.abs
@@ -152,6 +154,7 @@ class MainActivity : AppCompatActivity() {
     private var autoUsername = ""
     private var mailtmToken  = ""
     private var flowRunning  = false
+    private var tabCount     = 1
       private val inboxMessages = mutableListOf<Pair<String, String>>()
 
       // Ho tro upload file trong WebView (vd: nut "Upload a file" trong Replit Agent chat)
@@ -214,6 +217,42 @@ class MainActivity : AppCompatActivity() {
         binding.tabLog.setOnClickListener    { switchTab(false) }
         binding.tabVerify.setOnClickListener { switchTab(true)  }
         binding.btnCreateAccount.setOnClickListener { startCreateAccountFlow() }
+
+        // ── URL bar: nhấn Go trên bàn phím → load trang ──────────────────
+        binding.etUrl.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_GO) {
+                navigateToUrl(binding.etUrl.text.toString())
+                val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.hideSoftInputFromWindow(binding.etUrl.windowToken, 0)
+                binding.etUrl.clearFocus()
+                true
+            } else false
+        }
+        // Chọn toàn bộ text khi focus vào URL bar (dễ xoá/gõ đè)
+        binding.etUrl.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) binding.etUrl.selectAll()
+        }
+
+        // ── Tab count button: mở tab mới (trang trắng → Google) ──────────
+        binding.btnTabCount.setOnClickListener {
+            tabCount++
+            binding.btnTabCount.text = tabCount.toString()
+            binding.webView.loadUrl("https://www.google.com")
+            binding.etUrl.setText("https://www.google.com")
+        }
+    }
+
+    // Chuẩn hóa URL: tự thêm https://, hoặc tìm Google nếu là từ khoá
+    private fun navigateToUrl(input: String) {
+        val s = input.trim()
+        if (s.isEmpty()) return
+        val url = when {
+            s.startsWith("http://") || s.startsWith("https://") -> s
+            s.contains(".") && !s.contains(" ") -> "https://$s"
+            else -> "https://www.google.com/search?q=${Uri.encode(s)}"
+        }
+        binding.webView.loadUrl(url)
+        binding.etUrl.setText(url)
     }
 
     // Log co the copy bang cach nhan giu (long-press) va chon van ban — tvLog da bat textIsSelectable
@@ -345,7 +384,13 @@ class MainActivity : AppCompatActivity() {
 
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String) {
-                runOnUiThread { binding.swipeRefresh.isRefreshing = false }
+                runOnUiThread {
+                    binding.swipeRefresh.isRefreshing = false
+                    // Cập nhật URL bar theo trang hiện tại
+                    if (!binding.etUrl.isFocused && url != null && url != "about:blank") {
+                        binding.etUrl.setText(url)
+                    }
+                }
                 // Sau khi verify link chay trong main WebView → detect thanh cong
                 if (url.contains("replit.com") && !url.contains("verify") &&
                     !url.contains("confirm") && !url.contains("signup") &&
