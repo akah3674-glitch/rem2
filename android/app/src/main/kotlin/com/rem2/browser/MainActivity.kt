@@ -319,6 +319,11 @@ class MainActivity : AppCompatActivity() {
         val wv = binding.webView
         // Vuot nhe cung tai lai trang (qua nhay) -> tat keo-de-tai lai, dung nut Tai lai canh icon dan tren dinh
         binding.swipeRefresh.isEnabled = false
+        // Tang do muot giong trinh duyet that: tang cung (hardware layer), cache mac dinh,
+        // tat safe browsing check (do do tre khi mo trang), cuon muot hon.
+        wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        wv.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+        wv.isScrollbarFadingEnabled = true
         wv.settings.apply {
             javaScriptEnabled        = true
             domStorageEnabled        = true
@@ -331,6 +336,10 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode         = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             userAgentString          = COCCOC_UA
             javaScriptCanOpenWindowsAutomatically = true
+            cacheMode                = WebSettings.LOAD_DEFAULT
+            textZoom                 = 100
+            safeBrowsingEnabled      = false
+            setGeolocationEnabled(false)
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
