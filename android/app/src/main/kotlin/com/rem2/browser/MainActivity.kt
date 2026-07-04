@@ -317,7 +317,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        wv.loadUrl("https://replit.com/signup")
+        // KHONG tu dong load signup luc khoi dong app nua.
+        // Chi load khi nguoi dung chu dong bam "Tao tai khoan moi" (xem startCreateAccountFlow/ensureAccount),
+        // luc do autoEmail da san sang truoc khi trang load xong -> tu dien chay dung.
+        wv.loadUrl("about:blank")
     }
 
     // React-compatible fill: use native setter + bubble input/change events
@@ -534,6 +537,12 @@ class MainActivity : AppCompatActivity() {
         autoUsername = randUsername()
         log("Email: $autoEmail | Pass: $MAIL_PASS")
         log("User Replit: $autoUsername")
+
+          // Nguoi dung da chu dong bam "Tao tai khoan moi" -> gio moi load trang signup,
+          // luc nay autoEmail/autoUsername da san sang nen tu dien se chay ngay khi trang load xong.
+          withContext(Dispatchers.Main) {
+              binding.webView.loadUrl("https://replit.com/signup")
+          }
 
         // 3. Đăng nhập mail.tm lấy token
         log("Dang nhap Mail.tm...")
