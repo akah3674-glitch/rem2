@@ -668,6 +668,31 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+                // Auto-fill email/pass/username trên signup — giống Tab 1
+                val isSignup = url.contains("signup") || url.contains("login") || url.contains("register")
+                if (isSignup && autoEmail.isNotEmpty()) {
+                    injectAutoFill(v)
+                    v.postDelayed({ injectAutoFill(v) }, 1000)
+                    v.postDelayed({ injectAutoFill(v) }, 2500)
+                    v.postDelayed({ injectAutoFill(v) }, 5000)
+                }
+                // Sau xác thực → detect dashboard + auto-continue onboarding
+                if (url.contains("replit.com") && !url.contains("verify") &&
+                    !url.contains("confirm") && !url.contains("signup") &&
+                    !url.contains("login") && url != "about:blank") {
+                    log("✓ [Tab 2] Xac thuc thanh cong! Da vao dashboard Replit.")
+                    CookieManager.getInstance().flush()
+                    injectAutoContinue(v)
+                }
+            }
+            // Bắt verify link trong Tab 2 — mở vào verifyWebView (panel nhỏ)
+            override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
+                val url = req.url.toString()
+                if (url.contains("verify") || url.contains("confirm-email") || url.contains("oobCode")) {
+                    openVerifyTab(url)
+                    return true
+                }
+                return false
             }
         }
 
