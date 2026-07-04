@@ -9,29 +9,20 @@ import RegisterScreen from './src/screens/RegisterScreen';
 
 const HOME_URL = 'https://replit.com';
 
-interface Tab {
-  id: number;
-  url: string;
-}
-
+interface Tab { id: number; url: string; }
 let _tabId = 1;
 
 export default function App() {
   const [showMail, setShowMail]         = useState(false);
   const [showRegister, setShowRegister] = useState(false);
-
-  // Mỗi tab có id + url riêng — không chia sẻ state với nhau
-  const [tabs, setTabs]           = useState<Tab[]>([{ id: 1, url: HOME_URL }]);
-  const [activeId, setActiveId]   = useState(1);
-  const [urlInput, setUrlInput]   = useState(HOME_URL);
-
-  // ref riêng cho từng WebView instance
+  const [tabs, setTabs]     = useState<Tab[]>([{ id: 1, url: HOME_URL }]);
+  const [activeId, setActiveId] = useState(1);
+  const [urlInput, setUrlInput] = useState(HOME_URL);
   const webRefs = useRef<Record<number, WebView | null>>({});
 
   const activeTab = tabs.find(t => t.id === activeId) ?? tabs[0];
 
-  /* ── helpers ── */
-  const normalizeUrl = (raw: string): string => {
+  const normalizeUrl = (raw: string) => {
     const s = raw.trim();
     if (!s) return activeTab.url;
     if (s.startsWith('http://') || s.startsWith('https://')) return s;
@@ -45,16 +36,8 @@ export default function App() {
     setTabs(prev => prev.map(t => t.id === activeId ? { ...t, url } : t));
   };
 
-  const switchTab = (id: number) => {
-    const tab = tabs.find(t => t.id === id);
-    if (!tab) return;
-    setActiveId(id);
-    setUrlInput(tab.url);
-  };
-
   const addTab = () => {
     const id = ++_tabId;
-    // Tab mới mở cùng URL đang xem — hoàn toàn instance riêng biệt
     const url = activeTab.url;
     setTabs(prev => [...prev, { id, url }]);
     setActiveId(id);
@@ -62,19 +45,17 @@ export default function App() {
   };
 
   const closeTab = (id: number) => {
-    if (tabs.length === 1) return;          // giữ ít nhất 1 tab
+    if (tabs.length === 1) return;
     const next = tabs.filter(t => t.id !== id);
     setTabs(next);
     if (activeId === id) {
-      const fallback = next[next.length - 1];
-      setActiveId(fallback.id);
-      setUrlInput(fallback.url);
+      const f = next[next.length - 1];
+      setActiveId(f.id); setUrlInput(f.url);
     }
     delete webRefs.current[id];
   };
 
   const handleVerifyLink = (url: string) => {
-    // inject navigation vào tab đang active
     webRefs.current[activeId]?.injectJavaScript(
       `window.location.href = ${JSON.stringify(url)};true;`
     );
@@ -83,80 +64,77 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.root}>
-      <StatusBar barStyle="light-content" backgroundColor="#0e1117" />
+      <StatusBar barStyle="light-content" backgroundColor="#1a1f3a" />
 
-      {/* ── Header ── */}
-      <View style={styles.header}>
+      {/* ── Thanh header đơn: title | URL input | các nút ── */}
+      <View style={styles.topBar}>
+        <Text style={styles.brand}>⚡ Rem2</Text>
 
-        {/* Hàng 1: Brand + Mail/Reg */}
-        <View style={styles.brandRow}>
-          <Text style={styles.brand}>🌐 Rem2 Browser</Text>
-          <View style={styles.actions}>
-            <TouchableOpacity style={styles.btn}
-              onPress={() => setShowRegister(v => !v)}>
-              <Text style={styles.btnText}>➕ Reg</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.btn, showMail && styles.btnActive]}
-              onPress={() => setShowMail(v => !v)}>
-              <Text style={styles.btnText}>📧 Mail</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* URL input — chiếm phần còn lại */}
+        <TextInput
+          style={styles.urlInput}
+          value={urlInput}
+          onChangeText={setUrlInput}
+          onSubmitEditing={() => navigate(urlInput)}
+          returnKeyType="go"
+          selectTextOnFocus
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+          placeholder="URL..."
+          placeholderTextColor="#6b7aaa"
+        />
 
-        {/* Hàng 2: URL bar + điều hướng */}
-        <View style={styles.urlRow}>
-          {/* ◀ Quay lại trong WebView history */}
-          <TouchableOpacity style={styles.iconBtn}
-            onPress={() => webRefs.current[activeId]?.goBack()}>
-            <Text style={styles.iconTxt}>◀</Text>
-          </TouchableOpacity>
+        {/* ◀ Quay lại trong WebView */}
+        <TouchableOpacity style={styles.iconBtn}
+          onPress={() => webRefs.current[activeId]?.goBack()}>
+          <Text style={styles.iconTxt}>◀</Text>
+        </TouchableOpacity>
 
-          {/* URL input */}
-          <TextInput
-            style={styles.urlInput}
-            value={urlInput}
-            onChangeText={setUrlInput}
-            onSubmitEditing={() => navigate(urlInput)}
-            returnKeyType="go"
-            selectTextOnFocus
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            placeholder="Nhập URL hoặc từ khoá..."
-            placeholderTextColor="#4a5568"
-          />
+        {/* 🔄 Reload */}
+        <TouchableOpacity style={styles.iconBtn}
+          onPress={() => webRefs.current[activeId]?.reload()}>
+          <Text style={styles.iconTxt}>🔄</Text>
+        </TouchableOpacity>
 
-          {/* 🔄 Reload */}
-          <TouchableOpacity style={styles.iconBtn}
-            onPress={() => webRefs.current[activeId]?.reload()}>
-            <Text style={styles.iconTxt}>🔄</Text>
-          </TouchableOpacity>
+        {/* 📑 Tab mới độc lập */}
+        <TouchableOpacity style={styles.iconBtn} onPress={addTab}>
+          <Text style={styles.iconTxt}>📑</Text>
+        </TouchableOpacity>
 
-          {/* 📑 Tab mới (instance hoàn toàn độc lập) */}
-          <TouchableOpacity style={styles.iconBtn} onPress={addTab}>
-            <Text style={styles.iconTxt}>📑</Text>
-          </TouchableOpacity>
-        </View>
+        {/* ➕ Reg */}
+        <TouchableOpacity style={[styles.iconBtn, showRegister && styles.iconBtnActive]}
+          onPress={() => setShowRegister(v => !v)}>
+          <Text style={styles.iconTxt}>➕</Text>
+        </TouchableOpacity>
 
-        {/* Hàng 3: Tab bar — chỉ hiện khi có ≥2 tab */}
-        {tabs.length > 1 && (
-          <View style={styles.tabBar}>
-            {tabs.map(tab => (
-              <TouchableOpacity
-                key={tab.id}
-                style={[styles.tabItem, tab.id === activeId && styles.tabActive]}
-                onPress={() => switchTab(tab.id)}>
-                <Text style={styles.tabLabel} numberOfLines={1}>
-                  {tab.url.replace(/^https?:\/\//, '').slice(0, 18) || 'Trang mới'}
-                </Text>
-                <TouchableOpacity onPress={() => closeTab(tab.id)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                  <Text style={styles.tabClose}>✕</Text>
-                </TouchableOpacity>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
+        {/* 📧 Mail */}
+        <TouchableOpacity style={[styles.iconBtn, showMail && styles.iconBtnActive]}
+          onPress={() => setShowMail(v => !v)}>
+          <Text style={styles.iconTxt}>📧</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Tab bar — chỉ hiện khi có ≥2 tab */}
+      {tabs.length > 1 && (
+        <View style={styles.tabBar}>
+          {tabs.map(tab => (
+            <TouchableOpacity
+              key={tab.id}
+              style={[styles.tabItem, tab.id === activeId && styles.tabActive]}
+              onPress={() => { setActiveId(tab.id); setUrlInput(tab.url); }}>
+              <Text style={styles.tabLabel} numberOfLines={1}>
+                {tab.url.replace(/^https?:\/\//, '').slice(0, 16) || 'Trang mới'}
+              </Text>
+              <TouchableOpacity
+                onPress={() => closeTab(tab.id)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Text style={styles.tabClose}>✕</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
 
       {/* ── Content ── */}
       {showRegister ? (
@@ -165,13 +143,12 @@ export default function App() {
           onVerifyLink={handleVerifyLink}
         />
       ) : (
-        <View style={styles.webArea}>
+        <View style={{ flex: 1 }}>
           {tabs.map(tab => (
             <WebView
               key={tab.id}
               ref={r => { webRefs.current[tab.id] = r; }}
               source={{ uri: tab.url }}
-              // Chỉ tab active chiếm không gian; tab khác thu về 0 (giữ state, không bị unmount)
               style={tab.id === activeId ? styles.webviewActive : styles.webviewHidden}
               javaScriptEnabled
               domStorageEnabled
@@ -190,7 +167,7 @@ export default function App() {
         </View>
       )}
 
-      {/* ── Floating Mail ── */}
+      {/* Floating Mail */}
       {showMail && (
         <FloatingMailWindow
           onClose={() => setShowMail(false)}
@@ -202,94 +179,68 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  root:    { flex: 1, backgroundColor: '#0e1117' },
+  root: { flex: 1, backgroundColor: '#0e1117' },
 
-  /* Header */
-  header: {
-    backgroundColor: '#161b22',
-    borderBottomWidth: 1,
-    borderBottomColor: '#30363d',
-    paddingBottom: 6,
-  },
-
-  /* Brand row */
-  brandRow: {
+  /* Thanh header đơn — 1 hàng duy nhất */
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
-  },
-  brand:   { color: '#58a6ff', fontWeight: 'bold', fontSize: 15 },
-  actions: { flexDirection: 'row', gap: 8 },
-  btn: {
-    backgroundColor: '#21262d', borderRadius: 6,
-    paddingHorizontal: 10, paddingVertical: 5,
-    borderWidth: 1, borderColor: '#30363d',
-  },
-  btnActive:  { backgroundColor: '#1f6feb', borderColor: '#58a6ff' },
-  btnText:    { color: '#c9d1d9', fontSize: 13 },
-
-  /* URL row */
-  urlRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    backgroundColor: '#1a1f3a',
     paddingHorizontal: 8,
-    gap: 6,
+    paddingVertical: 7,
+    gap: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2d3561',
+  },
+  brand: {
+    color: '#7b9fff',
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginRight: 2,
   },
   urlInput: {
     flex: 1,
+    height: 32,
     backgroundColor: '#0d1117',
     color: '#c9d1d9',
     fontSize: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#30363d',
-  },
-  iconBtn: {
-    width: 34,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#21262d',
+    paddingHorizontal: 9,
     borderRadius: 7,
     borderWidth: 1,
-    borderColor: '#30363d',
+    borderColor: '#2d3561',
   },
-  iconTxt: { fontSize: 15 },
+  iconBtn: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 6,
+    backgroundColor: '#232946',
+  },
+  iconBtnActive: { backgroundColor: '#1f6feb' },
+  iconTxt: { fontSize: 14 },
 
-  /* Tab bar */
+  /* Tab bar (xuất hiện khi ≥2 tab) */
   tabBar: {
     flexDirection: 'row',
-    paddingHorizontal: 8,
-    paddingTop: 4,
-    gap: 6,
-  },
-  tabItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#21262d',
-    borderRadius: 6,
+    backgroundColor: '#161b22',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: '#30363d',
-    gap: 4,
+    gap: 5,
+    borderBottomWidth: 1,
+    borderBottomColor: '#30363d',
+  },
+  tabItem: {
+    flex: 1, flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#21262d', borderRadius: 6,
+    paddingHorizontal: 7, paddingVertical: 3,
+    borderWidth: 1, borderColor: '#30363d', gap: 3,
   },
   tabActive:  { backgroundColor: '#1f6feb', borderColor: '#58a6ff' },
   tabLabel:   { flex: 1, color: '#c9d1d9', fontSize: 11 },
-  tabClose:   { color: '#8b949e', fontSize: 12 },
+  tabClose:   { color: '#8b949e', fontSize: 11 },
 
   /* WebViews */
-  webArea:        { flex: 1 },
   webviewActive:  { flex: 1 },
-  webviewHidden:  {
-    width: 0, height: 0,
-    position: 'absolute',
-    opacity: 0,
-  },
+  webviewHidden:  { width: 0, height: 0, position: 'absolute', opacity: 0 },
 });
