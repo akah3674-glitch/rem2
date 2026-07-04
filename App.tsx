@@ -15,7 +15,7 @@ import React, { useState, useRef } from 'react';
   export default function App() {
     const [showMail, setShowMail]         = useState(false);
     const [showRegister, setShowRegister] = useState(false);
-    const [tabs, setTabs]     = useState<Tab[]>([{ id: 1, url: HOME_URL, incognito: false }]);
+    const [tabs, setTabs]     = useState<Tab[]>([{ id: 1, url: HOME_URL, incognito: true }]);
     const [activeId, setActiveId] = useState(1);
     const [urlInput, setUrlInput] = useState(HOME_URL);
     const webRefs = useRef<Record<number, WebView | null>>({});
