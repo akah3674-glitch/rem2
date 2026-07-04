@@ -199,9 +199,16 @@ class MainActivity : AppCompatActivity() {
             binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
         }
         // Nut Tai lai trang — thay cho keo-de-tai lai (da tat vi qua nhay, vuot nhe la tai lai)
+        // Neu trang dang trang (about:blank / rong) thi tai lai trang dang ky Replit thay vi
+        // reload() vo nghia tren trang trang -> tranh bi "ket" man hinh trang khong vao lai duoc.
         binding.btnRefresh.setOnClickListener {
             binding.swipeRefresh.isRefreshing = true
-            binding.webView.reload()
+            val curUrl = binding.webView.url
+            if (curUrl.isNullOrBlank() || curUrl == "about:blank") {
+                binding.webView.loadUrl("https://replit.com/signup")
+            } else {
+                binding.webView.reload()
+            }
         }
         binding.btnClearLog.setOnClickListener { binding.tvLog.text = "" }
         binding.tabLog.setOnClickListener    { switchTab(false) }
@@ -435,22 +442,10 @@ class MainActivity : AppCompatActivity() {
       private fun setupSwipeAndGestures() {
           binding.swipeRefresh.setColorSchemeColors(0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
           binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
-          binding.webView.setOnScrollChangeListener { _, _, scrollY, _, _ ->
-              binding.swipeRefresh.isEnabled = scrollY == 0
-          }
-          val gestureDet = GestureDetectorCompat(this, object : GestureDetector.SimpleOnGestureListener() {
-              override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
-                  val dx = (e2.x) - (e1?.x ?: 0f)
-                  val dy = abs((e2.y) - (e1?.y ?: 0f))
-                  if (dy > 80f) return false
-                  return when {
-                      dx > 120f && binding.webView.canGoBack()    -> { binding.webView.goBack();    true }
-                      dx < -120f && binding.webView.canGoForward() -> { binding.webView.goForward(); true }
-                      else -> false
-                  }
-              }
-          })
-          binding.webView.setOnTouchListener { _, event -> gestureDet.onTouchEvent(event); false }
+          // Da tat hoan toan: pull-to-refresh (qua nhay) VA vuot ngang lui/toi trang (de bam nham
+          // khi chon dap an onboarding lam thoat trang, ket qua man hinh trang khong vao lai duoc).
+          // Dung nut Tai lai (btnRefresh) o header thay the.
+          binding.swipeRefresh.isEnabled = false
       }
 
       // Tu dong bam qua cac man hinh "cau hoi" onboarding (Welcome / Continue / Next / Skip...)
