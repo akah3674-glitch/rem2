@@ -220,6 +220,9 @@ class MainActivity : AppCompatActivity() {
         binding.btnCreateAccount.text = "\u23F3 Dang tao tai khoan..."
         binding.tvLog.text = ""
         switchTab(false)
+        // Dang xuat / xoa het session cu (cookie, cache, localStorage) TRUOC khi tao acc moi,
+        // neu khong WebView se con dang nhap acc cu -> tuong nham la "xac thuc thanh cong" lien tuc
+        clearWebSession()
         lifecycleScope.launch {
             ensureAccount()
             flowRunning = false
@@ -228,6 +231,21 @@ class MainActivity : AppCompatActivity() {
                 binding.btnCreateAccount.text = "\uD83D\uDD04 Tao tai khoan moi"
             }
         }
+    }
+
+    // Xoa toan bo cookie/cache/localStorage cua WebView chinh — dam bao "dang xuat" that su
+    // truoc khi bat dau tao tai khoan moi, tranh dinh session Replit cu.
+    private fun clearWebSession() {
+        val wv = binding.webView
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
+        wv.clearCache(true)
+        wv.clearHistory()
+        wv.clearFormData()
+        WebStorage.getInstance().deleteAllData()
+        wv.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
+        wv.loadUrl("about:blank")
+        log("Da dang xuat / xoa session cu, chuan bi tao tai khoan moi...")
     }
 
     private fun switchTab(toVerify: Boolean) {
