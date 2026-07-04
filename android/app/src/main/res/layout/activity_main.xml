@@ -38,7 +38,7 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_paste"
                 android:tint="#FFFFFF"
-                android:contentDescription="Toggle panel" />
+                android:contentDescription="Copy log" />
 
             <ImageButton
                 android:id="@+id/btnClearLog"
@@ -68,7 +68,7 @@
         <LinearLayout
             android:id="@+id/logPanel"
             android:layout_width="0dp"
-            android:layout_height="260dp"
+            android:layout_height="300dp"
             android:orientation="vertical"
             android:visibility="visible"
             android:background="#FFFFFF"
@@ -111,6 +111,28 @@
 
             </LinearLayout>
 
+            <!-- Nút Tạo tài khoản — luôn hiển thị trên cùng của panel -->
+            <LinearLayout
+                android:id="@+id/ctaRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="8dp"
+                android:background="#FFFFFF">
+
+                <Button
+                    android:id="@+id/btnCreateAccount"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:text="🚀 Tạo tài khoản Replit tự động"
+                    android:textAllCaps="false"
+                    android:textSize="13sp"
+                    android:textColor="#FFFFFF"
+                    android:backgroundTint="#1D4ED8"
+                    android:insetTop="0dp"
+                    android:insetBottom="0dp" />
+
+            </LinearLayout>
+
             <!-- Log area -->
             <ScrollView
                 android:id="@+id/logScroll"
@@ -131,7 +153,7 @@
                   android:textIsSelectable="true" />
             </ScrollView>
 
-            <!-- Verify mini WebView (same panel, tab-switched) — CHỈ hiển thị hộp thư mail.tm, không điều hướng đi nơi khác -->
+            <!-- Verify mini WebView (same panel, tab-switched) — CHỈ hiển thị nội dung hộp thư mail.tm, KHÔNG bao giờ điều hướng sang trang khác (kể cả Replit) -->
             <WebView
                 android:id="@+id/verifyWebView"
                 android:layout_width="match_parent"
@@ -141,7 +163,7 @@
 
         </LinearLayout>
 
-        <!-- ══ MAIN WEBVIEW (Replit) — nằm DƯỚI panel Log/Xác thực ══ -->
+        <!-- ══ MÀN HÌNH TO — WebView Replit, mặc định chạy Replit, nằm DƯỚI panel Log/Xác thực ══ -->
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipeRefresh"
             android:layout_width="0dp"
