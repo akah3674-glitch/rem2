@@ -137,6 +137,15 @@ class MainActivity : AppCompatActivity() {
                 .replace("&#61;", "=")
                 .trim()
         }
+
+        // Danh sách URL để save/restore cookie khi chuyển tab
+        private val COOKIE_URLS = listOf(
+            "https://replit.com",
+            "https://replit.com/",
+            "https://replit.com/~",
+            "https://replit.com/repls",
+            "https://api.mail.tm"
+        )
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -154,28 +163,37 @@ class MainActivity : AppCompatActivity() {
     private var autoUsername = ""
     private var mailtmToken  = ""
     private var flowRunning  = false
-    private var tabCount     = 1
-      private val inboxMessages = mutableListOf<Pair<String, String>>()
 
-      // Ho tro upload file trong WebView (vd: nut "Upload a file" trong Replit Agent chat)
-      private var filePathCallback: ValueCallback<Array<Uri>>? = null
-      private val fileChooserLauncher =
-          registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
-              val callback = filePathCallback
-              filePathCallback = null
-              if (callback == null) return@registerForActivityResult
-              val data = result.data
-              val uris: Array<Uri>? = when {
-                  result.resultCode != Activity.RESULT_OK -> null
-                  data?.clipData != null -> {
-                      val clip = data.clipData!!
-                      Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
-                  }
-                  data?.data != null -> arrayOf(data.data!!)
-                  else -> null
-              }
-              callback.onReceiveValue(uris)
-          }
+    // ── Tab management ────────────────────────────────────────────────────────
+    // currentTab = tab đang hiển thị (1 hoặc 2)
+    // Tab 1 = webView (session Replit / tạo tài khoản)
+    // Tab 2 = webView2 (session hoàn toàn độc lập, bắt đầu từ signup)
+    private var currentTab       = 1
+    private var tab2Initialized  = false
+    private val tab1Cookies      = mutableMapOf<String, String>()
+    private val tab2Cookies      = mutableMapOf<String, String>()
+
+    private val inboxMessages = mutableListOf<Pair<String, String>>()
+
+    // Ho tro upload file trong WebView (vd: nut "Upload a file" trong Replit Agent chat)
+    private var filePathCallback: ValueCallback<Array<Uri>>? = null
+    private val fileChooserLauncher =
+        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
+            val callback = filePathCallback
+            filePathCallback = null
+            if (callback == null) return@registerForActivityResult
+            val data = result.data
+            val uris: Array<Uri>? = when {
+                result.resultCode != Activity.RESULT_OK -> null
+                data?.clipData != null -> {
+                    val clip = data.clipData!!
+                    Array(clip.itemCount) { i -> clip.getItemAt(i).uri }
+                }
+                data?.data != null -> arrayOf(data.data!!)
+                else -> null
+            }
+            callback.onReceiveValue(uris)
+        }
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -188,6 +206,7 @@ class MainActivity : AppCompatActivity() {
         loadAccounts()
         setupHeader()
         setupWebView()
+        setupWebView2()
         setupSwipeAndGestures()
         setupVerifyWebView()
         log("San sang. Nhan 'Tao tai khoan Replit tu dong' de bat dau.")
@@ -201,21 +220,28 @@ class MainActivity : AppCompatActivity() {
             panelOpen = !panelOpen
             binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
         }
-        // Nut Tai lai trang — thay cho keo-de-tai lai (da tat vi qua nhay, vuot nhe la tai lai)
-        // Neu trang dang trang (about:blank / rong) thi tai lai trang dang ky Replit thay vi
-        // reload() vo nghia tren trang trang -> tranh bi "ket" man hinh trang khong vao lai duoc.
+        // Nut Tai lai trang — reload tab hiện tại
         binding.btnRefresh.setOnClickListener {
-            binding.swipeRefresh.isRefreshing = true
-            val curUrl = binding.webView.url
-            if (curUrl.isNullOrBlank() || curUrl == "about:blank") {
-                binding.webView.loadUrl("https://replit.com/signup")
+            if (currentTab == 1) {
+                binding.swipeRefresh.isRefreshing = true
+                val curUrl = binding.webView.url
+                if (curUrl.isNullOrBlank() || curUrl == "about:blank") {
+                    binding.webView.loadUrl("https://replit.com/signup")
+                } else {
+                    binding.webView.reload()
+                }
             } else {
-                binding.webView.reload()
+                binding.swipeRefresh2.isRefreshing = true
+                val curUrl = binding.webView2.url
+                if (curUrl.isNullOrBlank() || curUrl == "about:blank") {
+                    binding.webView2.loadUrl("https://replit.com/signup")
+                } else {
+                    binding.webView2.reload()
+                }
             }
         }
-        binding.btnClearLog.setOnClickListener { binding.tvLog.text = "" }
-        binding.tabLog.setOnClickListener    { switchTab(false) }
-        binding.tabVerify.setOnClickListener { switchTab(true)  }
+        binding.tabLog.setOnClickListener    { switchPanelTab(false) }
+        binding.tabVerify.setOnClickListener { switchPanelTab(true)  }
         binding.btnCreateAccount.setOnClickListener { startCreateAccountFlow() }
 
         // ── URL bar: nhấn Go trên bàn phím → load trang ──────────────────
@@ -233,12 +259,77 @@ class MainActivity : AppCompatActivity() {
             if (hasFocus) binding.etUrl.selectAll()
         }
 
-        // ── Tab count button: mở tab mới (trang trắng → Google) ──────────
+        // ── Tab count button: nhấn để chuyển qua lại Tab 1 ↔ Tab 2 ──────
+        // Số hiện = tab đang xem; nhấn → chuyển sang tab kia
         binding.btnTabCount.setOnClickListener {
-            tabCount++
-            binding.btnTabCount.text = tabCount.toString()
-            binding.webView.loadUrl("https://www.google.com")
-            binding.etUrl.setText("https://www.google.com")
+            switchBrowserTab(if (currentTab == 1) 2 else 1)
+        }
+    }
+
+    // ─── Browser Tab Switching (Tab 1 ↔ Tab 2 với session độc lập) ───────────
+
+    private fun saveCookies(destination: MutableMap<String, String>) {
+        destination.clear()
+        val cm = CookieManager.getInstance()
+        for (url in COOKIE_URLS) {
+            cm.getCookie(url)?.takeIf { it.isNotEmpty() }?.let { destination[url] = it }
+        }
+    }
+
+    private fun restoreCookies(source: Map<String, String>) {
+        val cm = CookieManager.getInstance()
+        cm.removeAllCookies(null)
+        cm.flush()
+        for ((url, cookies) in source) {
+            // getCookie trả về "a=1; b=2; c=3" — set từng cookie một
+            cookies.split(";").forEach { c ->
+                val trimmed = c.trim()
+                if (trimmed.isNotEmpty()) cm.setCookie(url, trimmed)
+            }
+        }
+        cm.flush()
+    }
+
+    private fun switchBrowserTab(tab: Int) {
+        if (tab == currentTab) return
+        runOnUiThread {
+            if (tab == 2) {
+                // Chuyển sang Tab 2
+                saveCookies(tab1Cookies)
+                if (!tab2Initialized) {
+                    // Lần đầu mở Tab 2: xóa cookie → Tab 2 bắt đầu fresh (chưa đăng nhập)
+                    CookieManager.getInstance().removeAllCookies(null)
+                    CookieManager.getInstance().flush()
+                    tab2Initialized = true
+                    binding.webView2.loadUrl("https://replit.com/signup")
+                    binding.etUrl.setText("https://replit.com/signup")
+                } else {
+                    // Restore cookies của Tab 2
+                    restoreCookies(tab2Cookies)
+                    val url = binding.webView2.url
+                    if (!url.isNullOrBlank() && url != "about:blank") {
+                        binding.etUrl.setText(url)
+                    }
+                }
+                binding.swipeRefresh.visibility  = View.GONE
+                binding.swipeRefresh2.visibility = View.VISIBLE
+                currentTab = 2
+                binding.btnTabCount.text = "2"
+            } else {
+                // Chuyển về Tab 1
+                saveCookies(tab2Cookies)
+                restoreCookies(tab1Cookies)
+                binding.swipeRefresh2.visibility = View.GONE
+                binding.swipeRefresh.visibility  = View.VISIBLE
+                val url = binding.webView.url
+                if (!url.isNullOrBlank() && url != "about:blank") {
+                    binding.etUrl.setText(url)
+                } else {
+                    binding.etUrl.setText("")
+                }
+                currentTab = 1
+                binding.btnTabCount.text = "1"
+            }
         }
     }
 
@@ -251,7 +342,8 @@ class MainActivity : AppCompatActivity() {
             s.contains(".") && !s.contains(" ") -> "https://$s"
             else -> "https://www.google.com/search?q=${Uri.encode(s)}"
         }
-        binding.webView.loadUrl(url)
+        val wv = if (currentTab == 1) binding.webView else binding.webView2
+        wv.loadUrl(url)
         binding.etUrl.setText(url)
     }
 
@@ -265,7 +357,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnCreateAccount.isEnabled = false
         binding.btnCreateAccount.text = "\u23F3 Dang tao tai khoan..."
         binding.tvLog.text = ""
-        switchTab(false)
+        switchPanelTab(false)
         // Dang xuat / xoa het session cu (cookie, cache, localStorage) TRUOC khi tao acc moi,
         // neu khong WebView se con dang nhap acc cu -> tuong nham la "xac thuc thanh cong" lien tuc
         clearWebSession()
@@ -285,6 +377,8 @@ class MainActivity : AppCompatActivity() {
         val wv = binding.webView
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
+        // Xóa cả cookies đã lưu cho tab 1
+        tab1Cookies.clear()
         wv.clearCache(true)
         wv.clearHistory()
         wv.clearFormData()
@@ -294,7 +388,9 @@ class MainActivity : AppCompatActivity() {
         log("Da dang xuat / xoa session cu, chuan bi tao tai khoan moi...")
     }
 
-    private fun switchTab(toVerify: Boolean) {
+    // switchPanelTab: chuyển giữa 2 tab trong PANEL LOG (Log ↔ Xác thực Mail.tm)
+    // Khác với switchBrowserTab (Tab 1 ↔ Tab 2 browser)
+    private fun switchPanelTab(toVerify: Boolean) {
         showingVerify = toVerify
         if (toVerify) {
             binding.logScroll.visibility     = View.GONE
@@ -351,15 +447,12 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString(KEY_ACCOUNTS, arr.toString()).apply()
     }
 
-    // ─── Main WebView ─────────────────────────────────────────────────────────
+    // ─── Main WebView (Tab 1) ─────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         val wv = binding.webView
-        // Vuot nhe cung tai lai trang (qua nhay) -> tat keo-de-tai lai, dung nut Tai lai canh icon dan tren dinh
         binding.swipeRefresh.isEnabled = false
-        // Tang do muot giong trinh duyet that: tang cung (hardware layer), cache mac dinh,
-        // tat safe browsing check (do do tre khi mo trang), cuon muot hon.
         wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         wv.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         wv.isScrollbarFadingEnabled = true
@@ -384,11 +477,13 @@ class MainActivity : AppCompatActivity() {
 
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String) {
-                runOnUiThread {
-                    binding.swipeRefresh.isRefreshing = false
-                    // Cập nhật URL bar theo trang hiện tại
-                    if (!binding.etUrl.isFocused && url != null && url != "about:blank") {
-                        binding.etUrl.setText(url)
+                if (currentTab == 1) {
+                    runOnUiThread {
+                        binding.swipeRefresh.isRefreshing = false
+                        // Cập nhật URL bar theo trang hiện tại
+                        if (!binding.etUrl.isFocused && url != null && url != "about:blank") {
+                            binding.etUrl.setText(url)
+                        }
                     }
                 }
                 // Sau khi verify link chay trong main WebView → detect thanh cong
@@ -421,8 +516,12 @@ class MainActivity : AppCompatActivity() {
 
         wv.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView, newProgress: Int) {
-                binding.progressBar.visibility = if (newProgress < 100) View.VISIBLE else View.GONE
-                binding.progressBar.progress   = newProgress
+                if (currentTab == 1) {
+                    runOnUiThread {
+                        binding.progressBar.visibility = if (newProgress < 100) View.VISIBLE else View.GONE
+                        binding.progressBar.progress   = newProgress
+                    }
+                }
             }
 
             // Ho tro nut "Upload a file" / <input type=file> trong Replit web (vd: Agent chat)
@@ -447,8 +546,62 @@ class MainActivity : AppCompatActivity() {
         }
 
         // KHONG tu dong load signup luc khoi dong app nua.
-        // Chi load khi nguoi dung chu dong bam "Tao tai khoan moi" (xem startCreateAccountFlow/ensureAccount),
-        // luc do autoEmail da san sang truoc khi trang load xong -> tu dien chay dung.
+        wv.loadUrl("about:blank")
+    }
+
+    // ─── Secondary WebView (Tab 2 — session độc lập) ─────────────────────────
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWebView2() {
+        val wv = binding.webView2
+        binding.swipeRefresh2.isEnabled = false
+        wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        wv.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
+        wv.isScrollbarFadingEnabled = true
+        wv.settings.apply {
+            javaScriptEnabled        = true
+            domStorageEnabled        = true
+            databaseEnabled          = true
+            useWideViewPort          = true
+            loadWithOverviewMode     = true
+            setSupportZoom(true)
+            builtInZoomControls      = true
+            displayZoomControls      = false
+            mixedContentMode         = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            userAgentString          = COCCOC_UA
+            javaScriptCanOpenWindowsAutomatically = true
+            cacheMode                = WebSettings.LOAD_DEFAULT
+            textZoom                 = 100
+            safeBrowsingEnabled      = false
+            setGeolocationEnabled(false)
+        }
+        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
+
+        wv.webViewClient = object : WebViewClient() {
+            override fun onPageFinished(v: WebView, url: String) {
+                if (currentTab == 2) {
+                    runOnUiThread {
+                        binding.swipeRefresh2.isRefreshing = false
+                        if (!binding.etUrl.isFocused && url != null && url != "about:blank") {
+                            binding.etUrl.setText(url)
+                        }
+                    }
+                }
+            }
+        }
+
+        wv.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(view: WebView, newProgress: Int) {
+                if (currentTab == 2) {
+                    runOnUiThread {
+                        binding.progressBar.visibility = if (newProgress < 100) View.VISIBLE else View.GONE
+                        binding.progressBar.progress   = newProgress
+                    }
+                }
+            }
+        }
+
+        // Tab 2 bắt đầu blank; nội dung được load khi user lần đầu switch sang tab 2
         wv.loadUrl("about:blank")
     }
 
@@ -490,29 +643,26 @@ class MainActivity : AppCompatActivity() {
         wv.evaluateJavascript(js.toString(), null)
     }
 
-      // ─── Pull-to-refresh + swipe left/right navigation ────────────────────────
+    // ─── Pull-to-refresh + swipe gestures ────────────────────────────────────
 
-      @SuppressLint("ClickableViewAccessibility")
-      private fun setupSwipeAndGestures() {
-          binding.swipeRefresh.setColorSchemeColors(0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
-          binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
-          // Da tat hoan toan: pull-to-refresh (qua nhay) VA vuot ngang lui/toi trang (de bam nham
-          // khi chon dap an onboarding lam thoat trang, ket qua man hinh trang khong vao lai duoc).
-          // Dung nut Tai lai (btnRefresh) o header thay the.
-          binding.swipeRefresh.isEnabled = false
-      }
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupSwipeAndGestures() {
+        binding.swipeRefresh.setColorSchemeColors(0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
+        binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
+        binding.swipeRefresh.isEnabled = false
 
-      // Tu dong bam qua cac man hinh "cau hoi" onboarding (Welcome / Continue / Next / Skip...)
-      // Dung setInterval vi Replit dashboard la SPA, khong reload trang giua cac buoc.
-      private fun injectAutoContinue(wv: WebView) {
+        binding.swipeRefresh2.setColorSchemeColors(0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
+        binding.swipeRefresh2.setOnRefreshListener { binding.webView2.reload() }
+        binding.swipeRefresh2.isEnabled = false
+    }
+
+    // Tu dong bam qua cac man hinh "cau hoi" onboarding (Welcome / Continue / Next / Skip...)
+    private fun injectAutoContinue(wv: WebView) {
             val js = """
                 (function(){
                   if (window.__rem2AutoContinue) return;
                   window.__rem2AutoContinue = true;
                   var KEYWORDS = ['continue','next','skip','get started','let\'s go','done','finish','i agree','agree','ok','got it'];
-                  // Cac cau hoi onboarding da biet — CHI tu chon dap an tren cac man hinh nay,
-                  // tuyet doi khong dong tren man hinh chinh (vd "What do you want to make?")
-                  // de tranh bam nham nut Upload file / goi y prompt cua Agent chat.
                   var ONBOARDING_HEADINGS = [
                     'how did you hear about replit',
                     'what best describes you',
@@ -586,14 +736,14 @@ class MainActivity : AppCompatActivity() {
                     var stop = tryClickOnboardingChoice();
                     if (stop === 'stop') { clearInterval(iv); return; }
                     tryClickContinue();
-                    if (count > 50) clearInterval(iv); // ~60s la du cho onboarding, tranh dong lau tren trang chinh
+                    if (count > 50) clearInterval(iv);
                   }, 1200);
                 })();
             """.trimIndent()
             wv.evaluateJavascript(js, null)
         }
 
-        // ─── Verify WebView (mini browser inside panel) ───────────────────────────
+    // ─── Verify WebView (mini browser inside panel) ───────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupVerifyWebView() {
@@ -602,8 +752,6 @@ class MainActivity : AppCompatActivity() {
             javaScriptEnabled = true
             domStorageEnabled = false
         }
-        // Man hinh nho CHI hien thi noi dung hop thu mail.tm da lay qua API —
-        // khong bao gio duoc phep dieu huong / tai bat ky trang nao khac (kem ca Replit).
         vwv.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean = true
             override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = true
@@ -611,8 +759,6 @@ class MainActivity : AppCompatActivity() {
         renderVerifyPanel()
     }
 
-    // Ve lai noi dung hop thu mail.tm (tu du lieu da fetch qua API) vao man hinh nho.
-    // Day la trang HTML tinh, khong co link dieu huong ra ngoai.
     private fun renderVerifyPanel() = runOnUiThread {
         val sb = StringBuilder()
         sb.append("<html><body style='font-family:sans-serif;margin:10px;color:#111827'>")
@@ -636,13 +782,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun openVerifyTab(url: String) = runOnUiThread {
         log("Tim thay link xac thuc — tu dong xac minh trong man hinh Replit...")
-        // Man hinh TO (webView chinh) tu dong load link xac thuc — day la noi duy nhat chay Replit
+        // Man hinh TO (webView chinh) tu dong load link xac thuc
         binding.webView.loadUrl(url)
-        // Man hinh nho chi cap nhat lai danh sach email, KHONG dieu huong sang Replit
+        // Man hinh nho chi cap nhat lai danh sach email
         renderVerifyPanel()
         panelOpen = true
         binding.logPanel.visibility = View.VISIBLE
-        switchTab(true)
+        switchPanelTab(true)
     }
 
     // ─── Account flow ─────────────────────────────────────────────────────────
@@ -650,15 +796,13 @@ class MainActivity : AppCompatActivity() {
     private suspend fun ensureAccount() = withContext(Dispatchers.IO) {
         log("Bat dau...")
 
-        // 1. Lấy domain từ mail.tm — xử lý cả hydra:member và array thẳng
+        // 1. Lấy domain từ mail.tm
         log("Lay domain Mail.tm...")
         val domain = try {
             val req = Request.Builder().url("$MAILTM/domains?page=1").build()
             val res = http.newCall(req).execute()
             val raw = res.body?.string() ?: "[]"
-            // _members() equivalent: handle both formats
             val members = jsonMembers(raw)
-            // Find first active domain
             var found = ""
             for (i in 0 until members.length()) {
                 val d = members.getJSONObject(i)
@@ -674,7 +818,7 @@ class MainActivity : AppCompatActivity() {
         }
         log("Domain: $domain")
 
-        // 2. Tạo tài khoản mail.tm — random username + password cố định (như Python tool)
+        // 2. Tạo tài khoản mail.tm
         var loginEmail = ""
         for (attempt in 1..5) {
             val user = randUser()
@@ -708,11 +852,9 @@ class MainActivity : AppCompatActivity() {
         log("Email: $autoEmail | Pass: $MAIL_PASS")
         log("User Replit: $autoUsername")
 
-          // Nguoi dung da chu dong bam "Tao tai khoan moi" -> gio moi load trang signup,
-          // luc nay autoEmail/autoUsername da san sang nen tu dien se chay ngay khi trang load xong.
-          withContext(Dispatchers.Main) {
-              binding.webView.loadUrl("https://replit.com/signup")
-          }
+        withContext(Dispatchers.Main) {
+            binding.webView.loadUrl("https://replit.com/signup")
+        }
 
         // 3. Đăng nhập mail.tm lấy token
         log("Dang nhap Mail.tm...")
@@ -796,7 +938,6 @@ class MainActivity : AppCompatActivity() {
                                 .header("Authorization", "Bearer $mailtmToken")
                                 .build()
                             val full = JSONObject(http.newCall(req2).execute().body?.string() ?: "{}")
-                            // Get HTML body (can be array or string like Python's html.parser)
                             val htmlRaw = full.opt("html")
                             val html = when (htmlRaw) {
                                 is JSONArray -> (0 until htmlRaw.length()).joinToString("\n") { htmlRaw.getString(it) }
@@ -825,11 +966,12 @@ class MainActivity : AppCompatActivity() {
     // ─── Back press ───────────────────────────────────────────────────────────
 
     override fun onBackPressed() {
+        val activeWv = if (currentTab == 1) binding.webView else binding.webView2
         when {
             panelOpen && showingVerify && binding.verifyWebView.canGoBack() ->
                 binding.verifyWebView.goBack()
             panelOpen -> { binding.logPanel.visibility = View.GONE; panelOpen = false }
-            binding.webView.canGoBack() -> binding.webView.goBack()
+            activeWv.canGoBack() -> activeWv.goBack()
             else -> super.onBackPressed()
         }
     }
