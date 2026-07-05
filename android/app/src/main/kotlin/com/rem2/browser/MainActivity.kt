@@ -792,22 +792,16 @@ class MainActivity : AppCompatActivity() {
         binding.swipeRefresh2.isEnabled = false
     }
 
-    // Tu dong bam qua cac man hinh "cau hoi" onboarding (Welcome / Continue / Next / Skip...)
+    // Tu dong bam qua cac man hinh onboarding — KHONG phu thuoc cau chu cu the (Replit hay doi copy).
+    // Nhan dien tong quat: neu co nut Next/Continue nhung dang disabled + co nhom nut lua chon ben canh
+    // -> tu chon 1 option roi bam Next. Chi dung khi gap dashboard/chat that hoac cau hoi "xay dung gi".
     private fun injectAutoContinue(wv: WebView) {
             val js = """
                 (function(){
-                  if (window.__rem2AutoContinue) return;
-                  window.__rem2AutoContinue = true;
-                  var KEYWORDS = ['continue','next','skip','get started','let\'s go','done','finish','i agree','agree','ok','got it'];
-                  var ONBOARDING_HEADINGS = [
-                    'how did you hear about replit',
-                    'what best describes you',
-                    'what is your role',
-                    'what\'s your role',
-                    'select all that apply',
-                    'tell us about yourself',
-                    'what brings you to replit'
-                  ];
+                  if (window.__rem2AutoContinueActive) return;
+                  window.__rem2AutoContinueActive = true;
+
+                  var CONTINUE_KW = ['continue','next','skip','get started',"let's go",'done','finish','i agree','agree','ok','got it','submit'];
                   var STOP_HEADINGS = ['what do you want to make', 'what should we build', 'what are we building'];
                   var EXCLUDE_KW = ['back','log in','login','create account','upgrade','sign in','sign up','close','cancel','upload'];
 
@@ -818,62 +812,82 @@ class MainActivity : AppCompatActivity() {
                     return txt;
                   }
 
-                  function tryClickContinue(){
-                    try {
-                      var els = document.querySelectorAll('button, a[role="button"], [role="button"], input[type=submit]');
-                      for (var i=0;i<els.length;i++){
-                        var el = els[i];
-                        if (el.disabled) continue;
-                        var txt = (el.innerText || el.value || '').trim().toLowerCase();
-                        if (!txt) continue;
-                        for (var k=0;k<KEYWORDS.length;k++){
-                          if (txt === KEYWORDS[k] || txt.indexOf(KEYWORDS[k]) !== -1) {
-                            el.click();
-                            return true;
-                          }
-                        }
-                      }
-                    } catch(e) {}
-                    return false;
+                  // Da toi dashboard / man hinh chat that su -> dung lai, khong dong vao gi nua
+                  function isFinalDestination(){
+                    return !!document.querySelector('textarea[placeholder*="Make anything" i]')
+                        || !!document.querySelector('[placeholder*="Try an example" i]')
+                        || !!document.querySelector('textarea[placeholder*="Ask Replit" i]');
                   }
 
-                  function tryClickOnboardingChoice(){
+                  function findContinueBtn(){
+                    var els = document.querySelectorAll('button, a[role="button"], [role="button"], input[type=submit]');
+                    for (var i=0;i<els.length;i++){
+                      var el = els[i];
+                      var txt = (el.innerText || el.value || '').trim().toLowerCase();
+                      if (!txt) continue;
+                      for (var k=0;k<CONTINUE_KW.length;k++){
+                        if (txt === CONTINUE_KW[k] || txt.indexOf(CONTINUE_KW[k]) !== -1) return el;
+                      }
+                    }
+                    return null;
+                  }
+
+                  function findChoiceCandidates(excludeEl){
+                    var buttons = document.querySelectorAll('button, [role="button"]');
+                    var out = [];
+                    for (var i=0;i<buttons.length;i++){
+                      var el = buttons[i];
+                      if (el === excludeEl || el.disabled) continue;
+                      var txt = (el.innerText||'').trim().toLowerCase();
+                      if (!txt || txt.length > 40) continue;
+                      var bad = false;
+                      for (var e2=0;e2<EXCLUDE_KW.length;e2++){
+                        if (txt.indexOf(EXCLUDE_KW[e2]) !== -1) { bad = true; break; }
+                      }
+                      if (bad) continue;
+                      out.push(el);
+                    }
+                    return out;
+                  }
+
+                  // Tra ve true neu da xu ly xong (final destination hoac gap man hinh dung)
+                  function tick(){
                     try {
+                      if (isFinalDestination()) return true;
                       var h = headingText();
                       for (var s=0;s<STOP_HEADINGS.length;s++){
-                        if (h.indexOf(STOP_HEADINGS[s]) !== -1) return 'stop';
+                        if (h.indexOf(STOP_HEADINGS[s]) !== -1) return true;
                       }
-                      var isKnownQuestion = false;
-                      for (var q=0;q<ONBOARDING_HEADINGS.length;q++){
-                        if (h.indexOf(ONBOARDING_HEADINGS[q]) !== -1) { isKnownQuestion = true; break; }
+
+                      var contBtn = findContinueBtn();
+                      if (contBtn && !contBtn.disabled) {
+                        contBtn.click();
+                        return false;
                       }
-                      if (!isKnownQuestion) return false;
-                      var els = document.querySelectorAll('button, [role="button"]');
-                      for (var i=0;i<els.length;i++){
-                        var el = els[i];
-                        if (el.disabled) continue;
-                        var txt = (el.innerText || '').trim().toLowerCase();
-                        if (!txt || txt.length > 40) continue;
-                        var bad = false;
-                        for (var e2=0;e2<EXCLUDE_KW.length;e2++){
-                          if (txt.indexOf(EXCLUDE_KW[e2]) !== -1) { bad = true; break; }
-                        }
-                        if (bad) continue;
-                        el.click();
-                        return true;
+                      // Continue dang disabled hoac chua thay -> co the la man "chon 1 trong nhieu"
+                      // chua duoc chon -> tu chon option dau tien roi thu bam Continue ngay sau do
+                      // (delay de doi React cap nhat trang thai enabled cua nut Continue).
+                      var candidates = findChoiceCandidates(contBtn);
+                      if (candidates.length >= 1) {
+                        candidates[0].click();
+                        setTimeout(function(){
+                          var b = findContinueBtn();
+                          if (b && !b.disabled) b.click();
+                        }, 400);
                       }
-                    } catch(e) {}
+                    } catch (e) {}
                     return false;
                   }
 
                   var count = 0;
                   var iv = setInterval(function(){
                     count++;
-                    var stop = tryClickOnboardingChoice();
-                    if (stop === 'stop') { clearInterval(iv); return; }
-                    if (tryClickContinue()) count = Math.max(0, count - 3);
-                    if (count > 20) clearInterval(iv);
-                  }, 1500);
+                    var done = tick();
+                    if (done || count > 60) { clearInterval(iv); window.__rem2AutoContinueActive = false; }
+                  }, 1200);
+                  var mo = new MutationObserver(function(){ tick(); });
+                  mo.observe(document.body, {childList:true, subtree:true});
+                  tick();
                 })();
             """.trimIndent()
             wv.evaluateJavascript(js, null)
