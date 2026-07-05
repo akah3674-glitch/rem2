@@ -839,9 +839,10 @@ class MainActivity : AppCompatActivity() {
                 try{el.click();}catch(e){}
                 try{var r=el.getBoundingClientRect();if(r.width>0&&r.height>0&&window.ClickBridge)window.ClickBridge.tapAt(r.left+r.width/2,r.top+r.height/2,window.devicePixelRatio||1);}catch(e){}
               }
+              var pendingTick=null;
               function tick(){
                 if(window.__rem2FillSid!==sid)return;
-                var now=Date.now();if(now-lastFill<300)return;lastFill=now;
+                var now=Date.now();if(now-lastFill<500)return;lastFill=now;
                 try{
                   var eEl=findEmail(),pEl=findPass(),uEl=findUser();
                   if(!eEl&&!pEl){emptyTicks++;if(emptyTicks>8){clearInterval(window.__rem2FillIv);if(window.__rem2FillMo)window.__rem2FillMo.disconnect();}return;}
@@ -850,10 +851,12 @@ class MainActivity : AppCompatActivity() {
                   if(eEl&&!pEl)setTimeout(function(){var kws=['continue','next','sign up','create account','get started','submit'];var els=document.querySelectorAll('button:not([disabled]),input[type=submit]:not([disabled])');for(var i=0;i<els.length;i++){var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();for(var k=0;k<kws.length;k++)if(txt.indexOf(kws[k])!==-1){syntheticClick(els[i]);return;}}},400);
                 }catch(err){}
               }
-              var mo=new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var m=ms[i];if(m.type==='childList'||['style','class','hidden','disabled'].indexOf(m.attributeName)!==-1){tick();break;}}});
+              // Gộp nhiều mutation liên tiếp thành 1 lần tick (debounce) — giảm tải CPU/nhiet do MutationObserver ban ren
+              function scheduleTick(){if(pendingTick)return;pendingTick=setTimeout(function(){pendingTick=null;tick();},250);}
+              var mo=new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var m=ms[i];if(m.type==='childList'||['style','class','hidden','disabled'].indexOf(m.attributeName)!==-1){scheduleTick();break;}}});
               mo.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class','hidden','disabled','type']});
               window.__rem2FillMo=mo;
-              window.__rem2FillIv=setInterval(function(){if(window.__rem2FillSid!==sid){clearInterval(window.__rem2FillIv);return;}tick();},600);
+              window.__rem2FillIv=setInterval(function(){if(window.__rem2FillSid!==sid){clearInterval(window.__rem2FillIv);return;}tick();},900);
               tick();
             })();
         """.trimIndent(), null)
@@ -901,10 +904,17 @@ class MainActivity : AppCompatActivity() {
                 return candidates[0].el;
               }
               function findChoices(excl){var out=[];document.querySelectorAll('button,[role="button"]').forEach(function(el){if(el===excl||el.disabled)return;var txt=(el.innerText||'').trim().toLowerCase();if(!txt||txt.length>40)return;if(EXCLUDE_KW.some(function(k){return txt.indexOf(k)!==-1;}))return;out.push(el);});return out;}
-              function tick(){try{if(isDone())return true;var h=headingText();if(STOP_HEADS.some(function(s){return h.indexOf(s)!==-1;}))return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){syntheticClick(cs[0]);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;}
-              var count=0,mo=new MutationObserver(function(){tick();});
+              var lastTick=0;
+              function tick(){
+                var now=Date.now();if(now-lastTick<500)return false;lastTick=now;
+                try{if(isDone())return true;var h=headingText();if(STOP_HEADS.some(function(s){return h.indexOf(s)!==-1;}))return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){syntheticClick(cs[0]);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;
+              }
+              var count=0,pendingTick2=null;
+              // Gộp nhiều mutation lien tiep thanh 1 lan tick (debounce) — giam CPU/nhiet
+              function scheduleTick2(){if(pendingTick2)return;pendingTick2=setTimeout(function(){pendingTick2=null;if(tick()){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;}},250);}
+              var mo=new MutationObserver(function(){scheduleTick2();});
               mo.observe(document.body,{childList:true,subtree:true});
-              var iv=setInterval(function(){count++;if(tick()||count>60){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;}},1200);
+              var iv=setInterval(function(){count++;if(tick()||count>40){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;}},1500);
               tick();
             })();
         """.trimIndent(), null)
