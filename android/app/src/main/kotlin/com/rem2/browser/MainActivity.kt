@@ -458,7 +458,9 @@ class MainActivity : AppCompatActivity() {
         wv.evaluateJavascript(
             "(function(){try{window.__rem2FillSid=null;if(window.__rem2FillIv)clearInterval(window.__rem2FillIv);" +
             "if(window.__rem2FillMo)window.__rem2FillMo.disconnect();}catch(e){}" +
-            "try{window.__rem2AutoContinueActive=false;}catch(e){}})();",
+            "try{window.__rem2AutoContinueActive=false;" +
+            "if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);" +
+            "if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}})();",
             null
         )
     }
@@ -896,7 +898,18 @@ class MainActivity : AppCompatActivity() {
     private fun fillIfOnSignup(wv: WebView) { if ((wv.url ?: "").isSignupPage()) injectAutoFill(wv) }
     private fun ensureOnSignup(wv: WebView) {
         val url = wv.url ?: ""
-        if (url.isSignupPage()) injectAutoFill(wv) else wv.loadUrl("https://replit.com/signup")
+        when {
+            url.isSignupPage() ->
+                // Vẫn còn trên signup → điền form
+                injectAutoFill(wv)
+            url.contains("replit.com") && !url.contains("verify") &&
+            !url.contains("confirm") && url != "about:blank" ->
+                // Đã qua signup, đang ở onboarding/dashboard → bấm Continue
+                injectAutoContinue(wv)
+            else ->
+                // Chưa xác định trang → điều hướng về signup
+                wv.loadUrl("https://replit.com/signup")
+        }
     }
 
     // ─── Auto-Fill ────────────────────────────────────────────────────────────
@@ -957,7 +970,9 @@ class MainActivity : AppCompatActivity() {
     private fun injectAutoContinue(wv: WebView) {
         wv.evaluateJavascript("""
             (function(){
-              if(window.__rem2AutoContinueActive)return;
+              // Dừng instance cũ (nếu có) trước khi khởi động instance mới
+              try{if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);}catch(e){}
+              try{if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}
               window.__rem2AutoContinueActive=true;
               var CONTINUE_KW=['continue','next','skip','get started',"let's go",'done','finish','i agree','agree','ok','got it','submit'];
               var STOP_HEADS=['what do you want to make','what should we build','what are we building'];
@@ -1004,9 +1019,12 @@ class MainActivity : AppCompatActivity() {
               function scheduleTick2(){if(pendingTick2)return;pendingTick2=setTimeout(function(){pendingTick2=null;if(tick()){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;}},250);}
               var mo=new MutationObserver(function(){scheduleTick2();});
               mo.observe(document.body,{childList:true,subtree:true});
-              var iv=setInterval(function(){count++;if(tick()||count>40){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;}},1500);
+              window.__rem2AcMo=mo;
+              var iv=setInterval(function(){count++;if(tick()||count>60){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;window.__rem2AcIv=null;window.__rem2AcMo=null;}},1200);
+              window.__rem2AcIv=iv;
               tick();
             })();
         """.trimIndent(), null)
     }
 }
+
