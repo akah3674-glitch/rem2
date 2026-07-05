@@ -386,9 +386,10 @@ class MainActivity : AppCompatActivity() {
                     tab2Initialized = true
                     binding.swipeRefresh.visibility  = View.INVISIBLE
                     binding.swipeRefresh2.visibility = View.VISIBLE
-                    binding.swipeRefresh2.post {
+                    // postDelayed 100ms: đợi GPU layer tạo xong mới load (post{} không đủ)
+                    binding.webView2.postDelayed({
                         binding.webView2.loadUrl("https://replit.com/signup")
-                    }
+                    }, 100)
                     binding.etUrl.setText("https://replit.com/signup")
                 } else {
                     // Restore cookies của Tab 2
@@ -400,6 +401,8 @@ class MainActivity : AppCompatActivity() {
                 }
                 binding.swipeRefresh.visibility  = View.INVISIBLE
                 binding.swipeRefresh2.visibility = View.VISIBLE
+                binding.webView.onPause()   // giảm nóng máy: tắt JS/animation của tab ẩn
+                binding.webView2.onResume() // bật lại JS/animation của tab active
                 currentTab = 2
                 binding.btnTabCount.text = "2"
                 // Nếu flow đang chạy và Tab 2 đang ở trang signup mà chưa được fill
@@ -420,6 +423,8 @@ class MainActivity : AppCompatActivity() {
                 restoreCookies(tab1Cookies)
                 binding.swipeRefresh2.visibility = View.INVISIBLE
                 binding.swipeRefresh.visibility  = View.VISIBLE
+                binding.webView2.onPause()  // giảm nóng máy: tắt JS/animation của tab ẩn
+                binding.webView.onResume()  // bật lại JS/animation của tab active
                 val url = binding.webView.url
                 if (!url.isNullOrBlank() && url != "about:blank") {
                     binding.etUrl.setText(url)
@@ -1094,6 +1099,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ─── Back press ───────────────────────────────────────────────────────────
+
+    override fun onResume() {
+        super.onResume()
+        if (currentTab == 1) binding.webView.onResume() else binding.webView2.onResume()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        binding.webView.onPause()
+        binding.webView2.onPause()
+    }
 
     override fun onBackPressed() {
         val activeWv = if (currentTab == 1) binding.webView else binding.webView2
