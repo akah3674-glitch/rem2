@@ -425,16 +425,15 @@ class MainActivity : AppCompatActivity() {
             val popup = PopupMenu(this, anchor)
             val m = popup.menu
             if (currentTab == 1) {
-                m.add(0, 1, 0, if (flowRunning) "⏳ Đang xử lý..." else "🔄 Tạo tài khoản mới")
-                m.add(0, 2, 1, "📋 Danh sách tài khoản (${accounts.size})")
-                m.add(0, 3, 2, "📄 Nhật ký")
-                m.add(0, 4, 3, "⌂ Trang đăng ký")
-                m.add(0, 5, 4, if (dataSaving) "📶 Tắt tiết kiệm data" else "🔋 Bật tiết kiệm data")
-                m.add(0, 6, 5, if (!flowRunning) "⚡ Tạo 5 tài khoản" else "⏳ Đang chạy batch...")
+                m.add(0, 1, 0, if (flowRunning) "⏳ Đang xử lý..." else "1. Tạo tài khoản mới")
+                m.add(0, 2, 1, "2. Danh sách tài khoản (${accounts.size})")
+                m.add(0, 3, 2, "3. Nhật ký")
+                m.add(0, 4, 3, "4. Trang đăng ký")
+                m.add(0, 5, 4, if (dataSaving) "5. Tắt tiết kiệm data" else "5. Bật tiết kiệm data")
             } else {
-                m.add(0, 10, 0, "🆕 Shell mới (xoá phiên cũ)")
-                m.add(0, 11, 1, "⟳ Tải lại terminal")
-                m.add(0, 12, 2, if (dataSaving) "📶 Tắt tiết kiệm data" else "🔋 Bật tiết kiệm data")
+                m.add(0, 10, 0, "1. Shell mới")
+                m.add(0, 11, 1, "2. Tải lại terminal")
+                m.add(0, 12, 2, if (dataSaving) "3. Tắt tiết kiệm data" else "3. Bật tiết kiệm data")
             }
             popup.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
@@ -443,7 +442,6 @@ class MainActivity : AppCompatActivity() {
                     3  -> { panelOpen = !panelOpen; binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE; true }
                     4  -> { activeWebView().loadUrl(DEFAULT_URL); true }
                     5  -> { applyDataSaving(!dataSaving); true }
-                    6  -> { if (!flowRunning) startBatchFlow(5) else Toast.makeText(this, "Đang xử lý...", Toast.LENGTH_SHORT).show(); true }
                     10 -> { binding.webView2.evaluateJavascript("if(typeof newSession==='function')newSession();", null); true }
                     11 -> { binding.webView2.loadUrl(TERMINAL_URL); true }
                     12 -> { applyDataSaving(!dataSaving); true }
