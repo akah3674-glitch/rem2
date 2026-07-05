@@ -401,7 +401,6 @@ class MainActivity : AppCompatActivity() {
                     restoreCookies(tab2Cookies) {
                         val url = binding.webView2.url
                         if (!url.isNullOrBlank() && url != "about:blank") {
-                            binding.webView2.reload()
                             binding.etUrl.setText(url)
                         }
                     }
@@ -442,7 +441,6 @@ class MainActivity : AppCompatActivity() {
                 restoreCookies(tab1Cookies) {
                     val url = binding.webView.url
                     if (!url.isNullOrBlank() && url != "about:blank") {
-                        binding.webView.reload()
                         binding.etUrl.setText(url)
                     } else {
                         binding.etUrl.setText("")
