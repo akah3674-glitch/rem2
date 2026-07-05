@@ -3,26 +3,20 @@ package com.rem2.browser
 
 import android.annotation.SuppressLint
 import android.os.Bundle
-import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.app.Activity
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.net.Uri
 import android.webkit.*
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
-import androidx.core.view.GestureDetectorCompat
-import kotlin.math.abs
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.lifecycle.lifecycleScope
 import com.rem2.browser.databinding.ActivityMainBinding
 import kotlinx.coroutines.*
-import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
@@ -44,14 +38,12 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS        = "rem2_prefs"
         private const val KEY_ACCOUNTS = "accounts_v3"
-        // Cloud server: hồn chạy trên Replit, app chỉ nhận kết quả
-          private const val SERVER_URL   = "https://zkdjjc--hemv5x7n7p.replit.app"
-          private const val MAIL_PASS    = "Mailtm2025Tool" // giữ để lưu account local
-        private const val COCCOC_UA =
+        private const val SERVER_URL   = "https://zkdjjc--hemv5x7n7p.replit.app"
+        private const val MAIL_PASS    = "Mailtm2025Tool"
+        private const val COCCOC_UA    =
             "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36"
 
-                  // Danh sách URL để save/restore cookie khi chuyển tab
         private val COOKIE_URLS = listOf(
             "https://replit.com",
             "https://replit.com/",
@@ -59,7 +51,6 @@ class MainActivity : AppCompatActivity() {
             "https://replit.com/repls"
         )
 
-        // Keys lưu trạng thái session qua các lần thoát/vào lại app
         private const val KEY_TAB_CURRENT  = "tab_current"
         private const val KEY_TAB1_URL     = "tab1_url"
         private const val KEY_TAB2_URL     = "tab2_url"
@@ -75,38 +66,31 @@ class MainActivity : AppCompatActivity() {
         .readTimeout(35, TimeUnit.SECONDS)
         .build()
 
-    private val accounts = mutableListOf<AccountEntry>()
-    private var panelOpen     = true
+    private val accounts    = mutableListOf<AccountEntry>()
+    private var panelOpen   = true
     private var showingVerify = false
-
-    private var autoEmail    = ""
+    private var autoEmail   = ""
     private var autoUsername = ""
-    private var flowRunning  = false
-    private var lastTab1TouchMs = 0L   // debounce touch-triggered fill Tab1
-    private var lastTab2TouchMs = 0L   // debounce touch-triggered fill Tab2
+    private var flowRunning = false
+    private var lastTab1TouchMs = 0L
+    private var lastTab2TouchMs = 0L
 
     // ── Tab management ────────────────────────────────────────────────────────
-    // currentTab = tab đang hiển thị (1 hoặc 2)
-    // Tab 1 = webView (session Replit / tạo tài khoản)
-    // Tab 2 = webView2 (session hoàn toàn độc lập, bắt đầu từ signup)
-    private var currentTab       = 1
-    private var tab2Initialized  = false
-    private val tab1Cookies      = mutableMapOf<String, String>()
-    private val tab2Cookies      = mutableMapOf<String, String>()
-    // switchSeq: tăng mỗi lần switchBrowserTab được gọi.
-    // Callbacks async (removeAllCookies, restoreCookies) kiểm tra seq trước khi reload —
-    // nếu seq đã thay đổi (user switch lại nhanh), callback cũ bị bỏ qua (stale callback guard).
-    private var switchSeq        = 0
+    private var currentTab      = 1
+    private var tab2Initialized = false
+    private val tab1Cookies     = mutableMapOf<String, String>()
+    private val tab2Cookies     = mutableMapOf<String, String>()
+    // switchSeq: guard chống stale callbacks khi switch tab nhanh
+    private var switchSeq       = 0
 
-    private val inboxMessages = mutableListOf<Pair<String, String>>()
-
-    // Ho tro upload file trong WebView (vd: nut "Upload a file" trong Replit Agent chat)
+    // File chooser support
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserLauncher =
-        registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { result ->
-            val callback = filePathCallback
+        registerForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+        ) { result ->
+            val callback = filePathCallback ?: return@registerForActivityResult
             filePathCallback = null
-            if (callback == null) return@registerForActivityResult
             val data = result.data
             val uris: Array<Uri>? = when {
                 result.resultCode != Activity.RESULT_OK -> null
@@ -120,66 +104,44 @@ class MainActivity : AppCompatActivity() {
             callback.onReceiveValue(uris)
         }
 
-    // ── ClickBridge: cho phép JS yêu cầu native MotionEvent tap ──────────────
-    // Không cần quyền trợ năng Android — WebView dispatchTouchEvent là real touch
+    // ── ClickBridge: JS → native MotionEvent, không cần trợ năng ─────────────
     inner class ClickBridge {
-        /**
-         * Được gọi từ JS: window.ClickBridge.tapAt(cssX, cssY, scale)
-         * cssX/cssY là viewport coords từ getBoundingClientRect() (đã tính scroll)
-         * scale là window.devicePixelRatio hoặc 1
-         */
+        /** JS gọi: window.ClickBridge.tapAt(cssX, cssY, devicePixelRatio) */
         @JavascriptInterface
-        fun tapAt(cssX: Float, cssY: Float, scale: Float) {
-            val wv = if (currentTab == 1) binding.webView else binding.webView2
+        fun tapAt(cssX: Float, cssY: Float, dpr: Float) {
+            val wv = activeWebView()
             runOnUiThread {
-                // CSS viewport px → Android display px (dùng WebView.scale * DPR)
-                val wvScale = wv.scale.let { if (it > 0f) it else 1f }
-                val dpr     = if (scale > 0f) scale else 1f
-                val ax = cssX * wvScale
-                val ay = cssY * wvScale
-                simulateTap(wv, ax, ay)
+                val scale = wv.scale.coerceAtLeast(0.01f)
+                simulateTap(wv, cssX * scale, cssY * scale)
             }
         }
 
-        /**
-         * Tap tại phần trăm chiều rộng/cao của WebView (0.0–1.0).
-         * Dùng khi không biết chính xác toạ độ CSS — ví dụ bấm nút "Next" ở
-         * vùng trung-dưới màn hình (xPct=0.5, yPct=0.85).
-         */
+        /** Tap tại % chiều rộng/cao WebView (0.0–1.0) */
         @JavascriptInterface
         fun tapAtPercent(xPct: Float, yPct: Float) {
-            val wv = if (currentTab == 1) binding.webView else binding.webView2
+            val wv = activeWebView()
             runOnUiThread {
                 wv.post {
-                    val x = wv.width  * xPct.coerceIn(0f, 1f)
-                    val y = wv.height * yPct.coerceIn(0f, 1f)
-                    simulateTap(wv, x, y)
+                    simulateTap(
+                        wv,
+                        wv.width  * xPct.coerceIn(0f, 1f),
+                        wv.height * yPct.coerceIn(0f, 1f)
+                    )
                 }
             }
         }
     }
 
-    /**
-     * Mô phỏng thao tác chạm thực tế tại (x, y) trong WebView.
-     * Sử dụng MotionEvent — không cần quyền trợ năng Android.
-     * Hoạt động với mọi phần tử, kể cả những nút phụ thuộc vào touch event.
-     */
+    private fun activeWebView() = if (currentTab == 1) binding.webView else binding.webView2
+
+    /** Real touch event — không cần accessibility. */
     private fun simulateTap(wv: WebView, x: Float, y: Float) {
-        val downTime = System.currentTimeMillis()
-        val down = MotionEvent.obtain(
-            downTime, downTime,
-            MotionEvent.ACTION_DOWN, x, y, 0
-        )
+        val t = System.currentTimeMillis()
+        val down = MotionEvent.obtain(t, t, MotionEvent.ACTION_DOWN, x, y, 0)
         wv.dispatchTouchEvent(down)
         down.recycle()
-        val up = MotionEvent.obtain(
-            downTime, downTime + 80L,
-            MotionEvent.ACTION_UP, x, y, 0
-        )
-        wv.postDelayed({
-            wv.dispatchTouchEvent(up)
-            up.recycle()
-        }, 80)
+        val up = MotionEvent.obtain(t, t + 80L, MotionEvent.ACTION_UP, x, y, 0)
+        wv.postDelayed({ wv.dispatchTouchEvent(up); up.recycle() }, 80)
     }
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
@@ -191,11 +153,11 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         CookieManager.getInstance().setAcceptCookie(true)
         binding.swipeRefresh2.visibility = View.INVISIBLE
-        binding.webView2.onPause() // Tab 2 bắt đầu ẩn — tắt JS/render để giảm nhiệt
+        binding.webView2.onPause()      // Tab 2 bắt đầu ẩn — tiết kiệm pin ngay từ đầu
         loadAccounts()
         setupHeader()
-        setupWebView()
-        setupWebView2()
+        setupWebView(binding.webView,  isTab1 = true)
+        setupWebView(binding.webView2, isTab1 = false)
         setupSwipeAndGestures()
         setupVerifyWebView()
         log("San sang. Nhan 'Tao tai khoan Replit tu dong' de bat dau.")
@@ -205,26 +167,41 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         saveSessionState()
-        // Dừng render/JS cả 2 WebView khi app mất focus (Home, notification shade, chuyển app)
-        // onStop() chỉ chạy khi app hoàn toàn ẩn — onPause() mới là điểm đúng để tiết kiệm pin
         binding.webView.onPause()
         binding.webView2.onPause()
-        // pauseTimers() dừng TẤT CẢ JS timers (setInterval/setTimeout) toàn cục trong mọi WebView
-        binding.webView.pauseTimers()
+        binding.webView.pauseTimers()   // dừng TẤT CẢ JS timers — tiết kiệm pin
     }
 
-    // ─── Session persistence (lưu/khôi phục URL + cookie qua lần thoát/vào) ──
+    override fun onResume() {
+        super.onResume()
+        binding.webView.resumeTimers()
+        if (currentTab == 1) binding.webView.onResume() else binding.webView2.onResume()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        binding.webView.onPause()
+        binding.webView2.onPause()
+    }
+
+    override fun onBackPressed() {
+        val wv = activeWebView()
+        when {
+            panelOpen && showingVerify && binding.verifyWebView.canGoBack() ->
+                binding.verifyWebView.goBack()
+            panelOpen -> { binding.logPanel.visibility = View.GONE; panelOpen = false }
+            wv.canGoBack() -> wv.goBack()
+            else -> super.onBackPressed()
+        }
+    }
+
+    // ─── Session persistence ──────────────────────────────────────────────────
 
     private fun saveSessionState() {
-        // Cập nhật cookie map của tab đang active trước khi lưu
-        if (currentTab == 1) saveCookies(tab1Cookies)
-        else                  saveCookies(tab2Cookies)
+        if (currentTab == 1) saveCookies(tab1Cookies) else saveCookies(tab2Cookies)
         CookieManager.getInstance().flush()
-
-        fun mapToJson(m: Map<String, String>): String =
+        fun mapToJson(m: Map<String, String>) =
             JSONObject().also { o -> m.forEach { (k, v) -> o.put(k, v) } }.toString()
-
-        // commit() thay vì apply() — đảm bảo ghi xong disk trước khi process bị kill
         prefs.edit()
             .putInt    (KEY_TAB_CURRENT,  currentTab)
             .putString (KEY_TAB1_URL,     binding.webView.url?.takeIf  { it != "about:blank" } ?: "")
@@ -242,151 +219,96 @@ class MainActivity : AppCompatActivity() {
         val tab2Init = prefs.getBoolean(KEY_TAB2_INIT, false)
         val ck1Json  = prefs.getString (KEY_TAB1_CK_JSON, "{}") ?: "{}"
         val ck2Json  = prefs.getString (KEY_TAB2_CK_JSON, "{}") ?: "{}"
-
-        // Nạp lại cookie maps từ prefs vào bộ nhớ
         fun loadMap(json: String, target: MutableMap<String, String>) {
-            try {
-                val o = JSONObject(json)
-                o.keys().forEach { target[it] = o.getString(it) }
-            } catch (_: Exception) {}
+            try { val o = JSONObject(json); o.keys().forEach { target[it] = o.getString(it) } }
+            catch (_: Exception) {}
         }
         loadMap(ck1Json, tab1Cookies)
         loadMap(ck2Json, tab2Cookies)
         tab2Initialized = tab2Init
-
-        // Không có gì để khôi phục (lần chạy đầu tiên)
         if (tab1Url.isEmpty() && tab2Url.isEmpty()) return
-
-        // QUAN TRỌNG: KHÔNG preload tab inactive ở đây để tránh race condition cookie.
-        // loadUrl() là async — nếu swap cookie trước rồi swap lại ngay, request thực sự
-        // gửi đi sau khi cookie đã bị đổi → session sai. Thay vào đó: chỉ load tab active;
-        // tab inactive sẽ được load đúng cookie khi user thực sự chuyển (switchBrowserTab đã xử lý).
-
         if (savedTab == 2 && tab2Init) {
-            // Lần cuối ở Tab 2 → CookieManager disk đang có cookie Tab 2 → đúng, load thẳng
             binding.swipeRefresh.visibility  = View.INVISIBLE
             binding.swipeRefresh2.visibility = View.VISIBLE
-            currentTab = 2
-            binding.btnTabCount.text = "2"
-            val urlToShow = tab2Url.takeIf { it.isNotEmpty() } ?: "https://replit.com/signup"
-            binding.webView2.loadUrl(urlToShow)
-            binding.etUrl.setText(urlToShow)
-        } else {
-            // Tab 1 (mặc định) → CookieManager disk đang có cookie Tab 1 → đúng, load thẳng
-            if (tab1Url.isNotEmpty()) {
-                binding.webView.loadUrl(tab1Url)
-                binding.etUrl.setText(tab1Url)
-            }
+            currentTab = 2; binding.btnTabCount.text = "2"
+            val url = tab2Url.takeIf { it.isNotEmpty() } ?: "https://replit.com/signup"
+            binding.webView2.loadUrl(url); binding.etUrl.setText(url)
+        } else if (tab1Url.isNotEmpty()) {
+            binding.webView.loadUrl(tab1Url); binding.etUrl.setText(tab1Url)
         }
     }
 
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
-        // Thu gon / mo rong panel Log + Xac thuc (giu nguyen vi tri o TREN)
         binding.btnToggleLog.setOnClickListener {
             panelOpen = !panelOpen
             binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
         }
-        // Nut Tai lai trang — reload tab hiện tại
         binding.btnRefresh.setOnClickListener {
-            if (currentTab == 1) {
-                binding.swipeRefresh.isRefreshing = true
-                val curUrl = binding.webView.url
-                if (curUrl.isNullOrBlank() || curUrl == "about:blank") {
-                    binding.webView.loadUrl("https://replit.com/signup")
-                } else {
-                    binding.webView.reload()
-                }
-            } else {
-                binding.swipeRefresh2.isRefreshing = true
-                val curUrl = binding.webView2.url
-                if (curUrl.isNullOrBlank() || curUrl == "about:blank") {
-                    binding.webView2.loadUrl("https://replit.com/signup")
-                } else {
-                    binding.webView2.reload()
-                }
-            }
+            val wv = activeWebView()
+            val refresh = if (currentTab == 1) binding.swipeRefresh else binding.swipeRefresh2
+            refresh.isRefreshing = true
+            val cur = wv.url
+            if (cur.isNullOrBlank() || cur == "about:blank") wv.loadUrl("https://replit.com/signup")
+            else wv.reload()
         }
         binding.tabLog.setOnClickListener    { switchPanelTab(false) }
         binding.tabVerify.setOnClickListener { switchPanelTab(true)  }
         binding.btnCreateAccount.setOnClickListener { startCreateAccountFlow() }
-
-        // ── URL bar: nhấn Go trên bàn phím → load trang ──────────────────
         binding.etUrl.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO) {
                 navigateToUrl(binding.etUrl.text.toString())
-                val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
-                imm.hideSoftInputFromWindow(binding.etUrl.windowToken, 0)
+                (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager)
+                    .hideSoftInputFromWindow(binding.etUrl.windowToken, 0)
                 binding.etUrl.clearFocus()
                 true
             } else false
         }
-        // Chọn toàn bộ text khi focus vào URL bar (dễ xoá/gõ đè)
-        binding.etUrl.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus) binding.etUrl.selectAll()
-        }
-
-        // ── Tab count button: nhấn để chuyển qua lại Tab 1 ↔ Tab 2 ──────
-        // Số hiện = tab đang xem; nhấn → chuyển sang tab kia
-        binding.btnTabCount.setOnClickListener {
-            switchBrowserTab(if (currentTab == 1) 2 else 1)
-        }
+        binding.etUrl.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) binding.etUrl.selectAll() }
+        binding.btnTabCount.setOnClickListener { switchBrowserTab(if (currentTab == 1) 2 else 1) }
     }
 
-    // ─── Browser Tab Switching (Tab 1 ↔ Tab 2 với session độc lập) ───────────
+    // ─── Cookie helpers ───────────────────────────────────────────────────────
 
-    private fun saveCookies(destination: MutableMap<String, String>) {
-        destination.clear()
+    private fun saveCookies(dst: MutableMap<String, String>) {
+        dst.clear()
         val cm = CookieManager.getInstance()
-        for (url in COOKIE_URLS) {
-            cm.getCookie(url)?.takeIf { it.isNotEmpty() }?.let { destination[url] = it }
-        }
+        COOKIE_URLS.forEach { url -> cm.getCookie(url)?.takeIf { it.isNotEmpty() }?.let { dst[url] = it } }
     }
 
-    private fun restoreCookies(source: Map<String, String>, seq: Int, onDone: (() -> Unit)? = null) {
+    private fun restoreCookies(src: Map<String, String>, seq: Int, onDone: (() -> Unit)? = null) {
         val cm = CookieManager.getInstance()
-        // removeAllCookies phải dùng callback — nó là async,
-        // nếu không có callback setCookie chạy trước khi xóa xong → cookie lẫn lộn
         cm.removeAllCookies { _ ->
-            // Stale callback guard: nếu user đã switch tab lại trong lúc chờ, bỏ qua
-            if (seq != switchSeq) return@removeAllCookies
-            for ((url, cookies) in source) {
+            if (seq != switchSeq) return@removeAllCookies   // stale — user switched again
+            src.forEach { (url, cookies) ->
                 cookies.split(";").forEach { kv ->
-                    val trimmed = kv.trim()
-                    if (trimmed.isNotEmpty()) cm.setCookie(url, trimmed)
+                    val t = kv.trim(); if (t.isNotEmpty()) cm.setCookie(url, t)
                 }
             }
-            // flush() đồng bộ cookies vào disk TRƯỚC khi gọi onDone (reload)
-            // tránh reload bắt đầu request trước khi cookie được ghi xong
             cm.flush()
-            runOnUiThread {
-                if (seq == switchSeq) onDone?.invoke()
-            }
+            runOnUiThread { if (seq == switchSeq) onDone?.invoke() }
         }
     }
+
+    // ─── Tab switching ────────────────────────────────────────────────────────
 
     private fun switchBrowserTab(tab: Int) {
         if (tab == currentTab) return
         runOnUiThread {
-            // Tăng seq trước mọi thao tác async — bất kỳ callback nào từ switch trước sẽ bị stale
             val seq = ++switchSeq
-
             if (tab == 2) {
-                // Chuyển sang Tab 2
                 binding.webView.stopLoading()
                 saveCookies(tab1Cookies)
+                binding.swipeRefresh.visibility  = View.INVISIBLE
+                binding.swipeRefresh2.visibility = View.VISIBLE
                 if (!tab2Initialized) {
-                    // Lần đầu mở Tab 2: xóa cookie → Tab 2 bắt đầu fresh
-                    // removeAllCookies với callback: loadUrl chỉ chạy SAU KHI cookie đã xóa xong
-                    binding.swipeRefresh.visibility  = View.INVISIBLE
-                    binding.swipeRefresh2.visibility = View.VISIBLE
                     tab2Initialized = true
                     CookieManager.getInstance().removeAllCookies { _ ->
-                        if (seq != switchSeq) return@removeAllCookies // stale
+                        if (seq != switchSeq) return@removeAllCookies
                         CookieManager.getInstance().flush()
                         runOnUiThread {
-                            if (seq != switchSeq) return@runOnUiThread // stale
+                            if (seq != switchSeq) return@runOnUiThread
                             binding.webView2.postDelayed({
                                 binding.webView2.loadUrl("https://replit.com/signup")
                             }, 50)
@@ -394,164 +316,78 @@ class MainActivity : AppCompatActivity() {
                     }
                     binding.etUrl.setText("https://replit.com/signup")
                 } else {
-                    // Restore cookies Tab 2 với callback → reload để áp dụng đúng cookie
-                    // FIX: reload() sau khi restore để Tab 2 nhận đúng session cookie,
-                    // tránh trường hợp Tab 1 đã thay đổi shared CookieManager
                     restoreCookies(tab2Cookies, seq) {
-                        val url = binding.webView2.url
-                        if (!url.isNullOrBlank() && url != "about:blank") {
-                            binding.etUrl.setText(url)
-                            binding.webView2.reload() // áp dụng cookie đã restore
-                        }
+                        binding.webView2.url?.takeIf { it.isNotBlank() && it != "about:blank" }
+                            ?.let { binding.etUrl.setText(it); binding.webView2.reload() }
                     }
                 }
-                binding.swipeRefresh.visibility  = View.INVISIBLE
-                binding.swipeRefresh2.visibility = View.VISIBLE
-                // Hiệu suất: LAYER_SOFTWARE cho tab ẩn, HARDWARE cho tab active
-                binding.webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                binding.webView2.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                binding.webView.onPause()   // giảm nóng máy: tắt JS/animation tab ẩn
-                binding.webView2.onResume() // bật lại JS/animation tab active
-                currentTab = 2
-                binding.btnTabCount.text = "2"
-                // Nếu flow đang chạy và Tab 2 đang ở trang signup mà chưa được fill
-                // → inject ngay sau khi trang hiển thị (500ms để DOM ổn định)
+                setTabActive(binding.webView, active = false)
+                setTabActive(binding.webView2, active = true)
+                currentTab = 2; binding.btnTabCount.text = "2"
                 if (autoEmail.isNotEmpty()) {
-                    val wv2url = binding.webView2.url ?: ""
-                    val onSignup = wv2url.contains("signup") || wv2url.contains("login") || wv2url.contains("register")
-                    if (onSignup) {
+                    val url = binding.webView2.url ?: ""
+                    if (url.isSignupPage()) {
                         binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
                         binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
-                        binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 3000)
                     }
                 }
             } else {
-                // Chuyển về Tab 1
                 binding.webView2.stopLoading()
                 saveCookies(tab2Cookies)
-                // Hiệu suất: LAYER_SOFTWARE cho tab ẩn, HARDWARE cho tab active
-                binding.webView2.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-                binding.webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
                 binding.swipeRefresh2.visibility = View.INVISIBLE
                 binding.swipeRefresh.visibility  = View.VISIBLE
-                binding.webView2.onPause()  // giảm nóng máy: tắt JS/animation tab ẩn
-                binding.webView.onResume()  // bật lại JS/animation tab active
-                currentTab = 1
-                binding.btnTabCount.text = "1"
-                // FIX SESSION ISOLATION: restore cookies Tab 1 rồi RELOAD trang.
-                // Lý do: khi Tab 2 logout, Replit xóa cookies trong shared CookieManager
-                // (vì CookieManager là singleton). Dù restore cookies Tab 1 thành công,
-                // page vẫn render ở trạng thái "logged out" vì JS đã nhận sự kiện cookie change.
-                // Reload buộc page tải lại với đúng session cookie Tab 1 → Tab 1 ở lại logged in.
+                setTabActive(binding.webView2, active = false)
+                setTabActive(binding.webView,  active = true)
+                currentTab = 1; binding.btnTabCount.text = "1"
+                // FIX: reload after restore so page picks up Tab 1's session cookies.
+                // Tab 2 logout clears the shared CookieManager; restore alone isn't enough.
                 restoreCookies(tab1Cookies, seq) {
-                    val url = binding.webView.url
-                    if (!url.isNullOrBlank() && url != "about:blank") {
-                        binding.etUrl.setText(url)
-                        binding.webView.reload() // BUG FIX: reload để page nhận đúng session
-                    } else {
-                        binding.etUrl.setText("")
-                    }
+                    binding.webView.url?.takeIf { it.isNotBlank() && it != "about:blank" }
+                        ?.let { binding.etUrl.setText(it); binding.webView.reload() }
+                        ?: binding.etUrl.setText("")
                 }
             }
         }
     }
 
-    // Chuẩn hóa URL: tự thêm https://, hoặc tìm Google nếu là từ khoá
+    /** LAYER + onPause/onResume để tab ẩn không tốn CPU/GPU. */
+    private fun setTabActive(wv: WebView, active: Boolean) {
+        if (active) {
+            wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+            wv.onResume()
+        } else {
+            wv.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+            wv.onPause()
+        }
+    }
+
+    private fun String.isSignupPage() =
+        contains("signup") || contains("login") || contains("register")
+
     private fun navigateToUrl(input: String) {
-        val s = input.trim()
-        if (s.isEmpty()) return
+        val s = input.trim(); if (s.isEmpty()) return
         val url = when {
             s.startsWith("http://") || s.startsWith("https://") -> s
             s.contains(".") && !s.contains(" ") -> "https://$s"
             else -> "https://www.google.com/search?q=${Uri.encode(s)}"
         }
-        val wv = if (currentTab == 1) binding.webView else binding.webView2
-        wv.loadUrl(url)
-        binding.etUrl.setText(url)
+        activeWebView().loadUrl(url); binding.etUrl.setText(url)
     }
 
-    // Log co the copy bang cach nhan giu (long-press) va chon van ban — tvLog da bat textIsSelectable
+    // ─── Panel tabs (Log ↔ Xác thực) ─────────────────────────────────────────
 
-    private fun startCreateAccountFlow() {
-        if (flowRunning) { Toast.makeText(this, "Dang xu ly, vui long doi...", Toast.LENGTH_SHORT).show(); return }
-        flowRunning = true
-        inboxMessages.clear()
-        renderVerifyPanel()
-        binding.btnCreateAccount.isEnabled = false
-        binding.btnCreateAccount.text = "\u23F3 Dang tao tai khoan..."
-        binding.tvLog.text = ""
-        switchPanelTab(false)
-        // Dang xuat / xoa het session cu (cookie, cache, localStorage) TRUOC khi tao acc moi,
-        // neu khong WebView se con dang nhap acc cu -> tuong nham la "xac thuc thanh cong" lien tuc
-        clearWebSession()
-        // Load ngay trang signup de nguoi dung thay trang chay/tien trinh ngay lap tuc,
-        // khong phai cho 5-10 phut nhin man hinh trang (about:blank) moi thay gi do.
-        binding.webView.postDelayed({ binding.webView.loadUrl("https://replit.com/signup") }, 300)
-        lifecycleScope.launch {
-            ensureAccount()
-            flowRunning = false
-            withContext(Dispatchers.Main) {
-                binding.btnCreateAccount.isEnabled = true
-                binding.btnCreateAccount.text = "\uD83D\uDD04 Tao tai khoan moi"
-            }
-        }
-    }
-
-    // Xoa toan bo cookie/cache/localStorage cua CA 2 WebView — dam bao "dang xuat" that su
-    // truoc khi bat dau tao tai khoan moi, tranh dinh session Replit cu (kem ca Tab 2 neu
-    // nguoi dung dung song song 2 tab). Dong thoi tam dung Tab 2 (khong active) de do nong
-    // may / do hao pin trong luc tao tai khoan — no khong can chay JS/animation nen trong
-    // suot qua trinh cho server.
-    private fun clearWebSession() {
-        val wv  = binding.webView
-        val wv2 = binding.webView2
-        CookieManager.getInstance().removeAllCookies(null)
-        CookieManager.getInstance().flush()
-        // Xóa cookies đã lưu cho cả Tab 1 lẫn Tab 2
-        tab1Cookies.clear()
-        tab2Cookies.clear()
-
-        wv.clearCache(true)
-        wv.clearHistory()
-        wv.clearFormData()
-        wv.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
-        wv.loadUrl("about:blank")
-
-        if (tab2Initialized) {
-            wv2.stopLoading()
-            wv2.clearCache(true)
-            wv2.clearHistory()
-            wv2.clearFormData()
-            wv2.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
-            wv2.loadUrl("about:blank")
-            // Neu Tab 2 dang khong active (nguoi dung o Tab 1) → pause han de tiet kiem
-            // CPU/pin, chi resume lai khi nguoi dung thuc su chuyen sang Tab 2.
-            if (currentTab != 2) wv2.onPause()
-            tab2Initialized = false
-        }
-
-        WebStorage.getInstance().deleteAllData()
-        log("Da dang xuat / xoa session cu (ca Tab 1 & Tab 2), chuan bi tao tai khoan moi...")
-    }
-
-    // switchPanelTab: chuyển giữa 2 tab trong PANEL LOG (Log ↔ Xác thực Mail.tm)
-    // Khác với switchBrowserTab (Tab 1 ↔ Tab 2 browser)
     private fun switchPanelTab(toVerify: Boolean) {
         showingVerify = toVerify
         if (toVerify) {
             binding.logScroll.visibility     = View.GONE
             binding.verifyWebView.visibility = View.VISIBLE
-            binding.tabLog.setBackgroundColor(0xFFF3F4F6.toInt())
-            binding.tabLog.setTextColor(0xFF6B7280.toInt())
-            binding.tabVerify.setBackgroundColor(0xFFFFFFFF.toInt())
-            binding.tabVerify.setTextColor(0xFF1D4ED8.toInt())
+            binding.tabLog.setBackgroundColor(0xFFF3F4F6.toInt()); binding.tabLog.setTextColor(0xFF6B7280.toInt())
+            binding.tabVerify.setBackgroundColor(0xFFFFFFFF.toInt()); binding.tabVerify.setTextColor(0xFF1D4ED8.toInt())
         } else {
             binding.logScroll.visibility     = View.VISIBLE
             binding.verifyWebView.visibility = View.GONE
-            binding.tabLog.setBackgroundColor(0xFFFFFFFF.toInt())
-            binding.tabLog.setTextColor(0xFF1D4ED8.toInt())
-            binding.tabVerify.setBackgroundColor(0xFFF3F4F6.toInt())
-            binding.tabVerify.setTextColor(0xFF6B7280.toInt())
+            binding.tabLog.setBackgroundColor(0xFFFFFFFF.toInt()); binding.tabLog.setTextColor(0xFF1D4ED8.toInt())
+            binding.tabVerify.setBackgroundColor(0xFFF3F4F6.toInt()); binding.tabVerify.setTextColor(0xFF6B7280.toInt())
         }
     }
 
@@ -559,7 +395,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun log(msg: String) = runOnUiThread {
         val cur = binding.tvLog.text.toString()
-        binding.tvLog.text = if (cur.isEmpty()) msg else (cur + "\n" + msg)
+        binding.tvLog.text = if (cur.isEmpty()) msg else "$cur\n$msg"
         binding.logScroll.post { binding.logScroll.fullScroll(View.FOCUS_DOWN) }
     }
 
@@ -593,153 +429,124 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString(KEY_ACCOUNTS, arr.toString()).apply()
     }
 
-    // ─── Main WebView (Tab 1) ─────────────────────────────────────────────────
+    // ─── WebView setup (dùng chung cho Tab 1 & Tab 2) ────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView() {
-        val wv = binding.webView
-        binding.swipeRefresh.isEnabled = false
+    private fun setupWebView(wv: WebView, isTab1: Boolean) {
+        val swipe = if (isTab1) binding.swipeRefresh else binding.swipeRefresh2
+        swipe.isEnabled = false
         wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         wv.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         wv.isScrollbarFadingEnabled = true
         wv.settings.apply {
-            javaScriptEnabled        = true
-            domStorageEnabled        = true
-            databaseEnabled          = true
-            useWideViewPort          = true
-            loadWithOverviewMode     = true
+            javaScriptEnabled                    = true
+            domStorageEnabled                    = true
+            databaseEnabled                      = true
+            useWideViewPort                      = true
+            loadWithOverviewMode                 = true
             setSupportZoom(true)
-            builtInZoomControls      = true
-            displayZoomControls      = false
-            mixedContentMode         = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            userAgentString          = COCCOC_UA
+            builtInZoomControls                  = true
+            displayZoomControls                  = false
+            mixedContentMode                     = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            userAgentString                      = COCCOC_UA
             javaScriptCanOpenWindowsAutomatically = true
-            cacheMode                = WebSettings.LOAD_DEFAULT
-            textZoom                 = 100
-            safeBrowsingEnabled      = false
+            cacheMode                            = WebSettings.LOAD_DEFAULT
+            textZoom                             = 100
+            safeBrowsingEnabled                  = false
             setGeolocationEnabled(false)
-            mediaPlaybackRequiresUserGesture = true  // tắt tự động phát media — tiết kiệm pin/CPU
+            mediaPlaybackRequiresUserGesture     = true  // tắt auto-play — tiết kiệm pin
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
-
-        // Đăng ký ClickBridge — JS có thể gọi window.ClickBridge.tapAt(x, y, scale)
-        // để yêu cầu native MotionEvent tap, không cần quyền trợ năng
         wv.addJavascriptInterface(ClickBridge(), "ClickBridge")
 
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String) {
-                if (currentTab == 1) {
-                    runOnUiThread {
-                        binding.swipeRefresh.isRefreshing = false
-                        // Cập nhật URL bar theo trang hiện tại
-                        if (!binding.etUrl.isFocused && url != null && url != "about:blank") {
-                            binding.etUrl.setText(url)
-                        }
-                    }
+                val isActive = (isTab1 && currentTab == 1) || (!isTab1 && currentTab == 2)
+                if (isActive) runOnUiThread {
+                    swipe.isRefreshing = false
+                    if (!binding.etUrl.isFocused && url != "about:blank") binding.etUrl.setText(url)
                 }
-                // Detect Cloudflare "Just a moment" challenge → tự reload sau 4s
-                // để pass challenge và load lại trang thật (tránh bị kẹt trang trắng)
-                v.evaluateJavascript("document.title") { titleRaw ->
-                    val t = titleRaw?.trim('"') ?: ""
-                    if (t.contains("Just a moment", ignoreCase = true) ||
-                        (t.contains("Cloudflare", ignoreCase = true) && url.contains("cdn-cgi"))) {
-                        log("⚡ Dang vuot Cloudflare, tu tai lai sau 4s...")
+                // Cloudflare challenge → reload sau 4s
+                v.evaluateJavascript("document.title") { raw ->
+                    val t = raw?.trim('"') ?: ""
+                    if (t.contains("Just a moment", true) ||
+                        (t.contains("Cloudflare", true) && url.contains("cdn-cgi"))) {
+                        if (isActive) log("⚡ Cloudflare — tu tai lai sau 4s...")
                         v.postDelayed({ v.reload() }, 4000)
                     }
                 }
-                // Sau khi verify link chay trong main WebView → detect thanh cong
-                // GUARD: chỉ inject auto-continue khi đang chạy flow tạo tài khoản,
-                // tránh click nhầm buttons khi user browse workspace bình thường.
-                if (flowRunning && url.contains("replit.com") && !url.contains("verify") &&
-                    !url.contains("confirm") && !url.contains("signup") &&
-                    !url.contains("login") && url != "about:blank") {
-                    log("✓ Xac thuc thanh cong! Da vao dashboard Replit.")
+                // Auto-fill signup
+                if (url.isSignupPage() && autoEmail.isNotEmpty()) {
+                    injectAutoFill(v)
+                    v.postDelayed({ injectAutoFill(v) }, 1200)
+                    v.postDelayed({ injectAutoFill(v) }, 3000)
+                }
+                // Detect dashboard sau xác thực
+                if (flowRunning && url.contains("replit.com") && !url.isSignupPage() &&
+                    !url.contains("verify") && !url.contains("confirm") && url != "about:blank") {
+                    val label = if (isTab1) "" else " [Tab 2]"
+                    log("✓$label Xac thuc thanh cong! Da vao dashboard.")
                     CookieManager.getInstance().flush()
                     injectAutoContinue(v)
                 }
-                val isSignup = url.contains("signup") || url.contains("login") || url.contains("register")
-                if (isSignup && autoEmail.isNotEmpty()) {
-                    // Inject immediately and again after 1s, 2s, 4s
-                    injectAutoFill(v)
-                    v.postDelayed({ injectAutoFill(v) }, 1000)
-                    v.postDelayed({ injectAutoFill(v) }, 2500)
-                    v.postDelayed({ injectAutoFill(v) }, 5000)
-                }
             }
+
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                 val url = req.url.toString()
                 if (url.contains("verify") || url.contains("confirm-email") || url.contains("oobCode")) {
-                    openVerifyTab(url)
-                    return true
+                    openVerifyTab(url); return true
                 }
                 return false
             }
         }
 
         wv.webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView, newProgress: Int) {
-                if (currentTab == 1) {
-                    runOnUiThread {
-                        binding.progressBar.visibility = if (newProgress < 100) View.VISIBLE else View.GONE
-                        binding.progressBar.progress   = newProgress
-                    }
+            override fun onProgressChanged(view: WebView, p: Int) {
+                val isActive = (isTab1 && currentTab == 1) || (!isTab1 && currentTab == 2)
+                if (isActive) runOnUiThread {
+                    binding.progressBar.visibility = if (p < 100) View.VISIBLE else View.GONE
+                    binding.progressBar.progress   = p
                 }
             }
 
-            // Ho tro nut "Upload a file" / <input type=file> trong Replit web (vd: Agent chat)
+            // Chỉ Tab 1 cần file chooser (Replit Agent upload)
             override fun onShowFileChooser(
-                view: WebView?,
-                callback: ValueCallback<Array<Uri>>?,
-                params: FileChooserParams?
+                view: WebView?, callback: ValueCallback<Array<Uri>>?, params: FileChooserParams?
             ): Boolean {
+                if (!isTab1) { callback?.onReceiveValue(null); return false }
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
-                // Bọc TẤT CẢ vào try-catch — intent building cũng có thể throw
                 return try {
-                    // Parse MIME types: split cả comma-in-string lẫn multiple entries
-                    val mimeTypes = params?.acceptTypes
-                        ?.flatMap { it.split(",") }
-                        ?.map { it.trim() }
-                        ?.filter { it.isNotBlank() }
-                        ?.takeIf { it.isNotEmpty() }
-                        ?: listOf("*/*")
-
-                    val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                        // type phải là single MIME — nếu nhiều loại dùng EXTRA_MIME_TYPES
-                        type = if (mimeTypes.size == 1) mimeTypes[0] else "*/*"
+                    val mimes = params?.acceptTypes
+                        ?.flatMap { it.split(",") }?.map { it.trim() }
+                        ?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() } ?: listOf("*/*")
+                    fileChooserLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply {
+                        type = if (mimes.size == 1) mimes[0] else "*/*"
                         addCategory(Intent.CATEGORY_OPENABLE)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        if (mimeTypes.size > 1) {
-                            putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
-                        }
-                        if (params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                        if (mimes.size > 1) putExtra(Intent.EXTRA_MIME_TYPES, mimes.toTypedArray())
+                        if (params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE)
                             putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                        }
-                    }
-                    fileChooserLauncher.launch(intent)
+                    })
                     true
                 } catch (e: Exception) {
-                    filePathCallback = null
-                    log("Loi mo file chooser: ${e.message}")
-                    // Phải gọi callback với null để WebView không bị treo
-                    callback?.onReceiveValue(null)
-                    false
+                    filePathCallback = null; callback?.onReceiveValue(null)
+                    log("Loi file chooser: ${e.message}"); false
                 }
             }
         }
 
-        // KHONG tu dong load signup luc khoi dong app nua.
         wv.loadUrl("about:blank")
 
-        // Touch listener: user TAP vào signup page → re-inject fill ngay
-        // Không cần accessibility permission — hoạt động qua JS injection
+        // Tap trên signup → re-inject fill (debounced 1s)
+        val lastTouch = longArrayOf(0L)
         wv.setOnTouchListener { _, event ->
             if (event.action == MotionEvent.ACTION_UP && autoEmail.isNotEmpty()) {
                 val url = wv.url ?: ""
-                if (url.contains("signup") || url.contains("login") || url.contains("register")) {
+                if (url.isSignupPage()) {
                     val now = System.currentTimeMillis()
-                    if (now - lastTab1TouchMs > 1000L) {
-                        lastTab1TouchMs = now
+                    if (now - lastTouch[0] > 1000L) {
+                        lastTouch[0] = now
                         wv.postDelayed({ injectAutoFill(wv) }, 150)
                     }
                 }
@@ -748,566 +555,300 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ─── Secondary WebView (Tab 2 — session độc lập) ─────────────────────────
+    // ─── Swipe to refresh ────────────────────────────────────────────────────
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView2() {
-        val wv = binding.webView2
-        binding.swipeRefresh2.isEnabled = false
-        wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-        wv.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-        wv.isScrollbarFadingEnabled = true
-        wv.settings.apply {
-            javaScriptEnabled        = true
-            domStorageEnabled        = true
-            databaseEnabled          = true
-            useWideViewPort          = true
-            loadWithOverviewMode     = true
-            setSupportZoom(true)
-            builtInZoomControls      = true
-            displayZoomControls      = false
-            mixedContentMode         = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            userAgentString          = COCCOC_UA
-            javaScriptCanOpenWindowsAutomatically = true
-            cacheMode                = WebSettings.LOAD_DEFAULT
-            textZoom                 = 100
-            safeBrowsingEnabled      = false
-            setGeolocationEnabled(false)
-            mediaPlaybackRequiresUserGesture = true  // tắt tự động phát media — tiết kiệm pin/CPU
-        }
-        CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
-
-        // Đăng ký ClickBridge cho Tab 2 — cùng bridge, dispatch tới tab active
-        wv.addJavascriptInterface(ClickBridge(), "ClickBridge")
-
-        wv.webViewClient = object : WebViewClient() {
-            override fun onPageFinished(v: WebView, url: String) {
-                if (currentTab == 2) {
-                    runOnUiThread {
-                        binding.swipeRefresh2.isRefreshing = false
-                        if (!binding.etUrl.isFocused && url != null && url != "about:blank") {
-                            binding.etUrl.setText(url)
-                        }
-                    }
-                }
-                // Auto-fill email/pass/username trên signup — giống Tab 1
-                val isSignup = url.contains("signup") || url.contains("login") || url.contains("register")
-                if (isSignup && autoEmail.isNotEmpty()) {
-                    injectAutoFill(v)
-                    v.postDelayed({ injectAutoFill(v) }, 1000)
-                    v.postDelayed({ injectAutoFill(v) }, 2500)
-                    v.postDelayed({ injectAutoFill(v) }, 5000)
-                }
-                // Detect Cloudflare challenge Tab 2 → auto-reload
-                v.evaluateJavascript("document.title") { titleRaw ->
-                    val t = titleRaw?.trim('"') ?: ""
-                    if (t.contains("Just a moment", ignoreCase = true) ||
-                        (t.contains("Cloudflare", ignoreCase = true) && url.contains("cdn-cgi"))) {
-                        v.postDelayed({ v.reload() }, 4000)
-                    }
-                }
-                // Sau xác thực → detect dashboard + auto-continue onboarding
-                // GUARD: chỉ inject khi đang chạy flow tạo tài khoản
-                if (flowRunning && url.contains("replit.com") && !url.contains("verify") &&
-                    !url.contains("confirm") && !url.contains("signup") &&
-                    !url.contains("login") && url != "about:blank") {
-                    log("✓ [Tab 2] Xac thuc thanh cong! Da vao dashboard Replit.")
-                    CookieManager.getInstance().flush()
-                    injectAutoContinue(v)
-                }
-            }
-            // Bắt verify link trong Tab 2 — mở vào verifyWebView (panel nhỏ)
-            override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
-                val url = req.url.toString()
-                if (url.contains("verify") || url.contains("confirm-email") || url.contains("oobCode")) {
-                    openVerifyTab(url)
-                    return true
-                }
-                return false
-            }
-        }
-
-        wv.webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView, newProgress: Int) {
-                if (currentTab == 2) {
-                    runOnUiThread {
-                        binding.progressBar.visibility = if (newProgress < 100) View.VISIBLE else View.GONE
-                        binding.progressBar.progress   = newProgress
-                    }
-                }
-            }
-        }
-
-        // Tab 2 bắt đầu blank; nội dung được load khi user lần đầu switch sang tab 2
-        wv.loadUrl("about:blank")
-
-        // Touch listener Tab2 — cùng logic Tab1
-        wv.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_UP && autoEmail.isNotEmpty()) {
-                val url = wv.url ?: ""
-                if (url.contains("signup") || url.contains("login") || url.contains("register")) {
-                    val now = System.currentTimeMillis()
-                    if (now - lastTab2TouchMs > 1000L) {
-                        lastTab2TouchMs = now
-                        wv.postDelayed({ injectAutoFill(wv) }, 150)
-                    }
-                }
-            }
-            false
-        }
-    }
-
-    // ─── Smart Auto-Fill Engine ──────────────────────────────────────────────
-    // Giống accessibility service nhưng qua JS — không cần quyền Android.
-    // Kích hoạt: onPageFinished, user TAP, MutationObserver, interval backup.
-    // Mỗi lần gọi: tạo session ID mới → kill instance cũ → chạy observer vĩnh viễn.
-    private fun injectAutoFill(wv: WebView) {
-        if (autoEmail.isEmpty()) return
-        val e = autoEmail.replace("'", "\\'")
-        val p = MAIL_PASS.replace("'", "\\'")
-        val u = autoUsername.replace("'", "\\'")
-
-        val js = """
-            (function(){
-              // Session ID: mỗi lần inject mới kill observer/interval cũ, tránh chồng lấp
-              var sid = Date.now() + '-' + Math.random();
-              window.__rem2FillSid = sid;
-              if (window.__rem2FillMo) { try { window.__rem2FillMo.disconnect(); } catch(x){} }
-              if (window.__rem2FillIv)  clearInterval(window.__rem2FillIv);
-
-              var EMAIL = '$e', PASS = '$p', USER = '$u';
-              var lastFill = 0;
-
-              // Ghi value đúng cách để React SPA nhận (không bị reset ngay)
-              function fillReact(el, val) {
-                if (!el) return;
-                if (document.activeElement === el && el.value === val) return;
-                if (el.value === val) return;
-                var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-                if (setter && setter.set) setter.set.call(el, val); else el.value = val;
-                el.dispatchEvent(new Event('input',  {bubbles:true, cancelable:true}));
-                el.dispatchEvent(new Event('change', {bubbles:true, cancelable:true}));
-                el.dispatchEvent(new KeyboardEvent('keyup', {bubbles:true, key:'a'}));
-              }
-
-              // Selector chains — theo thứ tự ưu tiên, bắt mọi biến thể
-              function findEmail() {
-                return document.querySelector('input[type=email]')
-                    || document.querySelector('input[name*=email i]')
-                    || document.querySelector('input[autocomplete*=email i]')
-                    || document.querySelector('input[placeholder*=email i]')
-                    || document.querySelector('input[placeholder*=mail i]');
-              }
-              function findPass() {
-                return document.querySelector('input[type=password]')
-                    || document.querySelector('input[autocomplete=new-password]')
-                    || document.querySelector('input[autocomplete=current-password]')
-                    || document.querySelector('input[name*=pass i]');
-              }
-              function findUser() {
-                return document.querySelector('input[autocomplete=username]')
-                    || document.querySelector('input[name*=user i]')
-                    || document.querySelector('input[placeholder*=username i]');
-              }
-              function clickContinue() {
-                try {
-                  var kws = ['continue','next','sign up','create account','get started','submit'];
-                  var els = document.querySelectorAll('button:not([disabled]),input[type=submit]:not([disabled])');
-                  for (var i=0;i<els.length;i++){
-                    var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();
-                    for (var k=0;k<kws.length;k++) if(txt.indexOf(kws[k])!==-1){
-                      syntheticClick(els[i]);
-                      return;
-                    }
-                  }
-                }catch(err){}
-              }
-
-              // Click tổng hợp: thử đủ cách để vượt qua React/Next.js event handling
-              // Không cần quyền trợ năng — dùng pointer/touch/mouse events + ClickBridge native tap
-              function syntheticClick(el) {
-                if (!el) return;
-                try { el.focus(); } catch(e) {}
-                // 1. PointerEvent (mới nhất, React 17+ dùng)
-                try { el.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true, cancelable:true, isPrimary:true})); } catch(e) {}
-                try { el.dispatchEvent(new PointerEvent('pointerup',   {bubbles:true, cancelable:true, isPrimary:true})); } catch(e) {}
-                // 2. MouseEvent (React 16 và các thư viện cũ)
-                try { el.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0})); } catch(e) {}
-                try { el.dispatchEvent(new MouseEvent('mouseup',   {bubbles:true, cancelable:true, button:0})); } catch(e) {}
-                try { el.dispatchEvent(new MouseEvent('click',     {bubbles:true, cancelable:true, button:0})); } catch(e) {}
-                // 3. DOM click() — fallback cuối
-                try { el.click(); } catch(e) {}
-                // 4. Native MotionEvent qua ClickBridge — đáng tin nhất, không cần accessibility
-                try {
-                  var rect = el.getBoundingClientRect();
-                  if (rect.width > 0 && rect.height > 0) {
-                    var cx = rect.left + rect.width  / 2;
-                    var cy = rect.top  + rect.height / 2;
-                    var dpr = window.devicePixelRatio || 1;
-                    if (window.ClickBridge) window.ClickBridge.tapAt(cx, cy, dpr);
-                  }
-                } catch(e) {}
-              }
-
-              function tick() {
-                if (window.__rem2FillSid !== sid) return;  // session bị replace — dừng
-                var now = Date.now();
-                if (now - lastFill < 250) return;          // debounce 250ms
-                lastFill = now;
-                try {
-                  var eEl = findEmail(), pEl = findPass(), uEl = findUser();
-                  if (eEl) fillReact(eEl, EMAIL);
-                  if (pEl) fillReact(pEl, PASS);
-                  if (uEl) fillReact(uEl, USER);
-                  // SPA nhiều bước: chỉ thấy email → bấm Continue để sang bước tiếp
-                  if (eEl && !pEl) setTimeout(clickContinue, 400);
-                }catch(err){}
-              }
-
-              // MutationObserver: phản ứng ngay khi DOM thay đổi hoặc field ẩn/hiện
-              var mo = new MutationObserver(function(mutations) {
-                for (var i=0;i<mutations.length;i++) {
-                  var m=mutations[i];
-                  if (m.type==='childList'||m.attributeName==='style'||
-                      m.attributeName==='class'||m.attributeName==='hidden'||
-                      m.attributeName==='disabled') { tick(); break; }
-                }
-              });
-              mo.observe(document.documentElement, {
-                childList:true, subtree:true,
-                attributes:true,
-                attributeFilter:['style','class','hidden','disabled','type']
-              });
-              window.__rem2FillMo = mo;
-
-              // Interval 500ms: bắt value bị React reset sau re-render — chạy vĩnh viễn
-              window.__rem2FillIv = setInterval(function(){
-                if (window.__rem2FillSid !== sid) { clearInterval(window.__rem2FillIv); return; }
-                tick();
-              }, 500);
-
-              tick(); // Fill ngay lập tức
-            })();
-        """.trimIndent()
-
-        wv.evaluateJavascript(js, null)
-    }
-
-    // ─── Pull-to-refresh + swipe gestures ────────────────────────────────────
-
-    @SuppressLint("ClickableViewAccessibility")
     private fun setupSwipeAndGestures() {
-        binding.swipeRefresh.setColorSchemeColors(0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
+        val blue = intArrayOf(0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
+        binding.swipeRefresh.setColorSchemeColors(*blue)
         binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
         binding.swipeRefresh.isEnabled = false
-
-        binding.swipeRefresh2.setColorSchemeColors(0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
+        binding.swipeRefresh2.setColorSchemeColors(*blue)
         binding.swipeRefresh2.setOnRefreshListener { binding.webView2.reload() }
         binding.swipeRefresh2.isEnabled = false
     }
 
-    // Tu dong bam qua cac man hinh onboarding — KHONG phu thuoc cau chu cu the (Replit hay doi copy).
-    // Su dung ClickBridge + syntheticClick de click manh hon, khong can quyen tro nang Android.
-    private fun injectAutoContinue(wv: WebView) {
-            val js = """
-                (function(){
-                  if (window.__rem2AutoContinueActive) return;
-                  window.__rem2AutoContinueActive = true;
+    // ─── Account flow ─────────────────────────────────────────────────────────
 
-                  var CONTINUE_KW = ['continue','next','skip','get started',"let's go",'done','finish','i agree','agree','ok','got it','submit'];
-                  var STOP_HEADINGS = ['what do you want to make', 'what should we build', 'what are we building'];
-                  var EXCLUDE_KW = ['back','log in','login','create account','upgrade','sign in','sign up','close','cancel','upload'];
-
-                  // Click mạnh: dùng cả PointerEvent + MouseEvent + click() + ClickBridge native tap
-                  // Không cần quyền trợ năng Android — ClickBridge dùng MotionEvent trực tiếp
-                  function syntheticClick(el) {
-                    if (!el) return;
-                    try { el.focus(); } catch(e) {}
-                    try { el.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true, cancelable:true, isPrimary:true})); } catch(e) {}
-                    try { el.dispatchEvent(new PointerEvent('pointerup',   {bubbles:true, cancelable:true, isPrimary:true})); } catch(e) {}
-                    try { el.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0})); } catch(e) {}
-                    try { el.dispatchEvent(new MouseEvent('mouseup',   {bubbles:true, cancelable:true, button:0})); } catch(e) {}
-                    try { el.dispatchEvent(new MouseEvent('click',     {bubbles:true, cancelable:true, button:0})); } catch(e) {}
-                    try { el.click(); } catch(e) {}
-                    // Native MotionEvent qua ClickBridge — đáng tin nhất
-                    try {
-                      var rect = el.getBoundingClientRect();
-                      if (rect.width > 0 && rect.height > 0) {
-                        var cx = rect.left + rect.width  / 2;
-                        var cy = rect.top  + rect.height / 2;
-                        var dpr = window.devicePixelRatio || 1;
-                        if (window.ClickBridge) window.ClickBridge.tapAt(cx, cy, dpr);
-                      }
-                    } catch(e) {}
-                  }
-
-                  function headingText(){
-                    var hs = document.querySelectorAll('h1,h2,h3');
-                    var txt = '';
-                    for (var i=0;i<hs.length;i++) txt += ' ' + (hs[i].innerText||'').toLowerCase();
-                    return txt;
-                  }
-
-                  // Da toi dashboard / man hinh chat that su -> dung lai, khong dong vao gi nua
-                  function isFinalDestination(){
-                    return !!document.querySelector('textarea[placeholder*="Make anything" i]')
-                        || !!document.querySelector('[placeholder*="Try an example" i]')
-                        || !!document.querySelector('textarea[placeholder*="Ask Replit" i]');
-                  }
-
-                  function findContinueBtn(){
-                    var els = document.querySelectorAll('button, a[role="button"], [role="button"], input[type=submit]');
-                    for (var i=0;i<els.length;i++){
-                      var el = els[i];
-                      var txt = (el.innerText || el.value || '').trim().toLowerCase();
-                      if (!txt) continue;
-                      for (var k=0;k<CONTINUE_KW.length;k++){
-                        if (txt === CONTINUE_KW[k] || txt.indexOf(CONTINUE_KW[k]) !== -1) return el;
-                      }
-                    }
-                    return null;
-                  }
-
-                  function findChoiceCandidates(excludeEl){
-                    var buttons = document.querySelectorAll('button, [role="button"]');
-                    var out = [];
-                    for (var i=0;i<buttons.length;i++){
-                      var el = buttons[i];
-                      if (el === excludeEl || el.disabled) continue;
-                      var txt = (el.innerText||'').trim().toLowerCase();
-                      if (!txt || txt.length > 40) continue;
-                      var bad = false;
-                      for (var e2=0;e2<EXCLUDE_KW.length;e2++){
-                        if (txt.indexOf(EXCLUDE_KW[e2]) !== -1) { bad = true; break; }
-                      }
-                      if (bad) continue;
-                      out.push(el);
-                    }
-                    return out;
-                  }
-
-                  // Tra ve true neu da xu ly xong (final destination hoac gap man hinh dung)
-                  function tick(){
-                    try {
-                      if (isFinalDestination()) return true;
-                      var h = headingText();
-                      for (var s=0;s<STOP_HEADINGS.length;s++){
-                        if (h.indexOf(STOP_HEADINGS[s]) !== -1) return true;
-                      }
-
-                      var contBtn = findContinueBtn();
-                      if (contBtn && !contBtn.disabled) {
-                        syntheticClick(contBtn);
-                        return false;
-                      }
-                      // Continue dang disabled hoac chua thay -> co the la man "chon 1 trong nhieu"
-                      // chua duoc chon -> tu chon option dau tien roi thu bam Continue ngay sau do
-                      var candidates = findChoiceCandidates(contBtn);
-                      if (candidates.length >= 1) {
-                        syntheticClick(candidates[0]);
-                        setTimeout(function(){
-                          var b = findContinueBtn();
-                          if (b && !b.disabled) syntheticClick(b);
-                        }, 400);
-                      }
-                    } catch (e) {}
-                    return false;
-                  }
-
-                  var count = 0;
-                  var iv = setInterval(function(){
-                    count++;
-                    var done = tick();
-                    if (done || count > 60) { clearInterval(iv); window.__rem2AutoContinueActive = false; }
-                  }, 1200);
-                  var mo = new MutationObserver(function(){ tick(); });
-                  mo.observe(document.body, {childList:true, subtree:true});
-                  tick();
-                })();
-            """.trimIndent()
-            wv.evaluateJavascript(js, null)
+    private fun startCreateAccountFlow() {
+        if (flowRunning) { Toast.makeText(this, "Dang xu ly...", Toast.LENGTH_SHORT).show(); return }
+        flowRunning = true
+        binding.btnCreateAccount.isEnabled = false
+        binding.btnCreateAccount.text = "⏳ Dang tao tai khoan..."
+        binding.tvLog.text = ""
+        switchPanelTab(false)
+        clearWebSession()
+        binding.webView.postDelayed({ binding.webView.loadUrl("https://replit.com/signup") }, 300)
+        lifecycleScope.launch {
+            ensureAccount()
+            flowRunning = false
+            withContext(Dispatchers.Main) {
+                binding.btnCreateAccount.isEnabled = true
+                binding.btnCreateAccount.text = "🔄 Tao tai khoan moi"
+            }
         }
+    }
 
-    // ─── Verify WebView (mini browser inside panel) ───────────────────────────
+    private fun clearWebSession() {
+        CookieManager.getInstance().removeAllCookies(null)
+        CookieManager.getInstance().flush()
+        tab1Cookies.clear(); tab2Cookies.clear()
+        listOf(binding.webView).also { if (tab2Initialized) it + binding.webView2 }.forEach { wv ->
+            wv.clearCache(true); wv.clearHistory(); wv.clearFormData()
+            wv.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
+            wv.loadUrl("about:blank")
+        }
+        if (tab2Initialized) {
+            binding.webView2.clearCache(true); binding.webView2.clearHistory()
+            binding.webView2.clearFormData()
+            binding.webView2.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
+            binding.webView2.loadUrl("about:blank")
+            if (currentTab != 2) binding.webView2.onPause()
+            tab2Initialized = false
+        }
+        WebStorage.getInstance().deleteAllData()
+        autoEmail = ""; autoUsername = ""
+        log("Da xoa session cu — chuan bi tao tai khoan moi...")
+    }
+
+    // ─── Cloud polling (server làm nặng, app chỉ poll + hiển thị) ────────────
+
+    private suspend fun ensureAccount() = withContext(Dispatchers.IO) {
+        log("Ket noi server...")
+        val jobId = try {
+            val body = "".toRequestBody(null)
+            val res  = http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/create").post(body).build()).execute()
+            JSONObject(res.body?.string() ?: "{}").getString("jobId")
+        } catch (e: Exception) { log("Loi ket noi: ${e.message}"); return@withContext }
+        log("Server dang xu ly (5-10 phut)... ID: ${jobId.take(8)}")
+
+        var lastLogIdx = 0
+        repeat(120) { attempt ->
+            delay(5000)
+            try {
+                val json   = JSONObject(http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()).execute().body?.string() ?: "{}")
+                val status = json.optString("status", "pending")
+
+                // Stream logs từ server
+                val logs = json.optJSONArray("log")
+                if (logs != null) {
+                    for (i in lastLogIdx until logs.length()) log("[Cloud] ${logs.getString(i)}")
+                    lastLogIdx = logs.length()
+                }
+
+                // Nhận email/username sớm (server tạo trước khi xác thực xong)
+                if (autoEmail.isEmpty()) {
+                    val e = json.optString("email", "")
+                    val u = json.optString("username", "")
+                    if (e.isNotEmpty()) {
+                        autoEmail = e; autoUsername = u
+                        withContext(Dispatchers.Main) {
+                            fillIfOnSignup(binding.webView)
+                            if (tab2Initialized) fillIfOnSignup(binding.webView2)
+                        }
+                    }
+                }
+
+                when (status) {
+                    "done" -> {
+                        autoEmail    = json.optString("email", "")
+                        autoUsername = json.optString("username", "")
+                        val link     = json.optString("verifyLink", "")
+                        accounts.add(AccountEntry(email = autoEmail, password = MAIL_PASS, username = autoUsername))
+                        saveAccounts()
+                        log("✅ Xong! Email: $autoEmail | User: $autoUsername")
+                        withContext(Dispatchers.Main) {
+                            ensureOnSignup(binding.webView)
+                            if (tab2Initialized) ensureOnSignup(binding.webView2)
+                            if (link.isNotEmpty()) openVerifyTab(link)
+                        }
+                        return@withContext
+                    }
+                    "error" -> { log("❌ Server loi tao tai khoan"); return@withContext }
+                    else -> if (attempt > 0 && attempt % 6 == 0) log("Dang cho... ${attempt * 5}s")
+                }
+            } catch (e: Exception) { if (attempt % 12 == 0) log("Poll loi: ${e.message}") }
+        }
+        log("Het thoi gian cho server")
+    }
+
+    private fun fillIfOnSignup(wv: WebView) {
+        if ((wv.url ?: "").isSignupPage()) injectAutoFill(wv)
+    }
+
+    private fun ensureOnSignup(wv: WebView) {
+        val url = wv.url ?: ""
+        if (url.isSignupPage()) injectAutoFill(wv) else wv.loadUrl("https://replit.com/signup")
+    }
+
+    // ─── Verify tab ───────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupVerifyWebView() {
-        val vwv = binding.verifyWebView
-        vwv.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = false
-        }
-        vwv.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean = true
-            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean = true
+        binding.verifyWebView.settings.javaScriptEnabled = false  // chỉ hiện HTML tĩnh
+        binding.verifyWebView.webViewClient = object : WebViewClient() {
+            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = true
+            override fun shouldOverrideUrlLoading(v: WebView, u: String) = true
         }
         renderVerifyPanel()
     }
 
     private fun renderVerifyPanel() = runOnUiThread {
-        val sb = StringBuilder()
-        sb.append("<html><body style='font-family:sans-serif;margin:10px;color:#111827'>")
-        sb.append("<h3 style='color:#1D4ED8;margin:0 0 6px 0;font-size:15px'>\uD83D\uDCEC Hop thu Mail.tm</h3>")
-        if (autoEmail.isNotEmpty()) {
-            sb.append("<p style='color:#6B7280;font-size:11px;margin:0 0 10px 0'>").append(autoEmail).append("</p>")
+        val html = buildString {
+            append("<html><body style='font-family:sans-serif;margin:10px;color:#111827'>")
+            append("<h3 style='color:#1D4ED8;margin:0 0 6px 0;font-size:15px'>📬 Hop thu Mail.tm</h3>")
+            if (autoEmail.isNotEmpty())
+                append("<p style='color:#6B7280;font-size:11px;margin:0 0 10px 0'>$autoEmail</p>")
+            append("<p style='color:#9CA3AF;font-size:12px'>Server tu dong xu ly email xac thuc.</p>")
+            append("</body></html>")
         }
-        if (inboxMessages.isEmpty()) {
-            sb.append("<p style='color:#9CA3AF;font-size:12px'>Chua co email nao...</p>")
-        } else {
-            inboxMessages.forEach { (from, subject) ->
-                sb.append("<div style='border-bottom:1px solid #E5E7EB;padding:8px 0'>")
-                sb.append("<div style='color:#6B7280;font-size:11px'>").append(from).append("</div>")
-                sb.append("<div style='font-weight:600;font-size:13px'>").append(subject).append("</div>")
-                sb.append("</div>")
-            }
-        }
-        sb.append("</body></html>")
-        binding.verifyWebView.loadDataWithBaseURL(null, sb.toString(), "text/html", "UTF-8", null)
+        binding.verifyWebView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
     }
 
     private fun openVerifyTab(url: String) = runOnUiThread {
-        log("Tim thay link xac thuc — tu dong xac minh trong man hinh Replit...")
-        // Load vào tab đang active — KHÔNG force Tab 1 khi user đang ở Tab 2
-        val activeWv = if (currentTab == 1) binding.webView else binding.webView2
-        activeWv.loadUrl(url)
+        log("Tim thay link xac thuc — dang mo...")
+        activeWebView().loadUrl(url)
         renderVerifyPanel()
-        panelOpen = true
-        binding.logPanel.visibility = View.VISIBLE
+        panelOpen = true; binding.logPanel.visibility = View.VISIBLE
         switchPanelTab(true)
     }
 
-    // ─── Account flow (cloud — server làm thay, app chỉ nhận kết quả) ────────
+    // ─── Auto-Fill (JS, không cần accessibility) ──────────────────────────────
+    // Tự dừng sau khi fill xong để không tốn pin.
+    private fun injectAutoFill(wv: WebView) {
+        if (autoEmail.isEmpty()) return
+        val e = autoEmail.replace("'", "\\'")
+        val p = MAIL_PASS.replace("'", "\\'")
+        val u = autoUsername.replace("'", "\\'")
+        wv.evaluateJavascript("""
+            (function(){
+              var sid = Date.now() + '-' + Math.random();
+              window.__rem2FillSid = sid;
+              if (window.__rem2FillMo) { try{window.__rem2FillMo.disconnect();}catch(x){} }
+              if (window.__rem2FillIv) clearInterval(window.__rem2FillIv);
+              var EMAIL='$e', PASS='$p', USER='$u', lastFill=0, emptyTicks=0;
 
-      private suspend fun ensureAccount() = withContext(Dispatchers.IO) {
-          log("Ket noi Replit Cloud de tao tai khoan...")
-
-          // Bước 1: Gửi yêu cầu lên server → nhận jobId
-          val jobId = try {
-              val req = Request.Builder()
-                  .url("$SERVER_URL/api/rem2/create")
-                  .post(okhttp3.RequestBody.create(null, byteArrayOf()))
-                  .build()
-              val res = http.newCall(req).execute()
-              org.json.JSONObject(res.body?.string() ?: "{}").getString("jobId")
-          } catch (e: Exception) {
-              log("Loi ket noi server: ${e.message}")
-              return@withContext
-          }
-          log("Server dang xu ly (5-10 phut)... JobID: ${jobId.take(8)}")
-
-          // Bước 2: Poll kết quả mỗi 5s — máy không làm gì nặng
-          var lastLogCount = 0
-          repeat(120) { attempt ->
-              delay(5000)
-              try {
-                  val req  = Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()
-                  val body = http.newCall(req).execute().body?.string() ?: "{}"
-                  val json = org.json.JSONObject(body)
-                  val status = json.optString("status", "pending")
-
-                  // Hiển thị log mới từ server lên panel
-                  val logs = json.optJSONArray("log")
-                  if (logs != null) {
-                      for (i in lastLogCount until logs.length()) {
-                          log("[Cloud] ${logs.getString(i)}")
-                      }
-                      lastLogCount = logs.length()
-                  }
-
-                  // Server da tao email/username tu luc "pending" (truoc khi xac thuc xong),
-                  // nen phai lay ngay tai day de kip dien vao form signup — KHONG doi den "done"
-                  // (luc do da qua tre, form signup da can duoc dien tu truoc roi).
-                  if (autoEmail.isEmpty()) {
-                      val earlyEmail = json.optString("email", "")
-                      val earlyUser  = json.optString("username", "")
-                      if (earlyEmail.isNotEmpty()) {
-                          autoEmail    = earlyEmail
-                          autoUsername = earlyUser
-                          withContext(Dispatchers.Main) {
-                              fun fillIfOnSignup(wv: WebView) {
-                                  val curUrl = wv.url ?: ""
-                                  val onSignup = curUrl.contains("signup") ||
-                                                 curUrl.contains("login")  ||
-                                                 curUrl.contains("register")
-                                  if (onSignup) injectAutoFill(wv)
-                              }
-                              fillIfOnSignup(binding.webView)
-                              if (tab2Initialized) fillIfOnSignup(binding.webView2)
-                          }
-                      }
-                  }
-
-                  when (status) {
-                      "done" -> {
-                          autoEmail    = json.optString("email", "")
-                          autoUsername = json.optString("username", "")
-                          val verifyLink = json.optString("verifyLink", "")
-                          accounts.add(AccountEntry(
-                              email    = autoEmail,
-                              password = MAIL_PASS,
-                              username = autoUsername
-                          ))
-                          saveAccounts()
-                          log("✅ Hoan thanh! Email: $autoEmail | User: $autoUsername")
-                          withContext(Dispatchers.Main) {
-                              // Trang signup da duoc load san tu luc bam nut (khong con phai
-                              // cho toi day moi thay trang). Neu da o dung trang thi fill luon,
-                              // khong reload lai (tranh mat tien trinh nguoi dung da nhap dang).
-                              fun ensureSignupAndFill(wv: WebView) {
-                                  val curUrl = wv.url ?: ""
-                                  val onSignup = curUrl.contains("signup") ||
-                                                 curUrl.contains("login")  ||
-                                                 curUrl.contains("register")
-                                  if (onSignup) {
-                                      injectAutoFill(wv)
-                                  } else {
-                                      wv.loadUrl("https://replit.com/signup")
-                                  }
-                              }
-                              ensureSignupAndFill(binding.webView)
-                              if (tab2Initialized) ensureSignupAndFill(binding.webView2)
-                              if (verifyLink.isNotEmpty()) openVerifyTab(verifyLink)
-                          }
-                          return@withContext
-                      }
-                      "error" -> {
-                          log("❌ Server bao loi tao tai khoan")
-                          return@withContext
-                      }
-                      else -> {
-                          if (attempt > 0 && attempt % 6 == 0) log("Dang cho server... ${attempt * 5}s")
-                      }
-                  }
-              } catch (e: Exception) {
-                  if (attempt % 12 == 0) log("Poll loi: ${e.message}")
+              function fillReact(el, val) {
+                if (!el || el.value === val) return;
+                var s = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');
+                if (s&&s.set) s.set.call(el,val); else el.value=val;
+                ['input','change'].forEach(function(t){el.dispatchEvent(new Event(t,{bubbles:true}));});
+                el.dispatchEvent(new KeyboardEvent('keyup',{bubbles:true,key:'a'}));
               }
-          }
-          log("Het thoi gian cho ket qua tu server")
-      }
+              function findEmail(){return document.querySelector('input[type=email]')||document.querySelector('input[name*=email i]')||document.querySelector('input[placeholder*=email i]');}
+              function findPass() {return document.querySelector('input[type=password]')||document.querySelector('input[name*=pass i]');}
+              function findUser() {return document.querySelector('input[autocomplete=username]')||document.querySelector('input[name*=user i]')||document.querySelector('input[placeholder*=username i]');}
 
-      // ─── Back press ───────────────────────────────────────────────────────────
+              function syntheticClick(el) {
+                if (!el) return;
+                try{el.focus();}catch(e){}
+                ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
+                  try{el.dispatchEvent(new (t.startsWith('pointer')?PointerEvent:MouseEvent)(t,{bubbles:true,cancelable:true,isPrimary:true,button:0}));}catch(e){}
+                });
+                try{el.click();}catch(e){}
+                try{
+                  var r=el.getBoundingClientRect();
+                  if(r.width>0&&r.height>0&&window.ClickBridge)
+                    window.ClickBridge.tapAt(r.left+r.width/2, r.top+r.height/2, window.devicePixelRatio||1);
+                }catch(e){}
+              }
 
-    override fun onResume() {
-        super.onResume()
-        // Khôi phục JS timers rồi mới resume tab đang active
-        binding.webView.resumeTimers()
-        if (currentTab == 1) binding.webView.onResume() else binding.webView2.onResume()
+              function tick() {
+                if (window.__rem2FillSid!==sid) return;
+                var now=Date.now(); if(now-lastFill<300) return; lastFill=now;
+                try {
+                  var eEl=findEmail(), pEl=findPass(), uEl=findUser();
+                  if (!eEl && !pEl) { emptyTicks++; if(emptyTicks>8){clearInterval(window.__rem2FillIv);window.__rem2FillMo&&window.__rem2FillMo.disconnect();} return; }
+                  emptyTicks=0;
+                  if(eEl) fillReact(eEl,EMAIL);
+                  if(pEl) fillReact(pEl,PASS);
+                  if(uEl) fillReact(uEl,USER);
+                  if(eEl&&!pEl) setTimeout(function(){
+                    var kws=['continue','next','sign up','create account','get started','submit'];
+                    var els=document.querySelectorAll('button:not([disabled]),input[type=submit]:not([disabled])');
+                    for(var i=0;i<els.length;i++){var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();for(var k=0;k<kws.length;k++)if(txt.indexOf(kws[k])!==-1){syntheticClick(els[i]);return;}}
+                  },400);
+                }catch(err){}
+              }
+
+              var mo=new MutationObserver(function(ms){
+                for(var i=0;i<ms.length;i++){var m=ms[i];if(m.type==='childList'||['style','class','hidden','disabled'].indexOf(m.attributeName)!==-1){tick();break;}}
+              });
+              mo.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class','hidden','disabled','type']});
+              window.__rem2FillMo=mo;
+              window.__rem2FillIv=setInterval(function(){if(window.__rem2FillSid!==sid){clearInterval(window.__rem2FillIv);return;}tick();},600);
+              tick();
+            })();
+        """.trimIndent(), null)
     }
 
-    override fun onStop() {
-        super.onStop()
-        binding.webView.onPause()
-        binding.webView2.onPause()
-    }
+    // ─── Auto-Continue onboarding (không cần accessibility) ──────────────────
+    private fun injectAutoContinue(wv: WebView) {
+        wv.evaluateJavascript("""
+            (function(){
+              if (window.__rem2AutoContinueActive) return;
+              window.__rem2AutoContinueActive=true;
+              var CONTINUE_KW=['continue','next','skip','get started',"let's go",'done','finish','i agree','agree','ok','got it','submit'];
+              var STOP_HEADS =['what do you want to make','what should we build','what are we building'];
+              var EXCLUDE_KW =['back','log in','login','create account','upgrade','sign in','sign up','close','cancel','upload'];
 
-    override fun onBackPressed() {
-        val activeWv = if (currentTab == 1) binding.webView else binding.webView2
-        when {
-            panelOpen && showingVerify && binding.verifyWebView.canGoBack() ->
-                binding.verifyWebView.goBack()
-            panelOpen -> { binding.logPanel.visibility = View.GONE; panelOpen = false }
-            activeWv.canGoBack() -> activeWv.goBack()
-            else -> super.onBackPressed()
-        }
+              function syntheticClick(el) {
+                if (!el) return;
+                try{el.focus();}catch(e){}
+                ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
+                  try{el.dispatchEvent(new (t.startsWith('pointer')?PointerEvent:MouseEvent)(t,{bubbles:true,cancelable:true,isPrimary:true,button:0}));}catch(e){}
+                });
+                try{el.click();}catch(e){}
+                try{
+                  var r=el.getBoundingClientRect();
+                  if(r.width>0&&r.height>0&&window.ClickBridge)
+                    window.ClickBridge.tapAt(r.left+r.width/2,r.top+r.height/2,window.devicePixelRatio||1);
+                }catch(e){}
+              }
+
+              function isDone(){
+                return !!document.querySelector('textarea[placeholder*="Make anything" i]')
+                    || !!document.querySelector('[placeholder*="Try an example" i]')
+                    || !!document.querySelector('textarea[placeholder*="Ask Replit" i]');
+              }
+              function headingText(){var t='';document.querySelectorAll('h1,h2,h3').forEach(function(h){t+=' '+(h.innerText||'').toLowerCase();});return t;}
+              function findContinue(){
+                var els=document.querySelectorAll('button,a[role="button"],[role="button"],input[type=submit]');
+                for(var i=0;i<els.length;i++){var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();for(var k=0;k<CONTINUE_KW.length;k++)if(txt===CONTINUE_KW[k]||txt.indexOf(CONTINUE_KW[k])!==-1)return els[i];}
+                return null;
+              }
+              function findChoices(excl){
+                var out=[];
+                document.querySelectorAll('button,[role="button"]').forEach(function(el){
+                  if(el===excl||el.disabled)return;
+                  var txt=(el.innerText||'').trim().toLowerCase();
+                  if(!txt||txt.length>40)return;
+                  if(EXCLUDE_KW.some(function(k){return txt.indexOf(k)!==-1;}))return;
+                  out.push(el);
+                });
+                return out;
+              }
+
+              function tick(){
+                try{
+                  if(isDone())return true;
+                  var h=headingText();
+                  if(STOP_HEADS.some(function(s){return h.indexOf(s)!==-1;}))return true;
+                  var btn=findContinue();
+                  if(btn&&!btn.disabled){syntheticClick(btn);return false;}
+                  var cs=findChoices(btn);
+                  if(cs.length){syntheticClick(cs[0]);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}
+                }catch(e){}
+                return false;
+              }
+
+              var count=0, mo=new MutationObserver(function(){tick();});
+              mo.observe(document.body,{childList:true,subtree:true});
+              var iv=setInterval(function(){
+                count++;
+                if(tick()||count>60){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;}
+              },1200);
+              tick();
+            })();
+        """.trimIndent(), null)
     }
 }
