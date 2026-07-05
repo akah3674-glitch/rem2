@@ -651,26 +651,35 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
-                // Dùng ACTION_GET_CONTENT trực tiếp thay vì params.createIntent()
-                // — createIntent() đôi khi trả về null hoặc sai MIME trên Android 10+
-                val mimeType = params?.acceptTypes
-                    ?.filter { it.isNotBlank() }
-                    ?.joinToString(",")
-                    ?.takeIf { it.isNotBlank() } ?: "*/*"
-                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = mimeType
-                    addCategory(Intent.CATEGORY_OPENABLE)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    if (params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE) {
-                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                    }
-                }
+                // Bọc TẤT CẢ vào try-catch — intent building cũng có thể throw
                 return try {
-                    fileChooserLauncher.launch(Intent.createChooser(intent, "Chọn file để gửi"))
+                    // Parse MIME types: split cả comma-in-string lẫn multiple entries
+                    val mimeTypes = params?.acceptTypes
+                        ?.flatMap { it.split(",") }
+                        ?.map { it.trim() }
+                        ?.filter { it.isNotBlank() }
+                        ?.takeIf { it.isNotEmpty() }
+                        ?: listOf("*/*")
+
+                    val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                        // type phải là single MIME — nếu nhiều loại dùng EXTRA_MIME_TYPES
+                        type = if (mimeTypes.size == 1) mimeTypes[0] else "*/*"
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        if (mimeTypes.size > 1) {
+                            putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes.toTypedArray())
+                        }
+                        if (params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                        }
+                    }
+                    fileChooserLauncher.launch(intent)
                     true
                 } catch (e: Exception) {
                     filePathCallback = null
                     log("Loi mo file chooser: ${e.message}")
+                    // Phải gọi callback với null để WebView không bị treo
+                    callback?.onReceiveValue(null)
                     false
                 }
             }
