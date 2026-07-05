@@ -66,7 +66,6 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_TAB2_INIT    = "tab2_initialized"
         private const val KEY_TAB1_CK_JSON = "tab1_cookies_j"
         private const val KEY_TAB2_CK_JSON = "tab2_cookies_j"
-        private const val KEY_BATTERY_SAVER = "battery_saver_enabled"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -90,7 +89,6 @@ class MainActivity : AppCompatActivity() {
     // Tab 2 = webView2 (session hoàn toàn độc lập, bắt đầu từ signup)
     private var currentTab       = 1
     private var tab2Initialized  = false
-    private var batterySaverEnabled = true
     private val tab1Cookies      = mutableMapOf<String, String>()
     private val tab2Cookies      = mutableMapOf<String, String>()
 
@@ -125,11 +123,9 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         CookieManager.getInstance().setAcceptCookie(true)
         binding.swipeRefresh2.visibility = View.INVISIBLE
-        batterySaverEnabled = prefs.getBoolean(KEY_BATTERY_SAVER, true)
-        if (batterySaverEnabled) binding.webView2.onPause() // Tab 2 bắt đầu ẩn — tắt JS/render để giảm nhiệt
+        binding.webView2.onPause() // Tab 2 bắt đầu ẩn — tắt JS/render để giảm nhiệt
         loadAccounts()
         setupHeader()
-        updateBatterySaverIcon()
         setupWebView()
         setupWebView2()
         setupSwipeAndGestures()
@@ -242,25 +238,6 @@ class MainActivity : AppCompatActivity() {
         binding.tabVerify.setOnClickListener { switchPanelTab(true)  }
         binding.btnCreateAccount.setOnClickListener { startCreateAccountFlow() }
 
-        // Nut tiet kiem pin: bat/tat viec tu dong pause WebView cua tab khong active.
-        // Bat (mac dinh) = do nong may/hao pin. Tat = ca 2 tab luon chay ngam,
-        // uu tien toc do/theo doi song song thay vi tiet kiem pin.
-        binding.btnBatterySaver.setOnClickListener {
-            batterySaverEnabled = !batterySaverEnabled
-            prefs.edit().putBoolean(KEY_BATTERY_SAVER, batterySaverEnabled).apply()
-            updateBatterySaverIcon()
-            if (batterySaverEnabled) {
-                // Bat lai: pause ngay tab dang khong active
-                if (currentTab != 2) binding.webView2.onPause() else binding.webView.onPause()
-                log("Da bat che do tiet kiem pin (tab an se tu dong tam dung).")
-            } else {
-                // Tat: resume ca 2 tab, giu chay ngam
-                binding.webView.onResume()
-                binding.webView2.onResume()
-                log("Da tat che do tiet kiem pin (ca 2 tab se luon chay ngam).")
-            }
-        }
-
         // ── URL bar: nhấn Go trên bàn phím → load trang ──────────────────
         binding.etUrl.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_GO) {
@@ -281,13 +258,6 @@ class MainActivity : AppCompatActivity() {
         binding.btnTabCount.setOnClickListener {
             switchBrowserTab(if (currentTab == 1) 2 else 1)
         }
-    }
-
-    // Cap nhat icon nut tiet kiem pin: sang (bat) / mo (tat) de nguoi dung biet trang thai
-    private fun updateBatterySaverIcon() {
-        binding.btnBatterySaver.alpha = if (batterySaverEnabled) 1.0f else 0.4f
-        binding.btnBatterySaver.background =
-            if (batterySaverEnabled) getDrawable(R.drawable.tab_btn_bg) else null
     }
 
     // ─── Browser Tab Switching (Tab 1 ↔ Tab 2 với session độc lập) ───────────
@@ -352,7 +322,7 @@ class MainActivity : AppCompatActivity() {
                 // Hiệu suất: LAYER_SOFTWARE cho tab ẩn, HARDWARE cho tab active
                 binding.webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
                 binding.webView2.setLayerType(View.LAYER_TYPE_HARDWARE, null)
-                if (batterySaverEnabled) binding.webView.onPause()   // giảm nóng máy: tắt JS/animation tab ẩn
+                binding.webView.onPause()   // giảm nóng máy: tắt JS/animation tab ẩn
                 binding.webView2.onResume() // bật lại JS/animation tab active
                 currentTab = 2
                 binding.btnTabCount.text = "2"
@@ -376,7 +346,7 @@ class MainActivity : AppCompatActivity() {
                 binding.webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
                 binding.swipeRefresh2.visibility = View.INVISIBLE
                 binding.swipeRefresh.visibility  = View.VISIBLE
-                if (batterySaverEnabled) binding.webView2.onPause()  // giảm nóng máy: tắt JS/animation tab ẩn
+                binding.webView2.onPause()  // giảm nóng máy: tắt JS/animation tab ẩn
                 binding.webView.onResume()  // bật lại JS/animation tab active
                 currentTab = 1
                 binding.btnTabCount.text = "1"
@@ -462,8 +432,7 @@ class MainActivity : AppCompatActivity() {
             wv2.loadUrl("about:blank")
             // Neu Tab 2 dang khong active (nguoi dung o Tab 1) → pause han de tiet kiem
             // CPU/pin, chi resume lai khi nguoi dung thuc su chuyen sang Tab 2.
-            // Chi ap dung khi che do tiet kiem pin dang bat.
-            if (batterySaverEnabled && currentTab != 2) wv2.onPause()
+            if (currentTab != 2) wv2.onPause()
             tab2Initialized = false
         }
 

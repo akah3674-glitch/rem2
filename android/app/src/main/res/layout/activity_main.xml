@@ -51,18 +51,6 @@
                 android:textCursorDrawable="@null"
                 android:layout_marginEnd="6dp" />
 
-            <!-- Nut tiet kiem pin: bat/tat tu dong pause Tab 2 khi khong active -->
-            <ImageButton
-                android:id="@+id/btnBatterySaver"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:layout_marginEnd="4dp"
-                android:padding="6dp"
-                android:background="@drawable/tab_btn_bg"
-                android:src="@drawable/ic_battery"
-                android:tint="#FFFFFF"
-                android:contentDescription="Tiet kiem pin" />
-
             <!-- Tab switcher: nhấn để chuyển tab 1↔2, số hiện = tab đang xem -->
             <TextView
                 android:id="@+id/btnTabCount"
@@ -74,13 +62,12 @@
                 android:textSize="13sp"
                 android:textStyle="bold"
                 android:gravity="center"
-                android:layout_marginEnd="4dp" />
+                android:layout_marginEnd="2dp" />
 
             <ImageButton
                 android:id="@+id/btnToggleLog"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:padding="6dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_paste"
                 android:tint="#FFFFFF"
@@ -88,9 +75,8 @@
 
             <ImageButton
                 android:id="@+id/btnRefresh"
-                android:layout_width="34dp"
-                android:layout_height="34dp"
-                android:padding="6dp"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_refresh"
                 android:tint="#FFFFFF"
