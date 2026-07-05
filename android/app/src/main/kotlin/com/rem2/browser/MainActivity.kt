@@ -979,6 +979,29 @@ class MainActivity : AppCompatActivity() {
                       lastLogCount = logs.length()
                   }
 
+                  // Server da tao email/username tu luc "pending" (truoc khi xac thuc xong),
+                  // nen phai lay ngay tai day de kip dien vao form signup — KHONG doi den "done"
+                  // (luc do da qua tre, form signup da can duoc dien tu truoc roi).
+                  if (autoEmail.isEmpty()) {
+                      val earlyEmail = json.optString("email", "")
+                      val earlyUser  = json.optString("username", "")
+                      if (earlyEmail.isNotEmpty()) {
+                          autoEmail    = earlyEmail
+                          autoUsername = earlyUser
+                          withContext(Dispatchers.Main) {
+                              fun fillIfOnSignup(wv: WebView) {
+                                  val curUrl = wv.url ?: ""
+                                  val onSignup = curUrl.contains("signup") ||
+                                                 curUrl.contains("login")  ||
+                                                 curUrl.contains("register")
+                                  if (onSignup) injectAutoFill(wv)
+                              }
+                              fillIfOnSignup(binding.webView)
+                              if (tab2Initialized) fillIfOnSignup(binding.webView2)
+                          }
+                      }
+                  }
+
                   when (status) {
                       "done" -> {
                           autoEmail    = json.optString("email", "")
