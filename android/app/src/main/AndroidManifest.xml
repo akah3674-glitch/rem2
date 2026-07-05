@@ -2,10 +2,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
-    <!-- Bộ nhớ: Android ≤ 12 -->
+    <!-- Notification khi tao tai khoan xong -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Bo nho: Android <= 12 -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"  android:maxSdkVersion="32"/>
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
-    <!-- Bộ nhớ: Android 13+ -->
+    <!-- Bo nho: Android 13+ -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
     <application
