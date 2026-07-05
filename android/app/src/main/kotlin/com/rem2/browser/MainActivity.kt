@@ -45,7 +45,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREFS        = "rem2_prefs"
         private const val KEY_ACCOUNTS = "accounts_v3"
         // Cloud server: hồn chạy trên Replit, app chỉ nhận kết quả
-          private const val SERVER_URL   = "https://f0d56513-0073-4996-919a-27830f0b7190-00-2saxwxwxub99w.pike.replit.dev"
+          private const val SERVER_URL   = "https://zkdjjc--hemv5x7n7p.replit.app"
           private const val MAIL_PASS    = "Mailtm2025Tool" // giữ để lưu account local
 
                   // Danh sách URL để save/restore cookie khi chuyển tab
