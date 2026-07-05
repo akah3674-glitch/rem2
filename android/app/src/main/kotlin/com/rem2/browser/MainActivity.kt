@@ -488,11 +488,13 @@ class MainActivity : AppCompatActivity() {
                 binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
                 if (!tab2Initialized) {
                     tab2Initialized = true
+                    // tab1Cookies vua duoc chup o tren (saveCookies) — xoa kho chung xong phai
+                    // khoi phuc lai ngay cho Tab 1, khong thi Tab 1 se bi mat dang nhap oan.
                     CookieManager.getInstance().removeAllCookies { _ ->
                         if (seq != switchSeq) return@removeAllCookies
                         CookieManager.getInstance().flush()
-                        runOnUiThread {
-                            if (seq != switchSeq) return@runOnUiThread
+                        restoreCookies(tab1Cookies, seq) {
+                            if (seq != switchSeq) return@restoreCookies
                             tab2LocalStorageJson = "{}"
                             binding.webView2.postDelayed({ binding.webView2.loadUrl("https://replit.com/signup") }, 50)
                         }
@@ -502,8 +504,11 @@ class MainActivity : AppCompatActivity() {
                     restoreCookies(tab2Cookies, seq) {
                         restoreLocalStorage(binding.webView2, tab2LocalStorageJson) {
                             if (seq != switchSeq) return@restoreLocalStorage
+                            // KHONG ep reload — webview2 dang tam dung (onPause) van giu nguyen
+                            // DOM/scroll trong bo nho, chi can cookie dung la du de cac request
+                            // moi (neu co) dung dung session, khong can tai lai tu dau.
                             binding.webView2.url?.takeIf { it.isNotBlank() && it!="about:blank" }
-                                ?.let { binding.etUrl.setText(it); binding.webView2.reload() }
+                                ?.let { binding.etUrl.setText(it) }
                         }
                     }
                 }
@@ -522,8 +527,10 @@ class MainActivity : AppCompatActivity() {
                 restoreCookies(tab1Cookies, seq) {
                     restoreLocalStorage(binding.webView, tab1LocalStorageJson) {
                         if (seq != switchSeq) return@restoreLocalStorage
+                        // KHONG ep reload — giu nguyen DOM/scroll dang co, chi can cookie dung
+                        // la du cho cac request moi, tranh cam giac "tai lai tu dau" moi lan chuyen tab.
                         binding.webView.url?.takeIf { it.isNotBlank() && it!="about:blank" }
-                            ?.let { binding.etUrl.setText(it); binding.webView.reload() }
+                            ?.let { binding.etUrl.setText(it) }
                             ?: binding.etUrl.setText("")
                     }
                 }
@@ -747,17 +754,44 @@ class MainActivity : AppCompatActivity() {
 
       // Chỉ xoá session của MỘT tab (tab đang được dùng để tạo tài khoản),
       // không đụng tới tab còn lại — tránh vạ lây khi 2 tab dùng song song.
+      //
+      // LƯU Ý QUAN TRỌNG: CookieManager và WebStorage của Android WebView là KHO DÙNG CHUNG
+      // cho toàn app (không phải riêng từng WebView) — gọi removeAllCookies()/deleteAllData()
+      // sẽ xoá LUÔN session (đăng nhập, localStorage) của tab CÒN LẠI dù không hề đụng tới nó.
+      // Đây từng là nguyên nhân bấm "Tạo tài khoản" ở Tab 2 lại làm Tab 1 bị lỗi/văng theo.
+      // Fix: chụp lại session hiện tại của tab CÒN LẠI ngay trước khi xoá, rồi khôi phục lại
+      // NGAY sau khi xoá xong — chỉ tab đang target mới thực sự mất session.
       private fun clearWebSession(tab: Int = currentTab) {
-          val wv = if (tab == 1) binding.webView else binding.webView2
+          val wv          = if (tab == 1) binding.webView  else binding.webView2
+          val otherWv     = if (tab == 1) binding.webView2 else binding.webView
+          val otherIsTab1 = tab != 1
           killAutoScripts(wv)
-          CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush()
+          val seq = ++switchSeq
+
+          // Chụp session sống hiện tại của tab kia trước khi xoá toàn bộ kho dùng chung.
+          if (otherIsTab1) saveCookies(tab1Cookies) else saveCookies(tab2Cookies)
+          snapshotLocalStorage(otherWv) { js ->
+              if (seq != switchSeq) return@snapshotLocalStorage
+              if (otherIsTab1) tab1LocalStorageJson = js else tab2LocalStorageJson = js
+
+              CookieManager.getInstance().removeAllCookies { _ ->
+                  if (seq != switchSeq) return@removeAllCookies
+                  CookieManager.getInstance().flush()
+                  // Khôi phục NGAY session của tab kia — không để nó bị mất đăng nhập oan.
+                  val otherCookies = if (otherIsTab1) tab1Cookies else tab2Cookies
+                  restoreCookies(otherCookies, seq) {
+                      val otherJson = if (otherIsTab1) tab1LocalStorageJson else tab2LocalStorageJson
+                      restoreLocalStorage(otherWv, otherJson) {}
+                  }
+              }
+          }
+
           if (tab == 1) { tab1Cookies.clear(); tab1LocalStorageJson = "{}" }
           else          { tab2Cookies.clear(); tab2LocalStorageJson = "{}" }
           autoEmail=""; autoUsername=""
           wv.clearCache(true); wv.clearHistory(); wv.clearFormData()
           wv.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
           wv.loadUrl("about:blank")
-          WebStorage.getInstance().deleteAllData()
           log("Da xoa session cu (Tab $tab) — chuan bi tao tai khoan moi...")
       }
 
