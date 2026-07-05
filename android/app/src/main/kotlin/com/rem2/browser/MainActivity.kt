@@ -133,6 +133,14 @@ class MainActivity : AppCompatActivity() {
             val wv = activeWebView()
             runOnUiThread { wv.post { simulateTap(wv, wv.width * xPct.coerceIn(0f,1f), wv.height * yPct.coerceIn(0f,1f)) } }
         }
+        @JavascriptInterface
+        fun cloudflareChallengeDetected(tabTag: String) {
+            runOnUiThread {
+                val wv = if (tabTag == "1") binding.webView else binding.webView2
+                log("⚡ Cloudflare (xac minh bao mat) — tu tai lai de loai bo trang nay...")
+                wv.postDelayed({ wv.reload() }, 1500)
+            }
+        }
     }
 
     private fun activeWebView() = if (currentTab == 1) binding.webView else binding.webView2
@@ -625,24 +633,38 @@ class MainActivity : AppCompatActivity() {
                     swipe.isRefreshing = false
                     if (!binding.etUrl.isFocused && url != "about:blank") binding.etUrl.setText(url)
                 }
-                // Cloudflare (kể cả trang xác minh bảo mật đa ngôn ngữ) → auto-reload
+                // Cloudflare (kể cả trang xác minh bảo mật đa ngôn ngữ) → auto-reload.
+                // Dùng watcher lặp lại (khong chi check 1 lan luc onPageFinished) vi noi dung
+                // trang Cloudflare co the render/doi ngon ngu muon hon thoi diem nay.
+                val tabTag = if (isTab1) "1" else "2"
                 v.evaluateJavascript(
-                    "(function(){try{return (document.title||'')+'|'+(document.body?document.body.innerText||'':'');}catch(e){return '';}})();"
-                ) { raw ->
-                    val t = jsStringUnquote(raw)
-                    val isCloudflareChallenge =
-                        t.contains("Just a moment", true) ||
-                        t.contains("Checking your browser", true) ||
-                        t.contains("Ray ID", true) ||
-                        t.contains("xác minh bảo mật", true) ||
-                        t.contains("Đang xác minh", true) ||
-                        t.contains("chống bot", true) ||
-                        (t.contains("Cloudflare", true) && (url.contains("cdn-cgi") || t.contains("Ray ID", true)))
-                    if (isCloudflareChallenge) {
-                        if (isActive) log("⚡ Cloudflare (xac minh bao mat) — tu tai lai sau 4s de loai bo trang nay...")
-                        v.postDelayed({ v.reload() }, 4000)
-                    }
-                }
+                    """
+                    (function(){
+                      if(window.__rem2CfWatchActive)return;
+                      window.__rem2CfWatchActive=true;
+                      var sid=Date.now()+'-'+Math.random();window.__rem2CfSid=sid;
+                      var KW=['just a moment','checking your browser','ray id','xác minh bảo mật','đang xác minh','chống bot'];
+                      function textOf(){try{return ((document.title||'')+'|'+(document.body?document.body.innerText||'':'')).toLowerCase();}catch(e){return '';}}
+                      function isCf(){
+                        var t=textOf();
+                        for(var i=0;i<KW.length;i++)if(t.indexOf(KW[i])!==-1)return true;
+                        if(t.indexOf('cloudflare')!==-1&&(location.href.indexOf('cdn-cgi')!==-1||t.indexOf('ray id')!==-1))return true;
+                        return false;
+                      }
+                      var ticks=0;
+                      var iv=setInterval(function(){
+                        if(window.__rem2CfSid!==sid){clearInterval(iv);return;}
+                        ticks++;
+                        if(isCf()){
+                          clearInterval(iv);window.__rem2CfWatchActive=false;
+                          if(window.ClickBridge)window.ClickBridge.cloudflareChallengeDetected('$tabTag');
+                          return;
+                        }
+                        if(ticks>15){clearInterval(iv);window.__rem2CfWatchActive=false;}
+                      },1000);
+                    })();
+                    """.trimIndent(), null
+                )
                 // Auto-fill
                 if (url.isSignupPage() && autoEmail.isNotEmpty()) {
                     injectAutoFill(v)
