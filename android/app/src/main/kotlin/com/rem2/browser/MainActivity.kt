@@ -211,6 +211,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         CookieManager.getInstance().setAcceptCookie(true)
+        binding.swipeRefresh2.visibility = View.INVISIBLE
         loadAccounts()
         setupHeader()
         setupWebView()
@@ -277,7 +278,7 @@ class MainActivity : AppCompatActivity() {
 
         if (savedTab == 2 && tab2Init) {
             // Lần cuối ở Tab 2 → CookieManager disk đang có cookie Tab 2 → đúng, load thẳng
-            binding.swipeRefresh.visibility  = View.GONE
+            binding.swipeRefresh.visibility  = View.INVISIBLE
             binding.swipeRefresh2.visibility = View.VISIBLE
             currentTab = 2
             binding.btnTabCount.text = "2"
@@ -376,13 +377,18 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             if (tab == 2) {
                 // Chuyển sang Tab 2
+                binding.webView.stopLoading()
                 saveCookies(tab1Cookies)
                 if (!tab2Initialized) {
-                    // Lần đầu mở Tab 2: xóa cookie → Tab 2 bắt đầu fresh (chưa đăng nhập)
+                    // Lần đầu mở Tab 2: xóa cookie → Tab 2 bắt đầu fresh
                     CookieManager.getInstance().removeAllCookies(null)
                     CookieManager.getInstance().flush()
                     tab2Initialized = true
-                    binding.webView2.loadUrl("https://replit.com/signup")
+                    binding.swipeRefresh.visibility  = View.INVISIBLE
+                    binding.swipeRefresh2.visibility = View.VISIBLE
+                    binding.swipeRefresh2.post {
+                        binding.webView2.loadUrl("https://replit.com/signup")
+                    }
                     binding.etUrl.setText("https://replit.com/signup")
                 } else {
                     // Restore cookies của Tab 2
@@ -392,7 +398,7 @@ class MainActivity : AppCompatActivity() {
                         binding.etUrl.setText(url)
                     }
                 }
-                binding.swipeRefresh.visibility  = View.GONE
+                binding.swipeRefresh.visibility  = View.INVISIBLE
                 binding.swipeRefresh2.visibility = View.VISIBLE
                 currentTab = 2
                 binding.btnTabCount.text = "2"
@@ -409,9 +415,10 @@ class MainActivity : AppCompatActivity() {
                 }
             } else {
                 // Chuyển về Tab 1
+                binding.webView2.stopLoading()
                 saveCookies(tab2Cookies)
                 restoreCookies(tab1Cookies)
-                binding.swipeRefresh2.visibility = View.GONE
+                binding.swipeRefresh2.visibility = View.INVISIBLE
                 binding.swipeRefresh.visibility  = View.VISIBLE
                 val url = binding.webView.url
                 if (!url.isNullOrBlank() && url != "about:blank") {
