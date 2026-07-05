@@ -47,6 +47,9 @@ class MainActivity : AppCompatActivity() {
         // Cloud server: hồn chạy trên Replit, app chỉ nhận kết quả
           private const val SERVER_URL   = "https://zkdjjc--hemv5x7n7p.replit.app"
           private const val MAIL_PASS    = "Mailtm2025Tool" // giữ để lưu account local
+        private const val COCCOC_UA =
+            "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
+            "(KHTML, like Gecko) coc_coc_browser/109.0.0.0 Chrome/123.0.0.0 Mobile Safari/537.36"
 
                   // Danh sách URL để save/restore cookie khi chuyển tab
         private val COOKIE_URLS = listOf(
