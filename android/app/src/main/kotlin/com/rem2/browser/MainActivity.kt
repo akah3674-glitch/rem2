@@ -381,15 +381,18 @@ class MainActivity : AppCompatActivity() {
                 saveCookies(tab1Cookies)
                 if (!tab2Initialized) {
                     // Lần đầu mở Tab 2: xóa cookie → Tab 2 bắt đầu fresh
-                    CookieManager.getInstance().removeAllCookies(null)
-                    CookieManager.getInstance().flush()
-                    tab2Initialized = true
+                    // removeAllCookies với callback: loadUrl chỉ chạy SAU KHI cookie đã xóa xong
                     binding.swipeRefresh.visibility  = View.INVISIBLE
                     binding.swipeRefresh2.visibility = View.VISIBLE
-                    // postDelayed 100ms: đợi GPU layer tạo xong mới load (post{} không đủ)
-                    binding.webView2.postDelayed({
-                        binding.webView2.loadUrl("https://replit.com/signup")
-                    }, 100)
+                    tab2Initialized = true
+                    CookieManager.getInstance().removeAllCookies { _ ->
+                        CookieManager.getInstance().flush()
+                        runOnUiThread {
+                            binding.webView2.postDelayed({
+                                binding.webView2.loadUrl("https://replit.com/signup")
+                            }, 50)
+                        }
+                    }
                     binding.etUrl.setText("https://replit.com/signup")
                 } else {
                     // Restore cookies của Tab 2
