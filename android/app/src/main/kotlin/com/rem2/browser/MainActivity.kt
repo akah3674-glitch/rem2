@@ -390,6 +390,9 @@ class MainActivity : AppCompatActivity() {
         // Dang xuat / xoa het session cu (cookie, cache, localStorage) TRUOC khi tao acc moi,
         // neu khong WebView se con dang nhap acc cu -> tuong nham la "xac thuc thanh cong" lien tuc
         clearWebSession()
+        // Load ngay trang signup de nguoi dung thay trang chay/tien trinh ngay lap tuc,
+        // khong phai cho 5-10 phut nhin man hinh trang (about:blank) moi thay gi do.
+        binding.webView.postDelayed({ binding.webView.loadUrl("https://replit.com/signup") }, 300)
         lifecycleScope.launch {
             ensureAccount()
             flowRunning = false
@@ -680,45 +683,100 @@ class MainActivity : AppCompatActivity() {
         wv.loadUrl("about:blank")
     }
 
-    // React-compatible fill: use native setter + bubble input/change events
+    // React-compatible fill: dùng MutationObserver + retry loop để bắt kịp form
+    // nhiều bước (SPA) của Replit — không chỉ fill 1 lần theo delay cố định.
     private fun injectAutoFill(wv: WebView) {
         if (autoEmail.isEmpty()) return
         val e = autoEmail.replace("'", "\\'")
         val p = MAIL_PASS.replace("'", "\\'")
         val u = autoUsername.replace("'", "\\'")
 
-        val js = StringBuilder()
-        js.append("(function(){")
-        // Guard: chỉ inject 1 lần per page load — tránh spam event → giảm nóng máy
-        js.append("if(window.__rem2FillDone)return;")
-        // Native setter để bypass React's synthetic value tracking
-        js.append("function fillReact(el,val){")
-        js.append("  if(!el)return;")
-        js.append("  var setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');")
-        js.append("  if(setter&&setter.set){setter.set.call(el,val);}else{el.value=val;}")
-        js.append("  el.dispatchEvent(new Event('input',{bubbles:true,cancelable:true}));")
-        js.append("  el.dispatchEvent(new Event('change',{bubbles:true,cancelable:true}));")
-        js.append("  el.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true}));")
-        js.append("  el.dispatchEvent(new KeyboardEvent('keyup',{bubbles:true}));")
-        js.append("}")
-        // Find email: try multiple selectors
-        js.append("var emailEl=document.querySelector('input[type=email]')")
-        js.append("  ||document.querySelector('input[name*=email]')")
-        js.append("  ||document.querySelector('input[placeholder*=mail]');")
-        js.append("fillReact(emailEl,'").append(e).append("');")
-        // Find password
-        js.append("var passEl=document.querySelector('input[type=password]')")
-        js.append("  ||document.querySelector('input[name*=pass]');")
-        js.append("fillReact(passEl,'").append(p).append("');")
-        // Find username (if present)
-        js.append("var userEl=document.querySelector('input[name*=user]')")
-        js.append("  ||document.querySelector('input[placeholder*=user]')")
-        js.append("  ||document.querySelector('input[placeholder*=User]');")
-        js.append("fillReact(userEl,'").append(u).append("');")
-        js.append("if(emailEl||passEl||userEl){window.__rem2FillDone=true;}")
-        js.append("})()")
+        val js = """
+            (function(){
+              // Guard: chỉ 1 observer/interval sống per page load
+              if (window.__rem2FillObserverActive) return;
+              window.__rem2FillObserverActive = true;
+              var EMAIL = '$e', PASS = '$p', USER = '$u';
 
-        wv.evaluateJavascript(js.toString(), null)
+              function fillReact(el, val) {
+                if (!el || el.value === val) return;
+                var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+                if (setter && setter.set) { setter.set.call(el, val); } else { el.value = val; }
+                el.dispatchEvent(new Event('input', {bubbles:true, cancelable:true}));
+                el.dispatchEvent(new Event('change', {bubbles:true, cancelable:true}));
+                el.dispatchEvent(new KeyboardEvent('keydown', {bubbles:true}));
+                el.dispatchEvent(new KeyboardEvent('keyup', {bubbles:true}));
+              }
+
+              function findEmail() {
+                return document.querySelector('input[type=email]')
+                  || document.querySelector('input[name*=email]')
+                  || document.querySelector('input[autocomplete*=email]')
+                  || document.querySelector('input[placeholder*=mail]')
+                  || document.querySelector('input[placeholder*=Email]');
+              }
+              function findPass() {
+                return document.querySelector('input[type=password]')
+                  || document.querySelector('input[name*=pass]')
+                  || document.querySelector('input[autocomplete*=password]')
+                  || document.querySelector('input[autocomplete=current-password]')
+                  || document.querySelector('input[autocomplete=new-password]');
+              }
+              function findUser() {
+                return document.querySelector('input[name*=user]')
+                  || document.querySelector('input[autocomplete*=username]')
+                  || document.querySelector('input[placeholder*=sername]');
+              }
+
+              function clickContinue() {
+                try {
+                  var els = document.querySelectorAll('button, input[type=submit]');
+                  var KEYWORDS = ['continue','next','sign up','submit','create account','get started'];
+                  for (var i = 0; i < els.length; i++) {
+                    var el = els[i];
+                    if (el.disabled) continue;
+                    var txt = (el.innerText || el.value || '').trim().toLowerCase();
+                    if (!txt) continue;
+                    for (var k = 0; k < KEYWORDS.length; k++) {
+                      if (txt.indexOf(KEYWORDS[k]) !== -1) { el.click(); return true; }
+                    }
+                  }
+                } catch (err) {}
+                return false;
+              }
+
+              function tick() {
+                try {
+                  var emailEl = findEmail();
+                  var passEl  = findPass();
+                  var userEl  = findUser();
+
+                  if (emailEl) fillReact(emailEl, EMAIL);
+                  if (passEl)  fillReact(passEl, PASS);
+                  if (userEl && USER) fillReact(userEl, USER);
+
+                  // Form nhiều bước: nếu chỉ thấy email (chưa có pass) → tự bấm Continue
+                  // để sang bước kế tiếp, observer sẽ tiếp tục fill khi field mới xuất hiện.
+                  if (emailEl && !passEl) {
+                    setTimeout(clickContinue, 500);
+                  }
+                } catch (err) {}
+              }
+
+              var count = 0;
+              var iv = setInterval(function () {
+                count++;
+                tick();
+                if (count > 75) { clearInterval(iv); window.__rem2FillObserverActive = false; }
+              }, 800);
+
+              var mo = new MutationObserver(function () { tick(); });
+              mo.observe(document.body, {childList: true, subtree: true});
+              tick();
+            })();
+        """.trimIndent()
+
+        wv.evaluateJavascript(js, null)
     }
 
     // ─── Pull-to-refresh + swipe gestures ────────────────────────────────────
@@ -920,8 +978,22 @@ class MainActivity : AppCompatActivity() {
                           saveAccounts()
                           log("✅ Hoan thanh! Email: $autoEmail | User: $autoUsername")
                           withContext(Dispatchers.Main) {
-                              binding.webView.loadUrl("https://replit.com/signup")
-                              if (tab2Initialized) binding.webView2.loadUrl("https://replit.com/signup")
+                              // Trang signup da duoc load san tu luc bam nut (khong con phai
+                              // cho toi day moi thay trang). Neu da o dung trang thi fill luon,
+                              // khong reload lai (tranh mat tien trinh nguoi dung da nhap dang).
+                              fun ensureSignupAndFill(wv: WebView) {
+                                  val curUrl = wv.url ?: ""
+                                  val onSignup = curUrl.contains("signup") ||
+                                                 curUrl.contains("login")  ||
+                                                 curUrl.contains("register")
+                                  if (onSignup) {
+                                      injectAutoFill(wv)
+                                  } else {
+                                      wv.loadUrl("https://replit.com/signup")
+                                  }
+                              }
+                              ensureSignupAndFill(binding.webView)
+                              if (tab2Initialized) ensureSignupAndFill(binding.webView2)
                               if (verifyLink.isNotEmpty()) openVerifyTab(verifyLink)
                           }
                           return@withContext
