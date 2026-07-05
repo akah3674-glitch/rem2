@@ -202,7 +202,7 @@ class MainActivity : AppCompatActivity() {
             Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_SINGLE_TOP },
             PendingIntent.FLAG_IMMUTABLE)
         val title = if (batchInfo.isEmpty()) "✅ Tao xong tai khoan" else "✅ $batchInfo"
-        val text  = "$email | $username | Pass: $MAIL_PASS"
+        val text  = "Email: $email  |  User: $username"
         val notif = NotificationCompat.Builder(this, NOTIF_CHANNEL)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
@@ -266,32 +266,44 @@ class MainActivity : AppCompatActivity() {
         batchTotal   = total
         batchCurrent = 0
         lifecycleScope.launch {
-            for (i in 1..total) {
-                batchCurrent = i
-                flowRunning  = true
-                autoEmail    = ""; autoUsername = ""
+            try {
+                for (i in 1..total) {
+                    batchCurrent = i
+                    flowRunning  = true
+                    autoEmail    = ""; autoUsername = ""
+                    withContext(Dispatchers.Main) {
+                        val label = if (total == 1) "⏳ Dang tao tai khoan..." else "⏳ Dang tao $i/$total..."
+                        binding.btnCreateAccount.isEnabled = false
+                        binding.btnCreateAccount.text      = label
+                        binding.tvLog.text = ""
+                        switchPanelTab(false)
+                        clearWebSession()
+                        binding.webView.postDelayed({ binding.webView.loadUrl("https://replit.com/signup") }, 300)
+                    }
+                    try {
+                        ensureAccount()
+                    } catch (e: Exception) {
+                        log("❌ Loi tai khoan $i/$total: ${e.message} — bo qua, tao tiep")
+                    } finally {
+                        flowRunning = false
+                    }
+                    if (i < total) {
+                        log("--- Xong $i/$total — cho 15s roi tao tiep ---")
+                        delay(15_000)
+                    }
+                }
                 withContext(Dispatchers.Main) {
-                    val label = if (total == 1) "⏳ Dang tao tai khoan..." else "⏳ Dang tao $i/$total..."
-                    binding.btnCreateAccount.isEnabled = false
-                    binding.btnCreateAccount.text      = label
-                    binding.tvLog.text = ""
-                    switchPanelTab(false)
-                    clearWebSession()
-                    binding.webView.postDelayed({ binding.webView.loadUrl("https://replit.com/signup") }, 300)
+                    if (total > 1) {
+                        log("✅ Da tao xong $total tai khoan! Nhan giu nut de xem danh sach.")
+                        showDoneNotification("Batch $total tai khoan xong", "$total tai khoan da duoc tao")
+                    }
                 }
-                ensureAccount()
+            } finally {
+                // Đảm bảo button luôn được re-enable dù có exception hay CancellationException
                 flowRunning = false
-                if (i < total) {
-                    log("--- Xong $i/$total — cho 15s roi tao tiep ---")
-                    delay(15_000)
-                }
-            }
-            withContext(Dispatchers.Main) {
-                binding.btnCreateAccount.isEnabled = true
-                binding.btnCreateAccount.text      = "🔄 Tao tai khoan moi"
-                if (total > 1) {
-                    log("✅ Da tao xong $total tai khoan! Nhan giu nut de xem danh sach.")
-                    showDoneNotification("Batch xong", "$total tai khoan", "Batch xong: $total tai khoan")
+                withContext(Dispatchers.Main) {
+                    binding.btnCreateAccount.isEnabled = true
+                    binding.btnCreateAccount.text      = "🔄 Tao tai khoan moi"
                 }
             }
         }
