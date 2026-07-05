@@ -44,107 +44,16 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS        = "rem2_prefs"
         private const val KEY_ACCOUNTS = "accounts_v3"
-        private const val MAILTM       = "https://api.mail.tm"
-        // Fixed password như Python tool — đơn giản, không random
-        private const val MAIL_PASS    = "Mailtm2025Tool"
-        private val JSON_MT = "application/json; charset=utf-8".toMediaType()
-        private const val COCCOC_UA =
-            "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) coc_coc_browser/109.0.0.0 Chrome/123.0.0.0 Mobile Safari/537.36"
+        // Cloud server: hồn chạy trên Replit, app chỉ nhận kết quả
+          private const val SERVER_URL   = "https://f0d56513-0073-4996-919a-27830f0b7190-00-2saxwxwxub99w.pike.replit.dev"
+          private const val MAIL_PASS    = "Mailtm2025Tool" // giữ để lưu account local
 
-        // Lấy hydra:member hoặc array thẳng — giống _members() trong Python
-        fun jsonMembers(raw: String): JSONArray {
-            return try {
-                // Thử parse như object có hydra:member
-                val obj = JSONObject(raw)
-                obj.optJSONArray("hydra:member") ?: JSONArray()
-            } catch (_: Exception) {
-                try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
-            }
-        }
-
-        fun randUser(): String {
-            val chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-            return (1..10).map { chars.random() }.joinToString("")
-        }
-
-        fun randUsername(): String {
-            val adj  = listOf("cool","fast","dark","blue","wild","swift","calm","bright")
-            val noun = listOf("fox","hawk","wolf","bear","lion","ace","star","byte")
-            return adj.random() + noun.random() + (1000..9999).random()
-        }
-
-        // Skip URLs — không phải verify link
-        private val SKIP_KW = listOf(
-            "unsubscribe","opt-out","privacy","policy","terms",
-            "facebook.com","twitter.com","instagram.com","linkedin.com",
-            "youtube.com","apple.com","google.com","play.google"
-        )
-        // Verify URL keywords
-        private val VERIFY_URL_KW = listOf(
-            "verify","confirm","activate","validation","oobCode","action-code",
-            "token=","code=","activate=","email_token","verify_email","email-confirm"
-        )
-        // Verify label keywords
-        private val VERIFY_LABEL_KW = listOf(
-            "verify","confirm","activate","click here","complete","valid",
-            "xac nhan","kich hoat"
-        )
-
-        fun isVerifyLink(url: String, label: String): Boolean {
-            if (SKIP_KW.any { url.contains(it, ignoreCase = true) }) return false
-            if (VERIFY_LABEL_KW.any { label.contains(it, ignoreCase = true) }) return true
-            if (VERIFY_URL_KW.any { url.contains(it, ignoreCase = true) }) return true
-            return false
-        }
-
-        // Extract all <a href> tags from HTML then pick best verify link
-        fun extractVerifyLink(html: String): String? {
-            // Parse all href values from <a href="..."> tags
-            val links = mutableListOf<Pair<String, String>>()
-            val hrefRegex = Regex("""<a[^>]+href=["']([^"']+)["'][^>]*>(.*?)</a>""", RegexOption.DOT_MATCHES_ALL)
-            hrefRegex.findAll(html).forEach { m ->
-                val url   = m.groupValues[1].trim()
-                val label = m.groupValues[2].replace(Regex("<[^>]+>"), " ").trim()
-                if (url.startsWith("http")) links.add(Pair(url, label))
-            }
-            // Also catch bare https links not in <a> tags
-            if (links.isEmpty()) {
-                Regex("""https://[^\s"'<>]+""").findAll(html).forEach {
-                    links.add(Pair(it.value, it.value))
-                }
-            }
-
-            // Find best verify link: prefer label match, then URL match
-            val candidates = links.filter { (u, l) -> isVerifyLink(u, l) }
-            // Prefer label-matched ones first
-            val labelMatch = candidates.firstOrNull { (_, l) ->
-                VERIFY_LABEL_KW.any { kw -> l.contains(kw, ignoreCase = true) }
-            }
-            val raw = labelMatch?.first ?: candidates.firstOrNull()?.first
-            return raw?.let { decodeHtmlEntities(it) }
-        }
-
-        // Email HTML thuong encode & thanh &amp; trong href — neu khong decode,
-        // link se bi sai (vd: ...?token=xxx&amp;uid=yyy) va Replit tra ve "Page not found"
-        fun decodeHtmlEntities(url: String): String {
-            return url
-                .replace("&amp;", "&")
-                .replace("&#38;", "&")
-                .replace("&#x26;", "&")
-                .replace("&#39;", "'")
-                .replace("&quot;", "\"")
-                .replace("&#61;", "=")
-                .trim()
-        }
-
-        // Danh sách URL để save/restore cookie khi chuyển tab
+                  // Danh sách URL để save/restore cookie khi chuyển tab
         private val COOKIE_URLS = listOf(
             "https://replit.com",
             "https://replit.com/",
             "https://replit.com/~",
-            "https://replit.com/repls",
-            "https://api.mail.tm"
+            "https://replit.com/repls"
         )
 
         // Keys lưu trạng thái session qua các lần thoát/vào lại app
@@ -169,7 +78,6 @@ class MainActivity : AppCompatActivity() {
 
     private var autoEmail    = ""
     private var autoUsername = ""
-    private var mailtmToken  = ""
     private var flowRunning  = false
 
     // ── Tab management ────────────────────────────────────────────────────────
@@ -960,185 +868,79 @@ class MainActivity : AppCompatActivity() {
         switchPanelTab(true)
     }
 
-    // ─── Account flow ─────────────────────────────────────────────────────────
+    // ─── Account flow (cloud — server làm thay, app chỉ nhận kết quả) ────────
 
-    private suspend fun ensureAccount() = withContext(Dispatchers.IO) {
-        log("Bat dau...")
+      private suspend fun ensureAccount() = withContext(Dispatchers.IO) {
+          log("Ket noi Replit Cloud de tao tai khoan...")
 
-        // 1. Lấy domain từ mail.tm
-        log("Lay domain Mail.tm...")
-        val domain = try {
-            val req = Request.Builder().url("$MAILTM/domains?page=1").build()
-            val res = http.newCall(req).execute()
-            val raw = res.body?.string() ?: "[]"
-            val members = jsonMembers(raw)
-            var found = ""
-            for (i in 0 until members.length()) {
-                val d = members.getJSONObject(i)
-                if (d.optBoolean("isActive", true)) {
-                    found = d.optString("domain", "")
-                    if (found.isNotEmpty()) break
-                }
-            }
-            if (found.isEmpty()) "mail.tm" else found
-        } catch (e: Exception) {
-            log("Domain loi: ${e.message}")
-            "mail.tm"
-        }
-        log("Domain: $domain")
+          // Bước 1: Gửi yêu cầu lên server → nhận jobId
+          val jobId = try {
+              val req = Request.Builder()
+                  .url("$SERVER_URL/api/rem2/create")
+                  .post(okhttp3.RequestBody.create(null, byteArrayOf()))
+                  .build()
+              val res = http.newCall(req).execute()
+              org.json.JSONObject(res.body?.string() ?: "{}").getString("jobId")
+          } catch (e: Exception) {
+              log("Loi ket noi server: ${e.message}")
+              return@withContext
+          }
+          log("Server dang xu ly (5-10 phut)... JobID: ${jobId.take(8)}")
 
-        // 2. Tạo tài khoản mail.tm
-        var loginEmail = ""
-        for (attempt in 1..5) {
-            val user = randUser()
-            val addr = "$user@$domain"
-            try {
-                val body = JSONObject().apply {
-                    put("address", addr)
-                    put("password", MAIL_PASS)
-                }.toString().toRequestBody(JSON_MT)
-                val req = Request.Builder().url("$MAILTM/accounts").post(body).build()
-                val res = http.newCall(req).execute()
-                when (res.code) {
-                    201 -> { loginEmail = addr; log("Tao hop thu: $addr"); break }
-                    429 -> { log("Rate limit, cho 5s..."); delay(5000) }
-                    422 -> { log("422 dia chi $addr, thu lai..."); delay(1000) }
-                    else -> { log("HTTP ${res.code}, thu lai..."); delay(2000) }
-                }
-            } catch (e: Exception) {
-                log("Loi tao acc: ${e.message}")
-                delay(2000)
-            }
-        }
+          // Bước 2: Poll kết quả mỗi 5s — máy không làm gì nặng
+          var lastLogCount = 0
+          repeat(120) { attempt ->
+              delay(5000)
+              try {
+                  val req  = Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()
+                  val body = http.newCall(req).execute().body?.string() ?: "{}"
+                  val json = org.json.JSONObject(body)
+                  val status = json.optString("status", "pending")
 
-        if (loginEmail.isEmpty()) {
-            log("Khong tao duoc hop thu — dung")
-            return@withContext
-        }
+                  // Hiển thị log mới từ server lên panel
+                  val logs = json.optJSONArray("log")
+                  if (logs != null) {
+                      for (i in lastLogCount until logs.length()) {
+                          log("[Cloud] ${logs.getString(i)}")
+                      }
+                      lastLogCount = logs.length()
+                  }
 
-        autoEmail    = loginEmail
-        autoUsername = randUsername()
-        log("Email: $autoEmail | Pass: $MAIL_PASS")
-        log("User Replit: $autoUsername")
+                  when (status) {
+                      "done" -> {
+                          autoEmail    = json.optString("email", "")
+                          autoUsername = json.optString("username", "")
+                          val verifyLink = json.optString("verifyLink", "")
+                          accounts.add(AccountEntry(
+                              email    = autoEmail,
+                              password = MAIL_PASS,
+                              username = autoUsername
+                          ))
+                          saveAccounts()
+                          log("✅ Hoan thanh! Email: $autoEmail | User: $autoUsername")
+                          withContext(Dispatchers.Main) {
+                              binding.webView.loadUrl("https://replit.com/signup")
+                              if (tab2Initialized) binding.webView2.loadUrl("https://replit.com/signup")
+                              if (verifyLink.isNotEmpty()) openVerifyTab(verifyLink)
+                          }
+                          return@withContext
+                      }
+                      "error" -> {
+                          log("❌ Server bao loi tao tai khoan")
+                          return@withContext
+                      }
+                      else -> {
+                          if (attempt > 0 && attempt % 6 == 0) log("Dang cho server... ${attempt * 5}s")
+                      }
+                  }
+              } catch (e: Exception) {
+                  if (attempt % 12 == 0) log("Poll loi: ${e.message}")
+              }
+          }
+          log("Het thoi gian cho ket qua tu server")
+      }
 
-        withContext(Dispatchers.Main) {
-            // Load signup trên Tab 1
-            binding.webView.loadUrl("https://replit.com/signup")
-            // Nếu Tab 2 đã được mở → reload signup để onPageFinished kích auto-fill
-            // (Tab 2 có thể đang ở trang signup cũ load trước khi autoEmail được set)
-            if (tab2Initialized) {
-                binding.webView2.loadUrl("https://replit.com/signup")
-            }
-        }
-
-        // 3. Đăng nhập mail.tm lấy token
-        log("Dang nhap Mail.tm...")
-        for (attempt in 1..5) {
-            try {
-                delay(if (attempt == 1) 1500L else 3000L)
-                val body = JSONObject().apply {
-                    put("address", loginEmail)
-                    put("password", MAIL_PASS)
-                }.toString().toRequestBody(JSON_MT)
-                val req = Request.Builder().url("$MAILTM/token").post(body).build()
-                val res = http.newCall(req).execute()
-                val tok = JSONObject(res.body?.string() ?: "{}").optString("token", "")
-                if (tok.isNotEmpty()) {
-                    mailtmToken = tok
-                    log("Dang nhap OK")
-                    break
-                } else {
-                    log("Token trong ($attempt/5), thu lai...")
-                }
-            } catch (e: Exception) {
-                log("Login loi: ${e.message}")
-            }
-        }
-
-        if (mailtmToken.isEmpty()) {
-            log("Khong dang nhap duoc Mail.tm")
-        }
-
-        // 4. Lưu account
-        accounts.add(AccountEntry(email = autoEmail, password = MAIL_PASS, username = autoUsername))
-        saveAccounts()
-
-        // 5. Mở Replit signup + auto-fill
-        withContext(Dispatchers.Main) {
-            log("Mo Replit signup...")
-            binding.webView.loadUrl("https://replit.com/signup")
-        }
-
-        // 6. Poll email xác thực
-        delay(15000)
-        if (mailtmToken.isNotEmpty()) {
-            pollVerification()
-        } else {
-            log("Bo qua poll — khong co token")
-        }
-    }
-
-    private suspend fun pollVerification() = withContext(Dispatchers.IO) {
-        log("Cho email xac thuc tu Replit...")
-        repeat(75) { attempt ->
-            delay(8000)
-            try {
-                val req = Request.Builder()
-                    .url("$MAILTM/messages")
-                    .header("Authorization", "Bearer $mailtmToken")
-                    .build()
-                val res  = http.newCall(req).execute()
-                val raw  = res.body?.string() ?: "{}"
-                val msgs = jsonMembers(raw)
-
-                if (msgs.length() > 0) {
-                    log("${msgs.length()} email trong hop thu")
-                    inboxMessages.clear()
-                    for (i in 0 until msgs.length()) {
-                        val m2 = msgs.getJSONObject(i)
-                        val fromAddr = m2.optJSONObject("from")?.optString("address", "") ?: ""
-                        inboxMessages.add(Pair(fromAddr, m2.optString("subject", "(khong tieu de)")))
-                    }
-                    if (panelOpen && showingVerify) withContext(Dispatchers.Main) { renderVerifyPanel() }
-                    for (i in 0 until msgs.length()) {
-                        val msg  = msgs.getJSONObject(i)
-                        val subj = msg.optString("subject", "")
-                        val isVerify = subj.contains("verify", ignoreCase = true) ||
-                            subj.contains("confirm", ignoreCase = true) ||
-                            subj.contains("Replit", ignoreCase = true)
-                        if (isVerify) {
-                            log("Email: $subj")
-                            val req2 = Request.Builder()
-                                .url("$MAILTM/messages/${msg.getString("id")}")
-                                .header("Authorization", "Bearer $mailtmToken")
-                                .build()
-                            val full = JSONObject(http.newCall(req2).execute().body?.string() ?: "{}")
-                            val htmlRaw = full.opt("html")
-                            val html = when (htmlRaw) {
-                                is JSONArray -> (0 until htmlRaw.length()).joinToString("\n") { htmlRaw.getString(it) }
-                                is String   -> htmlRaw
-                                else        -> ""
-                            }
-                            val link = extractVerifyLink(html)
-                            if (link != null) {
-                                log("Tim thay link xac thuc!")
-                                withContext(Dispatchers.Main) { openVerifyTab(link) }
-                                return@withContext
-                            } else {
-                                log("Khong tim thay link")
-                            }
-                        }
-                    }
-                }
-                if (attempt > 0 && attempt % 4 == 0) log("Dang cho... ${(attempt + 1) * 8}s")
-            } catch (e: Exception) {
-                if (attempt % 8 == 0) log("Poll loi: ${e.message}")
-            }
-        }
-        log("Het thoi gian cho email")
-    }
-
-    // ─── Back press ───────────────────────────────────────────────────────────
+      // ─── Back press ───────────────────────────────────────────────────────────
 
     override fun onResume() {
         super.onResume()
