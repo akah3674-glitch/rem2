@@ -93,6 +93,10 @@ class MainActivity : AppCompatActivity() {
     private var tab2Initialized  = false
     private val tab1Cookies      = mutableMapOf<String, String>()
     private val tab2Cookies      = mutableMapOf<String, String>()
+    // switchSeq: tăng mỗi lần switchBrowserTab được gọi.
+    // Callbacks async (removeAllCookies, restoreCookies) kiểm tra seq trước khi reload —
+    // nếu seq đã thay đổi (user switch lại nhanh), callback cũ bị bỏ qua (stale callback guard).
+    private var switchSeq        = 0
 
     private val inboxMessages = mutableListOf<Pair<String, String>>()
 
@@ -340,25 +344,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun restoreCookies(source: Map<String, String>, onDone: (() -> Unit)? = null) {
+    private fun restoreCookies(source: Map<String, String>, seq: Int, onDone: (() -> Unit)? = null) {
         val cm = CookieManager.getInstance()
         // removeAllCookies phải dùng callback — nó là async,
         // nếu không có callback setCookie chạy trước khi xóa xong → cookie lẫn lộn
         cm.removeAllCookies { _ ->
+            // Stale callback guard: nếu user đã switch tab lại trong lúc chờ, bỏ qua
+            if (seq != switchSeq) return@removeAllCookies
             for ((url, cookies) in source) {
                 cookies.split(";").forEach { kv ->
                     val trimmed = kv.trim()
                     if (trimmed.isNotEmpty()) cm.setCookie(url, trimmed)
                 }
             }
+            // flush() đồng bộ cookies vào disk TRƯỚC khi gọi onDone (reload)
+            // tránh reload bắt đầu request trước khi cookie được ghi xong
             cm.flush()
-            runOnUiThread { onDone?.invoke() }
+            runOnUiThread {
+                if (seq == switchSeq) onDone?.invoke()
+            }
         }
     }
 
     private fun switchBrowserTab(tab: Int) {
         if (tab == currentTab) return
         runOnUiThread {
+            // Tăng seq trước mọi thao tác async — bất kỳ callback nào từ switch trước sẽ bị stale
+            val seq = ++switchSeq
+
             if (tab == 2) {
                 // Chuyển sang Tab 2
                 binding.webView.stopLoading()
@@ -370,8 +383,10 @@ class MainActivity : AppCompatActivity() {
                     binding.swipeRefresh2.visibility = View.VISIBLE
                     tab2Initialized = true
                     CookieManager.getInstance().removeAllCookies { _ ->
+                        if (seq != switchSeq) return@removeAllCookies // stale
                         CookieManager.getInstance().flush()
                         runOnUiThread {
+                            if (seq != switchSeq) return@runOnUiThread // stale
                             binding.webView2.postDelayed({
                                 binding.webView2.loadUrl("https://replit.com/signup")
                             }, 50)
@@ -382,7 +397,7 @@ class MainActivity : AppCompatActivity() {
                     // Restore cookies Tab 2 với callback → reload để áp dụng đúng cookie
                     // FIX: reload() sau khi restore để Tab 2 nhận đúng session cookie,
                     // tránh trường hợp Tab 1 đã thay đổi shared CookieManager
-                    restoreCookies(tab2Cookies) {
+                    restoreCookies(tab2Cookies, seq) {
                         val url = binding.webView2.url
                         if (!url.isNullOrBlank() && url != "about:blank") {
                             binding.etUrl.setText(url)
@@ -428,7 +443,7 @@ class MainActivity : AppCompatActivity() {
                 // (vì CookieManager là singleton). Dù restore cookies Tab 1 thành công,
                 // page vẫn render ở trạng thái "logged out" vì JS đã nhận sự kiện cookie change.
                 // Reload buộc page tải lại với đúng session cookie Tab 1 → Tab 1 ở lại logged in.
-                restoreCookies(tab1Cookies) {
+                restoreCookies(tab1Cookies, seq) {
                     val url = binding.webView.url
                     if (!url.isNullOrBlank() && url != "about:blank") {
                         binding.etUrl.setText(url)
