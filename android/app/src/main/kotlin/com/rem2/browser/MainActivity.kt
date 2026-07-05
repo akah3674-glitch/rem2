@@ -285,56 +285,58 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startBatchFlow(total: Int) {
-        batchTotal   = total
-        batchCurrent = 0
-        lifecycleScope.launch {
-            try {
-                for (i in 1..total) {
-                    batchCurrent = i
-                    flowRunning  = true
-                    autoEmail    = ""; autoUsername = ""
-                    coolDownIfHot()
-                    withContext(Dispatchers.Main) {
-                        val label = if (total == 1) "⏳ Dang tao tai khoan..." else "⏳ Dang tao $i/$total..."
-                        binding.btnCreateAccount.isEnabled = false
-                        binding.btnCreateAccount.text      = label
-                        binding.tvLog.text = ""
-                        switchPanelTab(false)
-                        clearWebSession()
-                        binding.webView.postDelayed({ binding.webView.loadUrl("https://replit.com/signup") }, 300)
-                    }
-                    try {
-                        ensureAccount()
-                    } catch (e: Exception) {
-                        log("❌ Loi tai khoan $i/$total: ${e.message} — bo qua, tao tiep")
-                    } finally {
-                        flowRunning = false
-                    }
-                    if (i < total) {
-                        // Cu moi 5 tai khoan thi nghi dai hon de may nguoi han
-                        val restMs = if (i % 5 == 0) 45_000L else 15_000L
-                        log("--- Xong $i/$total — cho ${restMs/1000}s roi tao tiep ---")
-                        delay(restMs)
-                        coolDownIfHot()
-                    }
-                }
-                withContext(Dispatchers.Main) {
-                    if (total > 1) {
-                        log("✅ Da tao xong $total tai khoan! Nhan giu nut de xem danh sach.")
-                        showDoneNotification("Batch $total tai khoan xong", "$total tai khoan da duoc tao")
-                    }
-                }
-            } finally {
-                // Đảm bảo button luôn được re-enable dù có exception hay CancellationException
-                flowRunning = false
-                withContext(Dispatchers.Main) {
-                    binding.btnCreateAccount.isEnabled = true
-                    binding.btnCreateAccount.text      = "🔄 Tao tai khoan moi"
-                }
-            }
-        }
-    }
-
+          batchTotal   = total
+          batchCurrent = 0
+          val targetTab = currentTab
+          val targetWv  = if (targetTab == 1) binding.webView else binding.webView2
+          lifecycleScope.launch {
+              try {
+                  for (i in 1..total) {
+                      batchCurrent = i
+                      flowRunning  = true
+                      autoEmail    = ""; autoUsername = ""
+                      coolDownIfHot()
+                      withContext(Dispatchers.Main) {
+                          val label = if (total == 1) "⏳ Dang tao tai khoan..." else "⏳ Dang tao $i/$total..."
+                          binding.btnCreateAccount.isEnabled = false
+                          binding.btnCreateAccount.text      = label
+                          binding.tvLog.text = ""
+                          switchPanelTab(false)
+                          clearWebSession(targetTab)
+                          targetWv.postDelayed({ targetWv.loadUrl("https://replit.com/signup") }, 300)
+                      }
+                      try {
+                          ensureAccount(targetTab)
+                      } catch (e: Exception) {
+                          log("❌ Loi tai khoan $i/$total: ${e.message} — bo qua, tao tiep")
+                      } finally {
+                          flowRunning = false
+                      }
+                      if (i < total) {
+                          // Cu moi 5 tai khoan thi nghi dai hon de may nguoi han
+                          val restMs = if (i % 5 == 0) 45_000L else 15_000L
+                          log("--- Xong $i/$total — cho ${restMs/1000}s roi tao tiep ---")
+                          delay(restMs)
+                          coolDownIfHot()
+                      }
+                  }
+                  withContext(Dispatchers.Main) {
+                      if (total > 1) {
+                          log("✅ Da tao xong $total tai khoan! Nhan giu nut de xem danh sach.")
+                          showDoneNotification("Batch $total tai khoan xong", "$total tai khoan da duoc tao")
+                      }
+                  }
+              } finally {
+                  // Đảm bảo button luôn được re-enable dù có exception hay CancellationException
+                  flowRunning = false
+                  withContext(Dispatchers.Main) {
+                      binding.btnCreateAccount.isEnabled = true
+                      binding.btnCreateAccount.text      = "🔄 Tao tai khoan moi"
+                  }
+              }
+          }
+      }
+  
     // ─── Session persistence ──────────────────────────────────────────────────
 
     private fun saveSessionState() {
@@ -686,7 +688,7 @@ class MainActivity : AppCompatActivity() {
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                 val url = req.url.toString()
                 if (url.contains("verify") || url.contains("confirm-email") || url.contains("oobCode")) {
-                    openVerifyTab(url); return true
+                    openVerifyTab(url, view); return true
                 }
                 return false
             }
@@ -742,25 +744,24 @@ class MainActivity : AppCompatActivity() {
 
     // ─── clearWebSession ──────────────────────────────────────────────────────
 
-    private fun clearWebSession() {
-        killAutoScripts(binding.webView); killAutoScripts(binding.webView2)
-        CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush()
-        tab1Cookies.clear(); tab2Cookies.clear(); autoEmail=""; autoUsername=""
-        tab1LocalStorageJson = "{}"; tab2LocalStorageJson = "{}"
-        binding.webView.clearCache(true); binding.webView.clearHistory(); binding.webView.clearFormData()
-        binding.webView.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
-        binding.webView.loadUrl("about:blank")
-        if (tab2Initialized) {
-            binding.webView2.clearCache(true); binding.webView2.clearHistory(); binding.webView2.clearFormData()
-            binding.webView2.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
-            binding.webView2.loadUrl("about:blank")
-            if (currentTab != 2) binding.webView2.onPause()
-            tab2Initialized = false
-        }
-        WebStorage.getInstance().deleteAllData()
-        log("Da xoa session cu — chuan bi tao tai khoan moi...")
-    }
 
+      // Chỉ xoá session của MỘT tab (tab đang được dùng để tạo tài khoản),
+      // không đụng tới tab còn lại — tránh vạ lây khi 2 tab dùng song song.
+      private fun clearWebSession(tab: Int = currentTab) {
+          val wv = if (tab == 1) binding.webView else binding.webView2
+          killAutoScripts(wv)
+          CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush()
+          if (tab == 1) { tab1Cookies.clear(); tab1LocalStorageJson = "{}" }
+          else          { tab2Cookies.clear(); tab2LocalStorageJson = "{}" }
+          autoEmail=""; autoUsername=""
+          wv.clearCache(true); wv.clearHistory(); wv.clearFormData()
+          wv.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
+          wv.loadUrl("about:blank")
+          WebStorage.getInstance().deleteAllData()
+          log("Da xoa session cu (Tab $tab) — chuan bi tao tai khoan moi...")
+      }
+
+  
     // ─── Verify tab ───────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -784,71 +785,71 @@ class MainActivity : AppCompatActivity() {
         binding.verifyWebView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
     }
 
-    private fun openVerifyTab(url: String) = runOnUiThread {
-        log("Tim thay link xac thuc — dang mo...")
-        activeWebView().loadUrl(url)
-        renderVerifyPanel(); panelOpen=true; binding.logPanel.visibility=View.VISIBLE; switchPanelTab(true)
-    }
-
+    // Mở vào wv được truyền vào (tab đúng chủ của link), không phải luôn "tab đang xem"
+      // — tránh mở nhầm link xác thực của tab kia vào tab đang active nếu user đã chuyển tab.
+      private fun openVerifyTab(url: String, wv: WebView = activeWebView()) = runOnUiThread {
+          log("Tim thay link xac thuc — dang mo...")
+          wv.loadUrl(url)
+          renderVerifyPanel(); panelOpen=true; binding.logPanel.visibility=View.VISIBLE; switchPanelTab(true)
+      }
+  
     // ─── Cloud polling ────────────────────────────────────────────────────────
 
-    private suspend fun ensureAccount() = withContext(Dispatchers.IO) {
-        log("Ket noi server...")
-        val jobId = try {
-            val res = http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/create")
-                .post("".toRequestBody(null)).build()).execute()
-            JSONObject(res.body?.string() ?: "{}").getString("jobId")
-        } catch (e: Exception) { log("Loi ket noi: ${e.message}"); return@withContext }
-        val batchLabel = if (batchTotal > 1) " ($batchCurrent/$batchTotal)" else ""
-        log("Server dang xu ly$batchLabel... ID: ${jobId.take(8)}")
+    private suspend fun ensureAccount(targetTab: Int) = withContext(Dispatchers.IO) {
+          val targetWv = if (targetTab == 1) binding.webView else binding.webView2
+          log("Ket noi server...")
+          val jobId = try {
+              val res = http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/create")
+                  .post("".toRequestBody(null)).build()).execute()
+              JSONObject(res.body?.string() ?: "{}").getString("jobId")
+          } catch (e: Exception) { log("Loi ket noi: ${e.message}"); return@withContext }
+          val batchLabel = if (batchTotal > 1) " ($batchCurrent/$batchTotal)" else ""
+          log("Server dang xu ly$batchLabel... ID: ${jobId.take(8)}")
 
-        var lastLogIdx = 0
-        repeat(120) { attempt ->
-            delay(5000)
-            try {
-                val json   = JSONObject(http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()).execute().body?.string() ?: "{}")
-                val status = json.optString("status", "pending")
-                val logs   = json.optJSONArray("log")
-                if (logs != null) {
-                    for (i in lastLogIdx until logs.length()) log("[Cloud] ${logs.getString(i)}")
-                    lastLogIdx = logs.length()
-                }
-                // Nhận email sớm để fill form kịp
-                if (autoEmail.isEmpty()) {
-                    val e = json.optString("email", ""); val u = json.optString("username", "")
-                    if (e.isNotEmpty()) {
-                        autoEmail=e; autoUsername=u
-                        withContext(Dispatchers.Main) {
-                            fillIfOnSignup(binding.webView)
-                            if (tab2Initialized) fillIfOnSignup(binding.webView2)
-                        }
-                    }
-                }
-                when (status) {
-                    "done" -> {
-                        autoEmail    = json.optString("email", "")
-                        autoUsername = json.optString("username", "")
-                        val link     = json.optString("verifyLink", "")
-                        accounts.add(AccountEntry(email=autoEmail, password=MAIL_PASS, username=autoUsername))
-                        saveAccounts()
-                        val bInfo = if (batchTotal>1) "Tai khoan $batchCurrent/$batchTotal" else ""
-                        log("✅ Xong${ if (bInfo.isEmpty()) "" else " ($bInfo)" }! Email: $autoEmail | User: $autoUsername")
-                        withContext(Dispatchers.Main) {
-                            ensureOnSignup(binding.webView)
-                            if (tab2Initialized) ensureOnSignup(binding.webView2)
-                            if (link.isNotEmpty()) openVerifyTab(link)
-                            showDoneNotification(autoEmail, autoUsername, bInfo)
-                        }
-                        return@withContext
-                    }
-                    "error" -> { log("❌ Server loi tao tai khoan"); return@withContext }
-                    else    -> if (attempt > 0 && attempt % 6 == 0) log("Dang cho... ${attempt*5}s$batchLabel")
-                }
-            } catch (e: Exception) { if (attempt % 12 == 0) log("Poll loi: ${e.message}") }
-        }
-        log("Het thoi gian cho server")
-    }
-
+          var lastLogIdx = 0
+          repeat(120) { attempt ->
+              delay(5000)
+              try {
+                  val json   = JSONObject(http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()).execute().body?.string() ?: "{}")
+                  val status = json.optString("status", "pending")
+                  val logs   = json.optJSONArray("log")
+                  if (logs != null) {
+                      for (i in lastLogIdx until logs.length()) log("[Cloud] ${logs.getString(i)}")
+                      lastLogIdx = logs.length()
+                  }
+                  // Nhận email sớm để fill form kịp — CHỈ điền vào tab đang tạo tài khoản này,
+                  // không đụng tab còn lại (tránh dính nhầm email/pass sang tab kia).
+                  if (autoEmail.isEmpty()) {
+                      val e = json.optString("email", ""); val u = json.optString("username", "")
+                      if (e.isNotEmpty()) {
+                          autoEmail=e; autoUsername=u
+                          withContext(Dispatchers.Main) { fillIfOnSignup(targetWv) }
+                      }
+                  }
+                  when (status) {
+                      "done" -> {
+                          autoEmail    = json.optString("email", "")
+                          autoUsername = json.optString("username", "")
+                          val link     = json.optString("verifyLink", "")
+                          accounts.add(AccountEntry(email=autoEmail, password=MAIL_PASS, username=autoUsername))
+                          saveAccounts()
+                          val bInfo = if (batchTotal>1) "Tai khoan $batchCurrent/$batchTotal" else ""
+                          log("✅ Xong${ if (bInfo.isEmpty()) "" else " ($bInfo)" }! Email: $autoEmail | User: $autoUsername")
+                          withContext(Dispatchers.Main) {
+                              ensureOnSignup(targetWv)
+                              if (link.isNotEmpty()) openVerifyTab(link, targetWv)
+                              showDoneNotification(autoEmail, autoUsername, bInfo)
+                          }
+                          return@withContext
+                      }
+                      "error" -> { log("❌ Server loi tao tai khoan"); return@withContext }
+                      else    -> if (attempt > 0 && attempt % 6 == 0) log("Dang cho... ${attempt*5}s$batchLabel")
+                  }
+              } catch (e: Exception) { if (attempt % 12 == 0) log("Poll loi: ${e.message}") }
+          }
+          log("Het thoi gian cho server")
+      }
+  
     private fun fillIfOnSignup(wv: WebView) { if ((wv.url ?: "").isSignupPage()) injectAutoFill(wv) }
     private fun ensureOnSignup(wv: WebView) {
         val url = wv.url ?: ""
@@ -953,7 +954,7 @@ class MainActivity : AppCompatActivity() {
               var lastTick=0;
               function tick(){
                 var now=Date.now();if(now-lastTick<500)return false;lastTick=now;
-                try{if(isDone())return true;var h=headingText();if(STOP_HEADS.some(function(s){return h.indexOf(s)!==-1;}))return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){syntheticClick(cs[0]);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;
+                try{if(isDone())return true;var h=headingText();if(STOP_HEADS.some(function(s){return h.indexOf(s)!==-1;}))return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){var pick=cs[Math.floor(Math.random()*cs.length)];syntheticClick(pick);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;
               }
               var count=0,pendingTick2=null;
               // Gộp nhiều mutation lien tiep thanh 1 lan tick (debounce) — giam CPU/nhiet
