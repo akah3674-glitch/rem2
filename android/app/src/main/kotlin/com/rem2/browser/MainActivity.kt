@@ -400,9 +400,12 @@ class MainActivity : AppCompatActivity() {
         }
         if (savedTab == 2 && tab2Init) {
             binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
-            currentTab=2; binding.btnTabCount.text=">"
+            currentTab=2; binding.btnTabCount.text="2"
+            // Header: terminal mode on restore
+            binding.etUrl.visibility = android.view.View.GONE
+            binding.tvTerminalTitle.visibility = android.view.View.VISIBLE
             val u = tab2Url.takeIf { it.isNotEmpty() } ?: TERMINAL_URL
-            binding.webView2.loadUrl(u); binding.etUrl.setText(u)
+            binding.webView2.loadUrl(u)
         } else if (tab1Url.isNotEmpty()) {
             binding.webView.loadUrl(tab1Url); binding.etUrl.setText(tab1Url)
         }
@@ -411,30 +414,39 @@ class MainActivity : AppCompatActivity() {
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
-        // Nút quay lại (trình duyệt thật)
+        // Nút quay lại — Tab 1: điều hướng trang; Tab 2: về Tab 1
         binding.btnBack.setOnClickListener {
-            val wv = activeWebView()
-            if (wv.canGoBack()) wv.goBack()
+            if (currentTab == 2) { switchBrowserTab(1) }
+            else { val wv = activeWebView(); if (wv.canGoBack()) wv.goBack() }
         }
 
-        // Ba chấm ⋮ — menu ẩn mọi tính năng automation
+        // Ba chấm ⋮ — menu thích nghi: Tab 1 = automation; Tab 2 = terminal controls
         binding.btnMenu.setOnClickListener { anchor ->
             val popup = PopupMenu(this, anchor)
             val m = popup.menu
-            m.add(0, 1, 0, if (flowRunning) "⏳ Đang xử lý..." else "🔄 Tạo tài khoản mới")
-            m.add(0, 2, 1, "📋 Danh sách tài khoản (${accounts.size})")
-            m.add(0, 3, 2, "📄 Nhật ký")
-            m.add(0, 4, 3, "⌂ Trang đăng ký")
-            m.add(0, 5, 4, if (dataSaving) "📶 Tắt tiết kiệm data" else "🔋 Bật tiết kiệm data")
-            m.add(0, 6, 5, if (!flowRunning) "⚡ Tạo 5 tài khoản" else "⏳ Đang chạy batch...")
+            if (currentTab == 1) {
+                m.add(0, 1, 0, if (flowRunning) "⏳ Đang xử lý..." else "🔄 Tạo tài khoản mới")
+                m.add(0, 2, 1, "📋 Danh sách tài khoản (${accounts.size})")
+                m.add(0, 3, 2, "📄 Nhật ký")
+                m.add(0, 4, 3, "⌂ Trang đăng ký")
+                m.add(0, 5, 4, if (dataSaving) "📶 Tắt tiết kiệm data" else "🔋 Bật tiết kiệm data")
+                m.add(0, 6, 5, if (!flowRunning) "⚡ Tạo 5 tài khoản" else "⏳ Đang chạy batch...")
+            } else {
+                m.add(0, 10, 0, "🆕 Shell mới (xoá phiên cũ)")
+                m.add(0, 11, 1, "⟳ Tải lại terminal")
+                m.add(0, 12, 2, if (dataSaving) "📶 Tắt tiết kiệm data" else "🔋 Bật tiết kiệm data")
+            }
             popup.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
-                    1 -> { if (!flowRunning) startBatchFlow(1) else Toast.makeText(this, "Đang xử lý, vui lòng đợi...", Toast.LENGTH_SHORT).show(); true }
-                    2 -> { showAccountList(); true }
-                    3 -> { panelOpen = !panelOpen; binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE; true }
-                    4 -> { activeWebView().loadUrl(DEFAULT_URL); true }
-                    5 -> { applyDataSaving(!dataSaving); true }
-                    6 -> { if (!flowRunning) startBatchFlow(5) else Toast.makeText(this, "Đang xử lý...", Toast.LENGTH_SHORT).show(); true }
+                    1  -> { if (!flowRunning) startBatchFlow(1) else Toast.makeText(this, "Đang xử lý, vui lòng đợi...", Toast.LENGTH_SHORT).show(); true }
+                    2  -> { showAccountList(); true }
+                    3  -> { panelOpen = !panelOpen; binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE; true }
+                    4  -> { activeWebView().loadUrl(DEFAULT_URL); true }
+                    5  -> { applyDataSaving(!dataSaving); true }
+                    6  -> { if (!flowRunning) startBatchFlow(5) else Toast.makeText(this, "Đang xử lý...", Toast.LENGTH_SHORT).show(); true }
+                    10 -> { binding.webView2.evaluateJavascript("if(typeof newSession==='function')newSession();", null); true }
+                    11 -> { binding.webView2.loadUrl(TERMINAL_URL); true }
+                    12 -> { applyDataSaving(!dataSaving); true }
                     else -> false
                 }
             }
@@ -447,8 +459,12 @@ class MainActivity : AppCompatActivity() {
             val wv = activeWebView()
             val sw = if (currentTab==1) binding.swipeRefresh else binding.swipeRefresh2
             sw.isRefreshing = true
-            val cur = wv.url
-            if (cur.isNullOrBlank() || cur=="about:blank") wv.loadUrl("https://replit.com/signup") else wv.reload()
+            if (currentTab == 2) {
+                wv.loadUrl(TERMINAL_URL)   // Tab 2: reload/reconnect terminal
+            } else {
+                val cur = wv.url
+                if (cur.isNullOrBlank() || cur=="about:blank") wv.loadUrl("https://replit.com/signup") else wv.reload()
+            }
         }
         binding.tabLog.setOnClickListener    { switchPanelTab(false) }
         binding.tabVerify.setOnClickListener { switchPanelTab(true)  }
@@ -563,7 +579,10 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 setTabActive(binding.webView, false); setTabActive(binding.webView2, true)
-                currentTab=2; binding.btnTabCount.text=">"
+                currentTab=2; binding.btnTabCount.text="2"
+                // Header: terminal mode
+                binding.etUrl.visibility = android.view.View.GONE
+                binding.tvTerminalTitle.visibility = android.view.View.VISIBLE
                 if (autoEmail.isNotEmpty() && (binding.webView2.url ?: "").isSignupPage()) {
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
@@ -574,6 +593,9 @@ class MainActivity : AppCompatActivity() {
                 binding.swipeRefresh2.visibility=View.INVISIBLE; binding.swipeRefresh.visibility=View.VISIBLE
                 setTabActive(binding.webView2, false); setTabActive(binding.webView, true)
                 currentTab=1; binding.btnTabCount.text="1"
+                // Header: browser mode
+                binding.etUrl.visibility = android.view.View.VISIBLE
+                binding.tvTerminalTitle.visibility = android.view.View.GONE
                 restoreCookies(tab1Cookies, seq) {
                     restoreLocalStorage(binding.webView, tab1LocalStorageJson) {
                         if (seq != switchSeq) return@restoreLocalStorage
