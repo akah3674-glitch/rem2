@@ -137,6 +137,12 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         saveSessionState()
+        // Dừng render/JS cả 2 WebView khi app mất focus (Home, notification shade, chuyển app)
+        // onStop() chỉ chạy khi app hoàn toàn ẩn — onPause() mới là điểm đúng để tiết kiệm pin
+        binding.webView.onPause()
+        binding.webView2.onPause()
+        // pauseTimers() dừng TẤT CẢ JS timers (setInterval/setTimeout) toàn cục trong mọi WebView
+        binding.webView.pauseTimers()
     }
 
     // ─── Session persistence (lưu/khôi phục URL + cookie qua lần thoát/vào) ──
@@ -524,6 +530,7 @@ class MainActivity : AppCompatActivity() {
             textZoom                 = 100
             safeBrowsingEnabled      = false
             setGeolocationEnabled(false)
+            mediaPlaybackRequiresUserGesture = true  // tắt tự động phát media — tiết kiệm pin/CPU
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
@@ -658,6 +665,7 @@ class MainActivity : AppCompatActivity() {
             textZoom                 = 100
             safeBrowsingEnabled      = false
             setGeolocationEnabled(false)
+            mediaPlaybackRequiresUserGesture = true  // tắt tự động phát media — tiết kiệm pin/CPU
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
@@ -1094,6 +1102,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // Khôi phục JS timers rồi mới resume tab đang active
+        binding.webView.resumeTimers()
         if (currentTab == 1) binding.webView.onResume() else binding.webView2.onResume()
     }
 
@@ -1114,5 +1124,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
+
 
 
