@@ -49,7 +49,7 @@ class MainActivity : AppCompatActivity() {
           private const val MAIL_PASS    = "Mailtm2025Tool" // giữ để lưu account local
         private const val COCCOC_UA =
             "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) coc_coc_browser/109.0.0.0 Chrome/123.0.0.0 Mobile Safari/537.36"
+            "(KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36"
 
                   // Danh sách URL để save/restore cookie khi chuyển tab
         private val COOKIE_URLS = listOf(
@@ -538,13 +538,24 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+                // Detect Cloudflare "Just a moment" challenge → tự reload sau 4s
+                // để pass challenge và load lại trang thật (tránh bị kẹt trang trắng)
+                v.evaluateJavascript("document.title") { titleRaw ->
+                    val t = titleRaw?.trim('"') ?: ""
+                    if (t.contains("Just a moment", ignoreCase = true) ||
+                        (t.contains("Cloudflare", ignoreCase = true) && url.contains("cdn-cgi"))) {
+                        log("⚡ Dang vuot Cloudflare, tu tai lai sau 4s...")
+                        v.postDelayed({ v.reload() }, 4000)
+                    }
+                }
                 // Sau khi verify link chay trong main WebView → detect thanh cong
-                if (url.contains("replit.com") && !url.contains("verify") &&
+                // GUARD: chỉ inject auto-continue khi đang chạy flow tạo tài khoản,
+                // tránh click nhầm buttons khi user browse workspace bình thường.
+                if (flowRunning && url.contains("replit.com") && !url.contains("verify") &&
                     !url.contains("confirm") && !url.contains("signup") &&
                     !url.contains("login") && url != "about:blank") {
                     log("✓ Xac thuc thanh cong! Da vao dashboard Replit.")
                     CookieManager.getInstance().flush()
-                    // Tu dong bam Next/Continue/Skip qua cac cau hoi onboarding sau khi xac thuc
                     injectAutoContinue(v)
                 }
                 val isSignup = url.contains("signup") || url.contains("login") || url.contains("register")
@@ -668,8 +679,17 @@ class MainActivity : AppCompatActivity() {
                     v.postDelayed({ injectAutoFill(v) }, 2500)
                     v.postDelayed({ injectAutoFill(v) }, 5000)
                 }
+                // Detect Cloudflare challenge Tab 2 → auto-reload
+                v.evaluateJavascript("document.title") { titleRaw ->
+                    val t = titleRaw?.trim('"') ?: ""
+                    if (t.contains("Just a moment", ignoreCase = true) ||
+                        (t.contains("Cloudflare", ignoreCase = true) && url.contains("cdn-cgi"))) {
+                        v.postDelayed({ v.reload() }, 4000)
+                    }
+                }
                 // Sau xác thực → detect dashboard + auto-continue onboarding
-                if (url.contains("replit.com") && !url.contains("verify") &&
+                // GUARD: chỉ inject khi đang chạy flow tạo tài khoản
+                if (flowRunning && url.contains("replit.com") && !url.contains("verify") &&
                     !url.contains("confirm") && !url.contains("signup") &&
                     !url.contains("login") && url != "about:blank") {
                     log("✓ [Tab 2] Xac thuc thanh cong! Da vao dashboard Replit.")
@@ -1094,4 +1114,5 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
+
 
