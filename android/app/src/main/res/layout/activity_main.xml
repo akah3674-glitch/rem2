@@ -223,7 +223,7 @@
             android:id="@+id/swipeRefresh2"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:visibility="gone"
+            android:visibility="invisible"
             app:layout_constraintTop_toBottomOf="@id/logPanel"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintStart_toStartOf="parent"
