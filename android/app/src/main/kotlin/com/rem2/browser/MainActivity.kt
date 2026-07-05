@@ -314,7 +314,6 @@ class MainActivity : AppCompatActivity() {
                         val url = binding.webView2.url
                         if (!url.isNullOrBlank() && url != "about:blank") {
                             binding.etUrl.setText(url)
-                            binding.webView2.reload() // cookie đã restore → reload để áp dụng
                         }
                     }
                 }
@@ -355,7 +354,6 @@ class MainActivity : AppCompatActivity() {
                     val url = binding.webView.url
                     if (!url.isNullOrBlank() && url != "about:blank") {
                         binding.etUrl.setText(url)
-                        binding.webView.reload() // cookie đã restore → reload để áp dụng
                     } else {
                         binding.etUrl.setText("")
                     }
