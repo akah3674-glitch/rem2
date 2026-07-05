@@ -807,13 +807,22 @@ class MainActivity : AppCompatActivity() {
           log("Server dang xu ly$batchLabel... ID: ${jobId.take(8)}")
 
           var lastLogIdx = 0
-          repeat(120) { attempt ->
-              delay(5000)
-              try {
-                  val json   = JSONObject(http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()).execute().body?.string() ?: "{}")
-                  val status = json.optString("status", "pending")
-                  val logs   = json.optJSONArray("log")
-                  if (logs != null) {
+            var notFoundStreak = 0
+            repeat(150) { attempt ->
+                delay(5000)
+                try {
+                    val json   = JSONObject(http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()).execute().body?.string() ?: "{}")
+                    if (json.has("error")) {
+                        // Server tam thoi khong tim thay job (autoscale doi instance / lanh khoi dong) —
+                        // KHONG coi day la loi vinh vien, chi cho lau hon thay vi bat nguoi dung lam lai tu dau.
+                        notFoundStreak++
+                        if (notFoundStreak == 1 || notFoundStreak % 6 == 0) log("Server dang khoi dong lai, tiep tuc cho$batchLabel...")
+                        return@repeat
+                    }
+                    notFoundStreak = 0
+                    val status = json.optString("status", "pending")
+                    val logs   = json.optJSONArray("log")
+                    if (logs != null) {
                       for (i in lastLogIdx until logs.length()) log("[Cloud] ${logs.getString(i)}")
                       lastLogIdx = logs.length()
                   }
@@ -950,7 +959,7 @@ class MainActivity : AppCompatActivity() {
                 if(candidates.length>1) return null; // nhiều nút nhưng toàn plan trả phí — không đoán, chờ vòng sau
                 return candidates[0].el;
               }
-              function findChoices(excl){var out=[];document.querySelectorAll('button,[role="button"]').forEach(function(el){if(el===excl||el.disabled)return;var txt=(el.innerText||'').trim().toLowerCase();if(!txt||txt.length>40)return;if(EXCLUDE_KW.some(function(k){return txt.indexOf(k)!==-1;}))return;out.push(el);});return out;}
+              function findChoices(excl){var out=[];document.querySelectorAll('button,[role="button"],[role="radio"],[role="option"],[role="checkbox"],input[type="radio"],input[type="checkbox"]').forEach(function(el){if(el===excl||el.disabled)return;var lbl=el.closest('label');var txt=((el.innerText||el.value||(lbl?lbl.innerText:'')||'')+'').trim().toLowerCase();if(!txt||txt.length>60)return;if(EXCLUDE_KW.some(function(k){return txt.indexOf(k)!==-1;}))return;out.push(lbl&&(el.type==='radio'||el.type==='checkbox')?lbl:el);});return out;}
               var lastTick=0;
               function tick(){
                 var now=Date.now();if(now-lastTick<500)return false;lastTick=now;
