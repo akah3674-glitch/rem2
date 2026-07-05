@@ -50,7 +50,10 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS        = "rem2_prefs"
         private const val KEY_ACCOUNTS = "accounts_v3"
-        private const val SERVER_URL   = "https://zkdjjc--hemv5x7n7p.replit.app"
+        private const val SERVER_URL      = "https://zkdjjc--hemv5x7n7p.replit.app"
+        private const val GOLIKE_TOOL_URL  = "${'$'}{SERVER_URL}/golike-tool"
+        private const val KEY_DATA_SAVING  = "data_saving"
+        private const val DEFAULT_URL      = "https://replit.com/signup"
         private const val MAIL_PASS    = "Mailtm2025Tool"
         private const val COCCOC_UA    =
             "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
@@ -88,6 +91,7 @@ class MainActivity : AppCompatActivity() {
     private var autoUsername = ""
     private var flowRunning  = false
     private var wakeLock: PowerManager.WakeLock? = null
+    private var dataSaving   = false
 
     // Batch mode
     private var batchTotal   = 1
@@ -162,12 +166,15 @@ class MainActivity : AppCompatActivity() {
         AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        window.statusBarColor     = android.graphics.Color.parseColor("#1565C0")
+        window.navigationBarColor = android.graphics.Color.parseColor("#1565C0")
         CookieManager.getInstance().setAcceptCookie(true)
         binding.swipeRefresh2.visibility = View.INVISIBLE
         binding.logPanel.visibility  = View.GONE  // ẩn panel khi mở app
         binding.webView2.onPause()
         createNotificationChannel()
         loadAccounts()
+        dataSaving = prefs.getBoolean(KEY_DATA_SAVING, false)
         setupHeader()
         setupWebView(binding.webView,  isTab1 = true)
         setupWebView(binding.webView2, isTab1 = false)
@@ -386,11 +393,15 @@ class MainActivity : AppCompatActivity() {
         tab1LocalStorageJson = prefs.getString(KEY_TAB1_LS_JSON, "{}") ?: "{}"
         tab2LocalStorageJson = prefs.getString(KEY_TAB2_LS_JSON, "{}") ?: "{}"
         tab2Initialized = tab2Init
-        if (tab1Url.isEmpty() && tab2Url.isEmpty()) return
+        if (tab1Url.isEmpty() && tab2Url.isEmpty()) {
+            // Lần đầu mở app — trang đăng ký mặc định
+            binding.webView.loadUrl(DEFAULT_URL); binding.etUrl.setText(DEFAULT_URL)
+            return
+        }
         if (savedTab == 2 && tab2Init) {
             binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
-            currentTab=2; binding.btnTabCount.text="2"
-            val u = tab2Url.takeIf { it.isNotEmpty() } ?: "https://replit.com/signup"
+            currentTab=2; binding.btnTabCount.text="GL"
+            val u = tab2Url.takeIf { it.isNotEmpty() } ?: GOLIKE_TOOL_URL
             binding.webView2.loadUrl(u); binding.etUrl.setText(u)
         } else if (tab1Url.isNotEmpty()) {
             binding.webView.loadUrl(tab1Url); binding.etUrl.setText(tab1Url)
@@ -414,12 +425,16 @@ class MainActivity : AppCompatActivity() {
             m.add(0, 2, 1, "📋 Danh sách tài khoản (${accounts.size})")
             m.add(0, 3, 2, "📄 Nhật ký")
             m.add(0, 4, 3, "⌂ Trang đăng ký")
+            m.add(0, 5, 4, if (dataSaving) "📶 Tắt tiết kiệm data" else "🔋 Bật tiết kiệm data")
+            m.add(0, 6, 5, if (!flowRunning) "⚡ Tạo 5 tài khoản" else "⏳ Đang chạy batch...")
             popup.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     1 -> { if (!flowRunning) startBatchFlow(1) else Toast.makeText(this, "Đang xử lý, vui lòng đợi...", Toast.LENGTH_SHORT).show(); true }
                     2 -> { showAccountList(); true }
                     3 -> { panelOpen = !panelOpen; binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE; true }
-                    4 -> { activeWebView().loadUrl("https://replit.com/signup"); true }
+                    4 -> { activeWebView().loadUrl(DEFAULT_URL); true }
+                    5 -> { applyDataSaving(!dataSaving); true }
+                    6 -> { if (!flowRunning) startBatchFlow(5) else Toast.makeText(this, "Đang xử lý...", Toast.LENGTH_SHORT).show(); true }
                     else -> false
                 }
             }
@@ -531,10 +546,10 @@ class MainActivity : AppCompatActivity() {
                         restoreCookies(tab1Cookies, seq) {
                             if (seq != switchSeq) return@restoreCookies
                             tab2LocalStorageJson = "{}"
-                            binding.webView2.postDelayed({ binding.webView2.loadUrl("https://replit.com/signup") }, 50)
+                            binding.webView2.postDelayed({ binding.webView2.loadUrl(GOLIKE_TOOL_URL) }, 50)
                         }
                     }
-                    binding.etUrl.setText("https://replit.com/signup")
+                    binding.etUrl.setText(GOLIKE_TOOL_URL)
                 } else {
                     restoreCookies(tab2Cookies, seq) {
                         restoreLocalStorage(binding.webView2, tab2LocalStorageJson) {
@@ -548,7 +563,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 setTabActive(binding.webView, false); setTabActive(binding.webView2, true)
-                currentTab=2; binding.btnTabCount.text="2"
+                currentTab=2; binding.btnTabCount.text="GL"
                 if (autoEmail.isNotEmpty() && (binding.webView2.url ?: "").isSignupPage()) {
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
@@ -571,6 +586,17 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun applyDataSaving(enable: Boolean) {
+        dataSaving = enable
+        binding.webView.settings.blockNetworkImage  = enable
+        binding.webView2.settings.blockNetworkImage = enable
+        prefs.edit().putBoolean(KEY_DATA_SAVING, enable).apply()
+        Toast.makeText(this,
+            if (enable) "🔋 Tiết kiệm data BẬT — ảnh bị ẩn để tiết kiệm 3G/4G"
+            else "📶 Tiết kiệm data TẮT — ảnh hiển thị bình thường",
+            Toast.LENGTH_SHORT).show()
     }
 
     private fun setTabActive(wv: WebView, active: Boolean) {
@@ -650,6 +676,7 @@ class MainActivity : AppCompatActivity() {
         wv.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         wv.isScrollbarFadingEnabled = true
         wv.settings.apply {
+            blockNetworkImage                     = dataSaving
             javaScriptEnabled                     = true
             domStorageEnabled                     = true
             databaseEnabled                       = true
@@ -1066,4 +1093,5 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent(), null)
     }
 }
+
 
