@@ -78,7 +78,7 @@ class MainActivity : AppCompatActivity() {
         .build()
 
     private val accounts     = mutableListOf<AccountEntry>()
-    private var panelOpen    = true
+    private var panelOpen    = false
     private var showingVerify = false
     private var autoEmail    = ""
     private var autoUsername = ""
@@ -149,6 +149,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         CookieManager.getInstance().setAcceptCookie(true)
         binding.swipeRefresh2.visibility = View.INVISIBLE
+        binding.logPanel.visibility  = View.GONE  // ẩn panel khi mở app
         binding.webView2.onPause()
         createNotificationChannel()
         loadAccounts()
