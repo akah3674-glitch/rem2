@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREFS        = "rem2_prefs"
         private const val KEY_ACCOUNTS = "accounts_v3"
         private const val SERVER_URL      = "https://zkdjjc--hemv5x7n7p.replit.app"
-        private const val TERMINAL_URL     = "https://zkdjjc--hemv5x7n7p.replit.app/terminal"
+        private const val TERMINAL_URL     = "https://zkdjjc--hemv5x7n7p.replit.app/api/terminal"
         private const val KEY_DATA_SAVING  = "data_saving"
         private const val DEFAULT_URL      = "https://replit.com/signup"
         private const val MAIL_PASS    = "Mailtm2025Tool"
@@ -1078,7 +1078,7 @@ class MainActivity : AppCompatActivity() {
               var lastTick=0;
               function tick(){
                 var now=Date.now();if(now-lastTick<500)return false;lastTick=now;
-                try{if(isDone())return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){var pick=cs[Math.floor(Math.random()*cs.length)];syntheticClick(pick);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;
+                try{if(isDone())return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){var pick=cs[0];syntheticClick(pick);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;
               }
               var count=0,pendingTick2=null;
               // Gộp nhiều mutation lien tiep thanh 1 lan tick (debounce) — giam CPU/nhiet
