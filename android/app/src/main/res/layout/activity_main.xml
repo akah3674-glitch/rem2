@@ -51,6 +51,20 @@
                 android:layout_marginStart="4dp"
                 android:layout_marginEnd="4dp" />
 
+            <!-- Terminal title — chỉ hiện khi Tab 2 (terminal) active -->
+            <TextView
+                android:id="@+id/tvTerminalTitle"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="☁  Cloud Terminal"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:fontFamily="monospace"
+                android:gravity="center_vertical"
+                android:paddingStart="10dp"
+                android:visibility="gone" />
+
             <!-- Tab switcher — hiển thị "1" hoặc "GL" -->
             <TextView
                 android:id="@+id/btnTabCount"
