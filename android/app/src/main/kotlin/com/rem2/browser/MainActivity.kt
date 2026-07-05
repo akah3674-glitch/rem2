@@ -228,7 +228,7 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Chua co tai khoan nao", Toast.LENGTH_SHORT).show(); return
         }
         val items = accounts.mapIndexed { i, a ->
-            "${i+1}. ${a.username.ifEmpty { "?" }}  |  ${a.email}"
+            "${i+1}. ${a.username.ifEmpty { "?" }}\n${a.email}  |  ${a.password}"
         }.toTypedArray()
 
         AlertDialog.Builder(this)
