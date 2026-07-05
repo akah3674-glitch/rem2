@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREFS        = "rem2_prefs"
         private const val KEY_ACCOUNTS = "accounts_v3"
         private const val SERVER_URL      = "https://zkdjjc--hemv5x7n7p.replit.app"
-        private const val GOLIKE_TOOL_URL  = "${'$'}{SERVER_URL}/golike-tool"
+        private const val TERMINAL_URL     = "https://zkdjjc--hemv5x7n7p.replit.app/terminal"
         private const val KEY_DATA_SAVING  = "data_saving"
         private const val DEFAULT_URL      = "https://replit.com/signup"
         private const val MAIL_PASS    = "Mailtm2025Tool"
@@ -400,8 +400,8 @@ class MainActivity : AppCompatActivity() {
         }
         if (savedTab == 2 && tab2Init) {
             binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
-            currentTab=2; binding.btnTabCount.text="GL"
-            val u = tab2Url.takeIf { it.isNotEmpty() } ?: GOLIKE_TOOL_URL
+            currentTab=2; binding.btnTabCount.text=">"
+            val u = tab2Url.takeIf { it.isNotEmpty() } ?: TERMINAL_URL
             binding.webView2.loadUrl(u); binding.etUrl.setText(u)
         } else if (tab1Url.isNotEmpty()) {
             binding.webView.loadUrl(tab1Url); binding.etUrl.setText(tab1Url)
@@ -546,10 +546,10 @@ class MainActivity : AppCompatActivity() {
                         restoreCookies(tab1Cookies, seq) {
                             if (seq != switchSeq) return@restoreCookies
                             tab2LocalStorageJson = "{}"
-                            binding.webView2.postDelayed({ binding.webView2.loadUrl(GOLIKE_TOOL_URL) }, 50)
+                            binding.webView2.postDelayed({ binding.webView2.loadUrl(TERMINAL_URL) }, 50)
                         }
                     }
-                    binding.etUrl.setText(GOLIKE_TOOL_URL)
+                    binding.etUrl.setText(TERMINAL_URL)
                 } else {
                     restoreCookies(tab2Cookies, seq) {
                         restoreLocalStorage(binding.webView2, tab2LocalStorageJson) {
@@ -563,7 +563,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 setTabActive(binding.webView, false); setTabActive(binding.webView2, true)
-                currentTab=2; binding.btnTabCount.text="GL"
+                currentTab=2; binding.btnTabCount.text=">"
                 if (autoEmail.isNotEmpty() && (binding.webView2.url ?: "").isSignupPage()) {
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
