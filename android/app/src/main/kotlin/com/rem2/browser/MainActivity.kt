@@ -20,6 +20,7 @@ import android.app.Activity
 import android.webkit.*
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.PopupMenu
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -86,6 +87,7 @@ class MainActivity : AppCompatActivity() {
     private var autoEmail    = ""
     private var autoUsername = ""
     private var flowRunning  = false
+    private var wakeLock: PowerManager.WakeLock? = null
 
     // Batch mode
     private var batchTotal   = 1
@@ -289,6 +291,12 @@ class MainActivity : AppCompatActivity() {
           batchCurrent = 0
           val targetTab = currentTab
           val targetWv  = if (targetTab == 1) binding.webView else binding.webView2
+          // Giữ CPU awake suốt batch — tránh bị Android ngắt khi màn hình tắt
+          wakeLock?.release()
+          wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
+              .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "rem2:batch")
+          @Suppress("WakelockTimeout")
+          wakeLock?.acquire(batchTotal * 18 * 60 * 1000L)  // 18 phút / acc tối đa
           lifecycleScope.launch {
               try {
                   for (i in 1..total) {
@@ -329,6 +337,7 @@ class MainActivity : AppCompatActivity() {
               } finally {
                   // Đảm bảo button luôn được re-enable dù có exception hay CancellationException
                   flowRunning = false
+                  wakeLock?.release(); wakeLock = null
                   withContext(Dispatchers.Main) {
                       binding.btnCreateAccount.isEnabled = true
                       binding.btnCreateAccount.text      = "🔄 Tao tai khoan moi"
@@ -391,10 +400,34 @@ class MainActivity : AppCompatActivity() {
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
-        binding.btnToggleLog.setOnClickListener {
-            panelOpen = !panelOpen
-            binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
+        // Nút quay lại (trình duyệt thật)
+        binding.btnBack.setOnClickListener {
+            val wv = activeWebView()
+            if (wv.canGoBack()) wv.goBack()
         }
+
+        // Ba chấm ⋮ — menu ẩn mọi tính năng automation
+        binding.btnMenu.setOnClickListener { anchor ->
+            val popup = PopupMenu(this, anchor)
+            val m = popup.menu
+            m.add(0, 1, 0, if (flowRunning) "⏳ Đang xử lý..." else "🔄 Tạo tài khoản mới")
+            m.add(0, 2, 1, "📋 Danh sách tài khoản (${accounts.size})")
+            m.add(0, 3, 2, "📄 Nhật ký")
+            m.add(0, 4, 3, "⌂ Trang đăng ký")
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    1 -> { if (!flowRunning) startBatchFlow(1) else Toast.makeText(this, "Đang xử lý, vui lòng đợi...", Toast.LENGTH_SHORT).show(); true }
+                    2 -> { showAccountList(); true }
+                    3 -> { panelOpen = !panelOpen; binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE; true }
+                    4 -> { activeWebView().loadUrl("https://replit.com/signup"); true }
+                    else -> false
+                }
+            }
+            popup.show()
+        }
+
+        // btnToggleLog giờ không còn trong header (ẩn trong XML) — giữ click rỗng tránh crash cũ
+        binding.btnToggleLog.setOnClickListener { /* no-op — replaced by btnMenu */ }
         binding.btnRefresh.setOnClickListener {
             val wv = activeWebView()
             val sw = if (currentTab==1) binding.swipeRefresh else binding.swipeRefresh2
@@ -844,8 +877,9 @@ class MainActivity : AppCompatActivity() {
 
           var lastLogIdx = 0
             var notFoundStreak = 0
+            var pollMs = 5_000L
             repeat(150) { attempt ->
-                delay(5000)
+                delay(pollMs)
                 try {
                     val json   = JSONObject(http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()).execute().body?.string() ?: "{}")
                     if (json.has("error")) {
@@ -868,6 +902,9 @@ class MainActivity : AppCompatActivity() {
                       val e = json.optString("email", ""); val u = json.optString("username", "")
                       if (e.isNotEmpty()) {
                           autoEmail=e; autoUsername=u
+                          // Đã có email → server cần 30-120s nữa để nhận verify mail
+                          // Giảm tần suất poll từ 5s → 12s để giảm nhiệt máy
+                          pollMs = 12_000L
                           withContext(Dispatchers.Main) { fillIfOnSignup(targetWv) }
                       }
                   }
