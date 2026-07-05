@@ -601,12 +601,21 @@ class MainActivity : AppCompatActivity() {
                     swipe.isRefreshing = false
                     if (!binding.etUrl.isFocused && url != "about:blank") binding.etUrl.setText(url)
                 }
-                // Cloudflare → auto-reload
-                v.evaluateJavascript("document.title") { raw ->
-                    val t = raw?.trim('"') ?: ""
-                    if (t.contains("Just a moment", true) ||
-                        (t.contains("Cloudflare", true) && url.contains("cdn-cgi"))) {
-                        if (isActive) log("⚡ Cloudflare — tu tai lai sau 4s...")
+                // Cloudflare (kể cả trang xác minh bảo mật đa ngôn ngữ) → auto-reload
+                v.evaluateJavascript(
+                    "(function(){try{return (document.title||'')+'|'+(document.body?document.body.innerText||'':'');}catch(e){return '';}})();"
+                ) { raw ->
+                    val t = jsStringUnquote(raw)
+                    val isCloudflareChallenge =
+                        t.contains("Just a moment", true) ||
+                        t.contains("Checking your browser", true) ||
+                        t.contains("Ray ID", true) ||
+                        t.contains("xác minh bảo mật", true) ||
+                        t.contains("Đang xác minh", true) ||
+                        t.contains("chống bot", true) ||
+                        (t.contains("Cloudflare", true) && (url.contains("cdn-cgi") || t.contains("Ray ID", true)))
+                    if (isCloudflareChallenge) {
+                        if (isActive) log("⚡ Cloudflare (xac minh bao mat) — tu tai lai sau 4s de loai bo trang nay...")
                         v.postDelayed({ v.reload() }, 4000)
                     }
                 }
