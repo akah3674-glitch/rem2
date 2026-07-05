@@ -116,6 +116,68 @@ class MainActivity : AppCompatActivity() {
             callback.onReceiveValue(uris)
         }
 
+    // ── ClickBridge: cho phép JS yêu cầu native MotionEvent tap ──────────────
+    // Không cần quyền trợ năng Android — WebView dispatchTouchEvent là real touch
+    inner class ClickBridge {
+        /**
+         * Được gọi từ JS: window.ClickBridge.tapAt(cssX, cssY, scale)
+         * cssX/cssY là viewport coords từ getBoundingClientRect() (đã tính scroll)
+         * scale là window.devicePixelRatio hoặc 1
+         */
+        @JavascriptInterface
+        fun tapAt(cssX: Float, cssY: Float, scale: Float) {
+            val wv = if (currentTab == 1) binding.webView else binding.webView2
+            runOnUiThread {
+                // CSS viewport px → Android display px (dùng WebView.scale * DPR)
+                val wvScale = wv.scale.let { if (it > 0f) it else 1f }
+                val dpr     = if (scale > 0f) scale else 1f
+                val ax = cssX * wvScale
+                val ay = cssY * wvScale
+                simulateTap(wv, ax, ay)
+            }
+        }
+
+        /**
+         * Tap tại phần trăm chiều rộng/cao của WebView (0.0–1.0).
+         * Dùng khi không biết chính xác toạ độ CSS — ví dụ bấm nút "Next" ở
+         * vùng trung-dưới màn hình (xPct=0.5, yPct=0.85).
+         */
+        @JavascriptInterface
+        fun tapAtPercent(xPct: Float, yPct: Float) {
+            val wv = if (currentTab == 1) binding.webView else binding.webView2
+            runOnUiThread {
+                wv.post {
+                    val x = wv.width  * xPct.coerceIn(0f, 1f)
+                    val y = wv.height * yPct.coerceIn(0f, 1f)
+                    simulateTap(wv, x, y)
+                }
+            }
+        }
+    }
+
+    /**
+     * Mô phỏng thao tác chạm thực tế tại (x, y) trong WebView.
+     * Sử dụng MotionEvent — không cần quyền trợ năng Android.
+     * Hoạt động với mọi phần tử, kể cả những nút phụ thuộc vào touch event.
+     */
+    private fun simulateTap(wv: WebView, x: Float, y: Float) {
+        val downTime = System.currentTimeMillis()
+        val down = MotionEvent.obtain(
+            downTime, downTime,
+            MotionEvent.ACTION_DOWN, x, y, 0
+        )
+        wv.dispatchTouchEvent(down)
+        down.recycle()
+        val up = MotionEvent.obtain(
+            downTime, downTime + 80L,
+            MotionEvent.ACTION_UP, x, y, 0
+        )
+        wv.postDelayed({
+            wv.dispatchTouchEvent(up)
+            up.recycle()
+        }, 80)
+    }
+
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -318,10 +380,13 @@ class MainActivity : AppCompatActivity() {
                     binding.etUrl.setText("https://replit.com/signup")
                 } else {
                     // Restore cookies Tab 2 với callback → reload để áp dụng đúng cookie
+                    // FIX: reload() sau khi restore để Tab 2 nhận đúng session cookie,
+                    // tránh trường hợp Tab 1 đã thay đổi shared CookieManager
                     restoreCookies(tab2Cookies) {
                         val url = binding.webView2.url
                         if (!url.isNullOrBlank() && url != "about:blank") {
                             binding.etUrl.setText(url)
+                            binding.webView2.reload() // áp dụng cookie đã restore
                         }
                     }
                 }
@@ -358,10 +423,16 @@ class MainActivity : AppCompatActivity() {
                 binding.webView.onResume()  // bật lại JS/animation tab active
                 currentTab = 1
                 binding.btnTabCount.text = "1"
+                // FIX SESSION ISOLATION: restore cookies Tab 1 rồi RELOAD trang.
+                // Lý do: khi Tab 2 logout, Replit xóa cookies trong shared CookieManager
+                // (vì CookieManager là singleton). Dù restore cookies Tab 1 thành công,
+                // page vẫn render ở trạng thái "logged out" vì JS đã nhận sự kiện cookie change.
+                // Reload buộc page tải lại với đúng session cookie Tab 1 → Tab 1 ở lại logged in.
                 restoreCookies(tab1Cookies) {
                     val url = binding.webView.url
                     if (!url.isNullOrBlank() && url != "about:blank") {
                         binding.etUrl.setText(url)
+                        binding.webView.reload() // BUG FIX: reload để page nhận đúng session
                     } else {
                         binding.etUrl.setText("")
                     }
@@ -536,6 +607,10 @@ class MainActivity : AppCompatActivity() {
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
+        // Đăng ký ClickBridge — JS có thể gọi window.ClickBridge.tapAt(x, y, scale)
+        // để yêu cầu native MotionEvent tap, không cần quyền trợ năng
+        wv.addJavascriptInterface(ClickBridge(), "ClickBridge")
+
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String) {
                 if (currentTab == 1) {
@@ -687,6 +762,9 @@ class MainActivity : AppCompatActivity() {
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(wv, true)
 
+        // Đăng ký ClickBridge cho Tab 2 — cùng bridge, dispatch tới tab active
+        wv.addJavascriptInterface(ClickBridge(), "ClickBridge")
+
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String) {
                 if (currentTab == 2) {
@@ -770,9 +848,9 @@ class MainActivity : AppCompatActivity() {
     // Mỗi lần gọi: tạo session ID mới → kill instance cũ → chạy observer vĩnh viễn.
     private fun injectAutoFill(wv: WebView) {
         if (autoEmail.isEmpty()) return
-        val e = autoEmail.replace("'", "\'")
-        val p = MAIL_PASS.replace("'", "\'")
-        val u = autoUsername.replace("'", "\'")
+        val e = autoEmail.replace("'", "\\'")
+        val p = MAIL_PASS.replace("'", "\\'")
+        val u = autoUsername.replace("'", "\\'")
 
         val js = """
             (function(){
@@ -822,9 +900,38 @@ class MainActivity : AppCompatActivity() {
                   var els = document.querySelectorAll('button:not([disabled]),input[type=submit]:not([disabled])');
                   for (var i=0;i<els.length;i++){
                     var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();
-                    for (var k=0;k<kws.length;k++) if(txt.indexOf(kws[k])!==-1){els[i].click();return;}
+                    for (var k=0;k<kws.length;k++) if(txt.indexOf(kws[k])!==-1){
+                      syntheticClick(els[i]);
+                      return;
+                    }
                   }
                 }catch(err){}
+              }
+
+              // Click tổng hợp: thử đủ cách để vượt qua React/Next.js event handling
+              // Không cần quyền trợ năng — dùng pointer/touch/mouse events + ClickBridge native tap
+              function syntheticClick(el) {
+                if (!el) return;
+                try { el.focus(); } catch(e) {}
+                // 1. PointerEvent (mới nhất, React 17+ dùng)
+                try { el.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true, cancelable:true, isPrimary:true})); } catch(e) {}
+                try { el.dispatchEvent(new PointerEvent('pointerup',   {bubbles:true, cancelable:true, isPrimary:true})); } catch(e) {}
+                // 2. MouseEvent (React 16 và các thư viện cũ)
+                try { el.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0})); } catch(e) {}
+                try { el.dispatchEvent(new MouseEvent('mouseup',   {bubbles:true, cancelable:true, button:0})); } catch(e) {}
+                try { el.dispatchEvent(new MouseEvent('click',     {bubbles:true, cancelable:true, button:0})); } catch(e) {}
+                // 3. DOM click() — fallback cuối
+                try { el.click(); } catch(e) {}
+                // 4. Native MotionEvent qua ClickBridge — đáng tin nhất, không cần accessibility
+                try {
+                  var rect = el.getBoundingClientRect();
+                  if (rect.width > 0 && rect.height > 0) {
+                    var cx = rect.left + rect.width  / 2;
+                    var cy = rect.top  + rect.height / 2;
+                    var dpr = window.devicePixelRatio || 1;
+                    if (window.ClickBridge) window.ClickBridge.tapAt(cx, cy, dpr);
+                  }
+                } catch(e) {}
               }
 
               function tick() {
@@ -885,8 +992,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Tu dong bam qua cac man hinh onboarding — KHONG phu thuoc cau chu cu the (Replit hay doi copy).
-    // Nhan dien tong quat: neu co nut Next/Continue nhung dang disabled + co nhom nut lua chon ben canh
-    // -> tu chon 1 option roi bam Next. Chi dung khi gap dashboard/chat that hoac cau hoi "xay dung gi".
+    // Su dung ClickBridge + syntheticClick de click manh hon, khong can quyen tro nang Android.
     private fun injectAutoContinue(wv: WebView) {
             val js = """
                 (function(){
@@ -896,6 +1002,29 @@ class MainActivity : AppCompatActivity() {
                   var CONTINUE_KW = ['continue','next','skip','get started',"let's go",'done','finish','i agree','agree','ok','got it','submit'];
                   var STOP_HEADINGS = ['what do you want to make', 'what should we build', 'what are we building'];
                   var EXCLUDE_KW = ['back','log in','login','create account','upgrade','sign in','sign up','close','cancel','upload'];
+
+                  // Click mạnh: dùng cả PointerEvent + MouseEvent + click() + ClickBridge native tap
+                  // Không cần quyền trợ năng Android — ClickBridge dùng MotionEvent trực tiếp
+                  function syntheticClick(el) {
+                    if (!el) return;
+                    try { el.focus(); } catch(e) {}
+                    try { el.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true, cancelable:true, isPrimary:true})); } catch(e) {}
+                    try { el.dispatchEvent(new PointerEvent('pointerup',   {bubbles:true, cancelable:true, isPrimary:true})); } catch(e) {}
+                    try { el.dispatchEvent(new MouseEvent('mousedown', {bubbles:true, cancelable:true, button:0})); } catch(e) {}
+                    try { el.dispatchEvent(new MouseEvent('mouseup',   {bubbles:true, cancelable:true, button:0})); } catch(e) {}
+                    try { el.dispatchEvent(new MouseEvent('click',     {bubbles:true, cancelable:true, button:0})); } catch(e) {}
+                    try { el.click(); } catch(e) {}
+                    // Native MotionEvent qua ClickBridge — đáng tin nhất
+                    try {
+                      var rect = el.getBoundingClientRect();
+                      if (rect.width > 0 && rect.height > 0) {
+                        var cx = rect.left + rect.width  / 2;
+                        var cy = rect.top  + rect.height / 2;
+                        var dpr = window.devicePixelRatio || 1;
+                        if (window.ClickBridge) window.ClickBridge.tapAt(cx, cy, dpr);
+                      }
+                    } catch(e) {}
+                  }
 
                   function headingText(){
                     var hs = document.querySelectorAll('h1,h2,h3');
@@ -953,18 +1082,17 @@ class MainActivity : AppCompatActivity() {
 
                       var contBtn = findContinueBtn();
                       if (contBtn && !contBtn.disabled) {
-                        contBtn.click();
+                        syntheticClick(contBtn);
                         return false;
                       }
                       // Continue dang disabled hoac chua thay -> co the la man "chon 1 trong nhieu"
                       // chua duoc chon -> tu chon option dau tien roi thu bam Continue ngay sau do
-                      // (delay de doi React cap nhat trang thai enabled cua nut Continue).
                       var candidates = findChoiceCandidates(contBtn);
                       if (candidates.length >= 1) {
-                        candidates[0].click();
+                        syntheticClick(candidates[0]);
                         setTimeout(function(){
                           var b = findContinueBtn();
-                          if (b && !b.disabled) b.click();
+                          if (b && !b.disabled) syntheticClick(b);
                         }, 400);
                       }
                     } catch (e) {}
@@ -1168,6 +1296,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-
-
-
