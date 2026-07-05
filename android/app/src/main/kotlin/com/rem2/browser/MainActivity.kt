@@ -68,6 +68,8 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_TAB2_INIT    = "tab2_initialized"
         private const val KEY_TAB1_CK_JSON = "tab1_cookies_j"
         private const val KEY_TAB2_CK_JSON = "tab2_cookies_j"
+        private const val KEY_TAB1_LS_JSON = "tab1_localstorage_j"
+        private const val KEY_TAB2_LS_JSON = "tab2_localstorage_j"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -93,6 +95,8 @@ class MainActivity : AppCompatActivity() {
     private var tab2Initialized = false
     private val tab1Cookies     = mutableMapOf<String, String>()
     private val tab2Cookies     = mutableMapOf<String, String>()
+    private var tab1LocalStorageJson = "{}"
+    private var tab2LocalStorageJson = "{}"
     private var switchSeq       = 0
 
     // File chooser
@@ -250,18 +254,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // ─── Batch creation dialog ────────────────────────────────────────────────
-
-    private fun showBatchDialog() {
-        if (flowRunning) { Toast.makeText(this, "Dang xu ly, vui long doi...", Toast.LENGTH_SHORT).show(); return }
-        val opts   = arrayOf("1 tai khoan", "2 tai khoan", "3 tai khoan", "5 tai khoan", "10 tai khoan")
-        val counts = intArrayOf(1, 2, 3, 5, 10)
-        AlertDialog.Builder(this)
-            .setTitle("🔄 Tao bao nhieu tai khoan?")
-            .setItems(opts) { _, i -> startBatchFlow(counts[i]) }
-            .setNegativeButton("Huy", null)
-            .show()
-    }
+    // ─── Batch creation ───────────────────────────────────────────────────────
 
     private fun startBatchFlow(total: Int) {
         batchTotal   = total
@@ -314,8 +307,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun saveSessionState() {
         if (currentTab == 1) saveCookies(tab1Cookies) else saveCookies(tab2Cookies)
+        killAutoScripts(binding.webView); killAutoScripts(binding.webView2)
         CookieManager.getInstance().flush()
         fun m2j(m: Map<String,String>) = JSONObject().also { o -> m.forEach { (k,v)->o.put(k,v) } }.toString()
+        val snapSeq = ++switchSeq
+        val activeWv = if (currentTab == 1) binding.webView else binding.webView2
+        snapshotLocalStorage(activeWv) { js ->
+            if (snapSeq != switchSeq) return@snapshotLocalStorage
+            if (currentTab == 1) tab1LocalStorageJson = js else tab2LocalStorageJson = js
+            prefs.edit().putString(KEY_TAB1_LS_JSON, tab1LocalStorageJson)
+                .putString(KEY_TAB2_LS_JSON, tab2LocalStorageJson).apply()
+        }
         prefs.edit()
             .putInt    (KEY_TAB_CURRENT,  currentTab)
             .putString (KEY_TAB1_URL,     binding.webView.url?.takeIf  { it!="about:blank" } ?: "")
@@ -323,6 +325,8 @@ class MainActivity : AppCompatActivity() {
             .putBoolean(KEY_TAB2_INIT,    tab2Initialized)
             .putString (KEY_TAB1_CK_JSON, m2j(tab1Cookies))
             .putString (KEY_TAB2_CK_JSON, m2j(tab2Cookies))
+            .putString (KEY_TAB1_LS_JSON, tab1LocalStorageJson)
+            .putString (KEY_TAB2_LS_JSON, tab2LocalStorageJson)
             .commit()
     }
 
@@ -336,6 +340,8 @@ class MainActivity : AppCompatActivity() {
         }
         loadMap(prefs.getString(KEY_TAB1_CK_JSON,"{}") ?: "{}", tab1Cookies)
         loadMap(prefs.getString(KEY_TAB2_CK_JSON,"{}") ?: "{}", tab2Cookies)
+        tab1LocalStorageJson = prefs.getString(KEY_TAB1_LS_JSON, "{}") ?: "{}"
+        tab2LocalStorageJson = prefs.getString(KEY_TAB2_LS_JSON, "{}") ?: "{}"
         tab2Initialized = tab2Init
         if (tab1Url.isEmpty() && tab2Url.isEmpty()) return
         if (savedTab == 2 && tab2Init) {
@@ -365,8 +371,11 @@ class MainActivity : AppCompatActivity() {
         binding.tabLog.setOnClickListener    { switchPanelTab(false) }
         binding.tabVerify.setOnClickListener { switchPanelTab(true)  }
 
-        // Nhấn thường → chọn số lượng tài khoản; Nhấn giữ → xem danh sách đã tạo
-        binding.btnCreateAccount.setOnClickListener      { showBatchDialog() }
+        // Nhấn thường → tạo ngay 1 tài khoản (không hỏi); Nhấn giữ → xem danh sách đã tạo
+        binding.btnCreateAccount.setOnClickListener {
+            if (flowRunning) { Toast.makeText(this, "Dang xu ly, vui long doi...", Toast.LENGTH_SHORT).show() }
+            else startBatchFlow(1)
+        }
         binding.btnCreateAccount.setOnLongClickListener  { showAccountList(); true }
 
         binding.etUrl.setOnEditorActionListener { _, id, _ ->
@@ -401,6 +410,38 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ─── Storage isolation helpers (Android WebView dùng CookieManager/localStorage
+    // chung cho toàn app — phải tự cách li từng tab bằng snapshot/restore) ─────────
+
+    private fun jsStringUnquote(raw: String?): String {
+        if (raw == null || raw == "null") return "{}"
+        return try { JSONObject("{\"v\":$raw}").getString("v") } catch (_: Exception) { "{}" }
+    }
+
+    /** Dừng hẳn các JS interval/observer tự-điền và tự-bấm đang chạy trên webview này,
+     *  để nó không tiếp tục thao túng cookie/localStorage khi tab bị chuyển sang nền. */
+    private fun killAutoScripts(wv: WebView) {
+        wv.evaluateJavascript(
+            "(function(){try{window.__rem2FillSid=null;if(window.__rem2FillIv)clearInterval(window.__rem2FillIv);" +
+            "if(window.__rem2FillMo)window.__rem2FillMo.disconnect();}catch(e){}" +
+            "try{window.__rem2AutoContinueActive=false;}catch(e){}})();",
+            null
+        )
+    }
+
+    private fun snapshotLocalStorage(wv: WebView, onDone: (String) -> Unit) {
+        wv.evaluateJavascript(
+            "(function(){try{var o={};for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);o[k]=localStorage.getItem(k);}return JSON.stringify(o);}catch(e){return '{}';}})();"
+        ) { raw -> onDone(jsStringUnquote(raw)) }
+    }
+
+    private fun restoreLocalStorage(wv: WebView, json: String, onDone: () -> Unit) {
+        val safe = json.replace("\\", "\\\\").replace("'", "\\'")
+        wv.evaluateJavascript(
+            "(function(){try{localStorage.clear();sessionStorage.clear();var o=JSON.parse('$safe');for(var k in o){localStorage.setItem(k,o[k]);}}catch(e){}})();"
+        ) { onDone() }
+    }
+
     // ─── Tab switching ────────────────────────────────────────────────────────
 
     private fun switchBrowserTab(tab: Int) {
@@ -408,7 +449,8 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             val seq = ++switchSeq
             if (tab == 2) {
-                binding.webView.stopLoading(); saveCookies(tab1Cookies)
+                binding.webView.stopLoading(); killAutoScripts(binding.webView); saveCookies(tab1Cookies)
+                snapshotLocalStorage(binding.webView) { js -> if (seq == switchSeq) tab1LocalStorageJson = js }
                 binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
                 if (!tab2Initialized) {
                     tab2Initialized = true
@@ -417,14 +459,18 @@ class MainActivity : AppCompatActivity() {
                         CookieManager.getInstance().flush()
                         runOnUiThread {
                             if (seq != switchSeq) return@runOnUiThread
+                            tab2LocalStorageJson = "{}"
                             binding.webView2.postDelayed({ binding.webView2.loadUrl("https://replit.com/signup") }, 50)
                         }
                     }
                     binding.etUrl.setText("https://replit.com/signup")
                 } else {
                     restoreCookies(tab2Cookies, seq) {
-                        binding.webView2.url?.takeIf { it.isNotBlank() && it!="about:blank" }
-                            ?.let { binding.etUrl.setText(it); binding.webView2.reload() }
+                        restoreLocalStorage(binding.webView2, tab2LocalStorageJson) {
+                            if (seq != switchSeq) return@restoreLocalStorage
+                            binding.webView2.url?.takeIf { it.isNotBlank() && it!="about:blank" }
+                                ?.let { binding.etUrl.setText(it); binding.webView2.reload() }
+                        }
                     }
                 }
                 setTabActive(binding.webView, false); setTabActive(binding.webView2, true)
@@ -434,14 +480,18 @@ class MainActivity : AppCompatActivity() {
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
                 }
             } else {
-                binding.webView2.stopLoading(); saveCookies(tab2Cookies)
+                binding.webView2.stopLoading(); killAutoScripts(binding.webView2); saveCookies(tab2Cookies)
+                snapshotLocalStorage(binding.webView2) { js -> if (seq == switchSeq) tab2LocalStorageJson = js }
                 binding.swipeRefresh2.visibility=View.INVISIBLE; binding.swipeRefresh.visibility=View.VISIBLE
                 setTabActive(binding.webView2, false); setTabActive(binding.webView, true)
                 currentTab=1; binding.btnTabCount.text="1"
                 restoreCookies(tab1Cookies, seq) {
-                    binding.webView.url?.takeIf { it.isNotBlank() && it!="about:blank" }
-                        ?.let { binding.etUrl.setText(it); binding.webView.reload() }
-                        ?: binding.etUrl.setText("")
+                    restoreLocalStorage(binding.webView, tab1LocalStorageJson) {
+                        if (seq != switchSeq) return@restoreLocalStorage
+                        binding.webView.url?.takeIf { it.isNotBlank() && it!="about:blank" }
+                            ?.let { binding.etUrl.setText(it); binding.webView.reload() }
+                            ?: binding.etUrl.setText("")
+                    }
                 }
             }
         }
@@ -566,8 +616,10 @@ class MainActivity : AppCompatActivity() {
                     v.postDelayed({ injectAutoFill(v) }, 1200)
                     v.postDelayed({ injectAutoFill(v) }, 3000)
                 }
-                // Dashboard detect
-                if (flowRunning && url.contains("replit.com") &&
+                // Dashboard detect — dùng autoEmail (còn hiệu lực suốt phiên tài khoản,
+                // không tắt sớm như flowRunning khi server báo "done" trước khi user
+                // xác thực email và các màn onboarding mới thực sự load)
+                if (autoEmail.isNotEmpty() && url.contains("replit.com") &&
                     !url.isSignupPage() && !url.contains("verify") &&
                     !url.contains("confirm") && url != "about:blank") {
                     val lbl = if (isTab1) "" else " [Tab 2]"
@@ -636,8 +688,10 @@ class MainActivity : AppCompatActivity() {
     // ─── clearWebSession ──────────────────────────────────────────────────────
 
     private fun clearWebSession() {
+        killAutoScripts(binding.webView); killAutoScripts(binding.webView2)
         CookieManager.getInstance().removeAllCookies(null); CookieManager.getInstance().flush()
         tab1Cookies.clear(); tab2Cookies.clear(); autoEmail=""; autoUsername=""
+        tab1LocalStorageJson = "{}"; tab2LocalStorageJson = "{}"
         binding.webView.clearCache(true); binding.webView.clearHistory(); binding.webView.clearFormData()
         binding.webView.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
         binding.webView.loadUrl("about:blank")
@@ -806,6 +860,8 @@ class MainActivity : AppCompatActivity() {
               var CONTINUE_KW=['continue','next','skip','get started',"let's go",'done','finish','i agree','agree','ok','got it','submit'];
               var STOP_HEADS=['what do you want to make','what should we build','what are we building'];
               var EXCLUDE_KW=['back','log in','login','create account','upgrade','sign in','sign up','close','cancel','upload'];
+              var PAID_PLAN_KW=['core','pro','teams','enterprise','business','$'];
+              var PREFER_KW=['starter','free'];
               function syntheticClick(el){
                 if(!el)return;try{el.focus();}catch(e){}
                 ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){try{el.dispatchEvent(new(t.startsWith('pointer')?PointerEvent:MouseEvent)(t,{bubbles:true,cancelable:true,isPrimary:true,button:0}));}catch(e){}});
@@ -814,7 +870,27 @@ class MainActivity : AppCompatActivity() {
               }
               function isDone(){return!!document.querySelector('textarea[placeholder*="Make anything" i]')||!!document.querySelector('[placeholder*="Try an example" i]')||!!document.querySelector('textarea[placeholder*="Ask Replit" i]');}
               function headingText(){var t='';document.querySelectorAll('h1,h2,h3').forEach(function(h){t+=' '+(h.innerText||'').toLowerCase();});return t;}
-              function findContinue(){var els=document.querySelectorAll('button,a[role="button"],[role="button"],input[type=submit]');for(var i=0;i<els.length;i++){var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();for(var k=0;k<CONTINUE_KW.length;k++)if(txt===CONTINUE_KW[k]||txt.indexOf(CONTINUE_KW[k])!==-1)return els[i];}return null;}
+              function findContinue(){
+                var els=document.querySelectorAll('button,a[role="button"],[role="button"],input[type=submit]');
+                var candidates=[];
+                for(var i=0;i<els.length;i++){
+                  var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();
+                  for(var k=0;k<CONTINUE_KW.length;k++){
+                    if(txt===CONTINUE_KW[k]||txt.indexOf(CONTINUE_KW[k])!==-1){candidates.push({el:els[i],txt:txt});break;}
+                  }
+                }
+                if(!candidates.length)return null;
+                // Nếu có nhiều nút "continue" (trang chọn plan) — ưu tiên Starter/Free,
+                // tuyệt đối không tự bấm nút của plan trả phí (Core/Pro/Teams...)
+                for(var p=0;p<candidates.length;p++){
+                  var c=candidates[p];
+                  if(PREFER_KW.some(function(k){return c.txt.indexOf(k)!==-1;})) return c.el;
+                }
+                var safe=candidates.filter(function(c){return !PAID_PLAN_KW.some(function(k){return c.txt.indexOf(k)!==-1;});});
+                if(safe.length) return safe[0].el;
+                if(candidates.length>1) return null; // nhiều nút nhưng toàn plan trả phí — không đoán, chờ vòng sau
+                return candidates[0].el;
+              }
               function findChoices(excl){var out=[];document.querySelectorAll('button,[role="button"]').forEach(function(el){if(el===excl||el.disabled)return;var txt=(el.innerText||'').trim().toLowerCase();if(!txt||txt.length>40)return;if(EXCLUDE_KW.some(function(k){return txt.indexOf(k)!==-1;}))return;out.push(el);});return out;}
               function tick(){try{if(isDone())return true;var h=headingText();if(STOP_HEADS.some(function(s){return h.indexOf(s)!==-1;}))return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){syntheticClick(cs[0]);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;}
               var count=0,mo=new MutationObserver(function(){tick();});
