@@ -961,6 +961,8 @@ class MainActivity : AppCompatActivity() {
               window.__rem2FillMo=mo;
               window.__rem2FillIv=setInterval(function(){if(window.__rem2FillSid!==sid){clearInterval(window.__rem2FillIv);return;}tick();},900);
               tick();
+              // Re-trigger khi SPA thay đổi route (onboarding dùng pushState/replaceState)
+              (function(){var lastUrl=location.href;function checkUrl(){var u=location.href;if(u!==lastUrl){lastUrl=u;if(!isDone()){window.__rem2AutoContinueActive=false;try{if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);}catch(e){}try{if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}setTimeout(function(){if(window.ClickBridge){}},50);}}}setInterval(checkUrl,800);window.addEventListener('popstate',function(){setTimeout(checkUrl,300)});})();
             })();
         """.trimIndent(), null)
     }
@@ -975,7 +977,7 @@ class MainActivity : AppCompatActivity() {
               try{if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}
               window.__rem2AutoContinueActive=true;
               var CONTINUE_KW=['continue','next','skip','get started',"let's go",'done','finish','i agree','agree','ok','got it','submit'];
-              var STOP_HEADS=['what do you want to make','what should we build','what are we building'];
+              // STOP_HEADS đã bị loại bỏ — không dừng theo heading text vì Replit A/B test copy bất kỳ lúc nào
               var EXCLUDE_KW=['back','log in','login','create account','upgrade','sign in','sign up','close','cancel','upload'];
               var PAID_PLAN_KW=['core','pro','teams','enterprise','business','$'];
               var PREFER_KW=['starter','free'];
@@ -986,7 +988,7 @@ class MainActivity : AppCompatActivity() {
                 try{var r=el.getBoundingClientRect();if(r.width>0&&r.height>0&&window.ClickBridge)window.ClickBridge.tapAt(r.left+r.width/2,r.top+r.height/2,window.devicePixelRatio||1);}catch(e){}
               }
               function isDone(){return!!document.querySelector('textarea[placeholder*="Make anything" i]')||!!document.querySelector('[placeholder*="Try an example" i]')||!!document.querySelector('textarea[placeholder*="Ask Replit" i]');}
-              function headingText(){var t='';document.querySelectorAll('h1,h2,h3').forEach(function(h){t+=' '+(h.innerText||'').toLowerCase();});return t;}
+              // headingText/STOP_HEADS đã bỏ — dùng isDone() làm điều kiện dừng duy nhất
               function findContinue(){
                 var els=document.querySelectorAll('button,a[role="button"],[role="button"],input[type=submit]');
                 var candidates=[];
@@ -1008,11 +1010,11 @@ class MainActivity : AppCompatActivity() {
                 if(candidates.length>1) return null; // nhiều nút nhưng toàn plan trả phí — không đoán, chờ vòng sau
                 return candidates[0].el;
               }
-              function findChoices(excl){var out=[];document.querySelectorAll('button,[role="button"],[role="radio"],[role="option"],[role="checkbox"],input[type="radio"],input[type="checkbox"]').forEach(function(el){if(el===excl||el.disabled)return;var lbl=el.closest('label');var txt=((el.innerText||el.value||(lbl?lbl.innerText:'')||'')+'').trim().toLowerCase();if(!txt||txt.length>60)return;if(EXCLUDE_KW.some(function(k){return txt.indexOf(k)!==-1;}))return;out.push(lbl&&(el.type==='radio'||el.type==='checkbox')?lbl:el);});return out;}
+              function findChoices(excl){var out=[];document.querySelectorAll('button,[role="button"],[role="radio"],[role="option"],[role="checkbox"],input[type="radio"],input[type="checkbox"]').forEach(function(el){if(el===excl||el.disabled)return;var lbl=el.closest('label');var txt=((el.innerText||el.value||(lbl?lbl.innerText:'')||'')+'').trim().toLowerCase();if(!txt||txt.length>120)return;if(EXCLUDE_KW.some(function(k){return txt.indexOf(k)!==-1;}))return;out.push(lbl&&(el.type==='radio'||el.type==='checkbox')?lbl:el);});return out;}
               var lastTick=0;
               function tick(){
                 var now=Date.now();if(now-lastTick<500)return false;lastTick=now;
-                try{if(isDone())return true;var h=headingText();if(STOP_HEADS.some(function(s){return h.indexOf(s)!==-1;}))return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){var pick=cs[Math.floor(Math.random()*cs.length)];syntheticClick(pick);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;
+                try{if(isDone())return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){var pick=cs[Math.floor(Math.random()*cs.length)];syntheticClick(pick);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;
               }
               var count=0,pendingTick2=null;
               // Gộp nhiều mutation lien tiep thanh 1 lan tick (debounce) — giam CPU/nhiet
