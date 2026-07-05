@@ -212,6 +212,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         CookieManager.getInstance().setAcceptCookie(true)
         binding.swipeRefresh2.visibility = View.INVISIBLE
+        binding.webView2.onPause() // Tab 2 bắt đầu ẩn — tắt JS/render để giảm nhiệt
         loadAccounts()
         setupHeader()
         setupWebView()
@@ -402,6 +403,7 @@ class MainActivity : AppCompatActivity() {
                         val url = binding.webView2.url
                         if (!url.isNullOrBlank() && url != "about:blank") {
                             binding.etUrl.setText(url)
+                            binding.webView2.reload() // cookie đã restore → reload để áp dụng
                         }
                     }
                 }
@@ -442,6 +444,7 @@ class MainActivity : AppCompatActivity() {
                     val url = binding.webView.url
                     if (!url.isNullOrBlank() && url != "about:blank") {
                         binding.etUrl.setText(url)
+                        binding.webView.reload() // cookie đã restore → reload để áp dụng
                     } else {
                         binding.etUrl.setText("")
                     }
@@ -901,9 +904,9 @@ class MainActivity : AppCompatActivity() {
                     count++;
                     var stop = tryClickOnboardingChoice();
                     if (stop === 'stop') { clearInterval(iv); return; }
-                    tryClickContinue();
-                    if (count > 50) clearInterval(iv);
-                  }, 1200);
+                    if (tryClickContinue()) count = Math.max(0, count - 3);
+                    if (count > 20) clearInterval(iv);
+                  }, 1500);
                 })();
             """.trimIndent()
             wv.evaluateJavascript(js, null)
@@ -1096,7 +1099,7 @@ class MainActivity : AppCompatActivity() {
                         val fromAddr = m2.optJSONObject("from")?.optString("address", "") ?: ""
                         inboxMessages.add(Pair(fromAddr, m2.optString("subject", "(khong tieu de)")))
                     }
-                    withContext(Dispatchers.Main) { renderVerifyPanel() }
+                    if (panelOpen && showingVerify) withContext(Dispatchers.Main) { renderVerifyPanel() }
                     for (i in 0 until msgs.length()) {
                         val msg  = msgs.getJSONObject(i)
                         val subj = msg.optString("subject", "")
