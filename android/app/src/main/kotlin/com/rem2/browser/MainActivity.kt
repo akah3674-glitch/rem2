@@ -358,18 +358,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun restoreCookies(source: Map<String, String>) {
+    private fun restoreCookies(source: Map<String, String>, onDone: (() -> Unit)? = null) {
         val cm = CookieManager.getInstance()
-        cm.removeAllCookies(null)
-        cm.flush()
-        for ((url, cookies) in source) {
-            // getCookie trả về "a=1; b=2; c=3" — set từng cookie một
-            cookies.split(";").forEach { c ->
-                val trimmed = c.trim()
-                if (trimmed.isNotEmpty()) cm.setCookie(url, trimmed)
+        // removeAllCookies phải dùng callback — nó là async,
+        // nếu không có callback setCookie chạy trước khi xóa xong → cookie lẫn lộn
+        cm.removeAllCookies { _ ->
+            for ((url, cookies) in source) {
+                cookies.split(";").forEach { kv ->
+                    val trimmed = kv.trim()
+                    if (trimmed.isNotEmpty()) cm.setCookie(url, trimmed)
+                }
             }
+            cm.flush()
+            runOnUiThread { onDone?.invoke() }
         }
-        cm.flush()
     }
 
     private fun switchBrowserTab(tab: Int) {
@@ -395,17 +397,22 @@ class MainActivity : AppCompatActivity() {
                     }
                     binding.etUrl.setText("https://replit.com/signup")
                 } else {
-                    // Restore cookies của Tab 2
-                    restoreCookies(tab2Cookies)
-                    val url = binding.webView2.url
-                    if (!url.isNullOrBlank() && url != "about:blank") {
-                        binding.etUrl.setText(url)
+                    // Restore cookies Tab 2 với callback → reload để áp dụng đúng cookie
+                    restoreCookies(tab2Cookies) {
+                        val url = binding.webView2.url
+                        if (!url.isNullOrBlank() && url != "about:blank") {
+                            binding.webView2.reload()
+                            binding.etUrl.setText(url)
+                        }
                     }
                 }
                 binding.swipeRefresh.visibility  = View.INVISIBLE
                 binding.swipeRefresh2.visibility = View.VISIBLE
-                binding.webView.onPause()   // giảm nóng máy: tắt JS/animation của tab ẩn
-                binding.webView2.onResume() // bật lại JS/animation của tab active
+                // Hiệu suất: LAYER_SOFTWARE cho tab ẩn, HARDWARE cho tab active
+                binding.webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                binding.webView2.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                binding.webView.onPause()   // giảm nóng máy: tắt JS/animation tab ẩn
+                binding.webView2.onResume() // bật lại JS/animation tab active
                 currentTab = 2
                 binding.btnTabCount.text = "2"
                 // Nếu flow đang chạy và Tab 2 đang ở trang signup mà chưa được fill
@@ -423,19 +430,24 @@ class MainActivity : AppCompatActivity() {
                 // Chuyển về Tab 1
                 binding.webView2.stopLoading()
                 saveCookies(tab2Cookies)
-                restoreCookies(tab1Cookies)
+                // Hiệu suất: LAYER_SOFTWARE cho tab ẩn, HARDWARE cho tab active
+                binding.webView2.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+                binding.webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
                 binding.swipeRefresh2.visibility = View.INVISIBLE
                 binding.swipeRefresh.visibility  = View.VISIBLE
-                binding.webView2.onPause()  // giảm nóng máy: tắt JS/animation của tab ẩn
-                binding.webView.onResume()  // bật lại JS/animation của tab active
-                val url = binding.webView.url
-                if (!url.isNullOrBlank() && url != "about:blank") {
-                    binding.etUrl.setText(url)
-                } else {
-                    binding.etUrl.setText("")
-                }
+                binding.webView2.onPause()  // giảm nóng máy: tắt JS/animation tab ẩn
+                binding.webView.onResume()  // bật lại JS/animation tab active
                 currentTab = 1
                 binding.btnTabCount.text = "1"
+                restoreCookies(tab1Cookies) {
+                    val url = binding.webView.url
+                    if (!url.isNullOrBlank() && url != "about:blank") {
+                        binding.webView.reload()
+                        binding.etUrl.setText(url)
+                    } else {
+                        binding.etUrl.setText("")
+                    }
+                }
             }
         }
     }
@@ -639,10 +651,22 @@ class MainActivity : AppCompatActivity() {
             ): Boolean {
                 filePathCallback?.onReceiveValue(null)
                 filePathCallback = callback
-                val intent = params?.createIntent() ?: Intent(Intent.ACTION_GET_CONTENT).apply { type = "*/*" }
-                intent.addCategory(Intent.CATEGORY_OPENABLE)
+                // Dùng ACTION_GET_CONTENT trực tiếp thay vì params.createIntent()
+                // — createIntent() đôi khi trả về null hoặc sai MIME trên Android 10+
+                val mimeType = params?.acceptTypes
+                    ?.filter { it.isNotBlank() }
+                    ?.joinToString(",")
+                    ?.takeIf { it.isNotBlank() } ?: "*/*"
+                val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                    type = mimeType
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    if (params?.mode == FileChooserParams.MODE_OPEN_MULTIPLE) {
+                        putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    }
+                }
                 return try {
-                    fileChooserLauncher.launch(intent)
+                    fileChooserLauncher.launch(Intent.createChooser(intent, "Chọn file để gửi"))
                     true
                 } catch (e: Exception) {
                     filePathCallback = null
@@ -746,6 +770,8 @@ class MainActivity : AppCompatActivity() {
 
         val js = StringBuilder()
         js.append("(function(){")
+        // Guard: chỉ inject 1 lần per page load — tránh spam event → giảm nóng máy
+        js.append("if(window.__rem2FillDone)return;")
         // Native setter để bypass React's synthetic value tracking
         js.append("function fillReact(el,val){")
         js.append("  if(!el)return;")
@@ -770,6 +796,7 @@ class MainActivity : AppCompatActivity() {
         js.append("  ||document.querySelector('input[placeholder*=user]')")
         js.append("  ||document.querySelector('input[placeholder*=User]');")
         js.append("fillReact(userEl,'").append(u).append("');")
+        js.append("if(emailEl||passEl||userEl){window.__rem2FillDone=true;}")
         js.append("})()")
 
         wv.evaluateJavascript(js.toString(), null)
@@ -914,9 +941,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun openVerifyTab(url: String) = runOnUiThread {
         log("Tim thay link xac thuc — tu dong xac minh trong man hinh Replit...")
-        // Man hinh TO (webView chinh) tu dong load link xac thuc
-        binding.webView.loadUrl(url)
-        // Man hinh nho chi cap nhat lai danh sach email
+        // Load vào tab đang active — KHÔNG force Tab 1 khi user đang ở Tab 2
+        val activeWv = if (currentTab == 1) binding.webView else binding.webView2
+        activeWv.loadUrl(url)
         renderVerifyPanel()
         panelOpen = true
         binding.logPanel.visibility = View.VISIBLE
@@ -1043,8 +1070,8 @@ class MainActivity : AppCompatActivity() {
 
     private suspend fun pollVerification() = withContext(Dispatchers.IO) {
         log("Cho email xac thuc tu Replit...")
-        repeat(72) { attempt ->
-            delay(5000)
+        repeat(75) { attempt ->
+            delay(8000)
             try {
                 val req = Request.Builder()
                     .url("$MAILTM/messages")
@@ -1093,9 +1120,9 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
-                if (attempt > 0 && attempt % 6 == 0) log("Dang cho... ${(attempt + 1) * 5}s")
+                if (attempt > 0 && attempt % 4 == 0) log("Dang cho... ${(attempt + 1) * 8}s")
             } catch (e: Exception) {
-                if (attempt % 12 == 0) log("Poll loi: ${e.message}")
+                if (attempt % 8 == 0) log("Poll loi: ${e.message}")
             }
         }
         log("Het thoi gian cho email")
