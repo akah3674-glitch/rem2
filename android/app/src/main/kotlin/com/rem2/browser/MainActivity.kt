@@ -82,6 +82,8 @@ class MainActivity : AppCompatActivity() {
     private var autoEmail    = ""
     private var autoUsername = ""
     private var flowRunning  = false
+    private var lastTab1TouchMs = 0L   // debounce touch-triggered fill Tab1
+    private var lastTab2TouchMs = 0L   // debounce touch-triggered fill Tab2
 
     // ── Tab management ────────────────────────────────────────────────────────
     // currentTab = tab đang hiển thị (1 hoặc 2)
@@ -638,6 +640,22 @@ class MainActivity : AppCompatActivity() {
 
         // KHONG tu dong load signup luc khoi dong app nua.
         wv.loadUrl("about:blank")
+
+        // Touch listener: user TAP vào signup page → re-inject fill ngay
+        // Không cần accessibility permission — hoạt động qua JS injection
+        wv.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_UP && autoEmail.isNotEmpty()) {
+                val url = wv.url ?: ""
+                if (url.contains("signup") || url.contains("login") || url.contains("register")) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastTab1TouchMs > 1000L) {
+                        lastTab1TouchMs = now
+                        wv.postDelayed({ injectAutoFill(wv) }, 150)
+                    }
+                }
+            }
+            false
+        }
     }
 
     // ─── Secondary WebView (Tab 2 — session độc lập) ─────────────────────────
@@ -729,98 +747,124 @@ class MainActivity : AppCompatActivity() {
 
         // Tab 2 bắt đầu blank; nội dung được load khi user lần đầu switch sang tab 2
         wv.loadUrl("about:blank")
+
+        // Touch listener Tab2 — cùng logic Tab1
+        wv.setOnTouchListener { _, event ->
+            if (event.action == MotionEvent.ACTION_UP && autoEmail.isNotEmpty()) {
+                val url = wv.url ?: ""
+                if (url.contains("signup") || url.contains("login") || url.contains("register")) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastTab2TouchMs > 1000L) {
+                        lastTab2TouchMs = now
+                        wv.postDelayed({ injectAutoFill(wv) }, 150)
+                    }
+                }
+            }
+            false
+        }
     }
 
-    // React-compatible fill: dùng MutationObserver + retry loop để bắt kịp form
-    // nhiều bước (SPA) của Replit — không chỉ fill 1 lần theo delay cố định.
+    // ─── Smart Auto-Fill Engine ──────────────────────────────────────────────
+    // Giống accessibility service nhưng qua JS — không cần quyền Android.
+    // Kích hoạt: onPageFinished, user TAP, MutationObserver, interval backup.
+    // Mỗi lần gọi: tạo session ID mới → kill instance cũ → chạy observer vĩnh viễn.
     private fun injectAutoFill(wv: WebView) {
         if (autoEmail.isEmpty()) return
-        val e = autoEmail.replace("'", "\\'")
-        val p = MAIL_PASS.replace("'", "\\'")
-        val u = autoUsername.replace("'", "\\'")
+        val e = autoEmail.replace("'", "\'")
+        val p = MAIL_PASS.replace("'", "\'")
+        val u = autoUsername.replace("'", "\'")
 
         val js = """
             (function(){
-              // Guard: chỉ 1 observer/interval sống per page load
-              if (window.__rem2FillObserverActive) return;
-              window.__rem2FillObserverActive = true;
-              var EMAIL = '$e', PASS = '$p', USER = '$u';
+              // Session ID: mỗi lần inject mới kill observer/interval cũ, tránh chồng lấp
+              var sid = Date.now() + '-' + Math.random();
+              window.__rem2FillSid = sid;
+              if (window.__rem2FillMo) { try { window.__rem2FillMo.disconnect(); } catch(x){} }
+              if (window.__rem2FillIv)  clearInterval(window.__rem2FillIv);
 
+              var EMAIL = '$e', PASS = '$p', USER = '$u';
+              var lastFill = 0;
+
+              // Ghi value đúng cách để React SPA nhận (không bị reset ngay)
               function fillReact(el, val) {
-                if (!el || el.value === val) return;
+                if (!el) return;
+                if (document.activeElement === el && el.value === val) return;
+                if (el.value === val) return;
                 var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-                if (setter && setter.set) { setter.set.call(el, val); } else { el.value = val; }
-                el.dispatchEvent(new Event('input', {bubbles:true, cancelable:true}));
+                if (setter && setter.set) setter.set.call(el, val); else el.value = val;
+                el.dispatchEvent(new Event('input',  {bubbles:true, cancelable:true}));
                 el.dispatchEvent(new Event('change', {bubbles:true, cancelable:true}));
-                el.dispatchEvent(new KeyboardEvent('keydown', {bubbles:true}));
-                el.dispatchEvent(new KeyboardEvent('keyup', {bubbles:true}));
+                el.dispatchEvent(new KeyboardEvent('keyup', {bubbles:true, key:'a'}));
               }
 
+              // Selector chains — theo thứ tự ưu tiên, bắt mọi biến thể
               function findEmail() {
                 return document.querySelector('input[type=email]')
-                  || document.querySelector('input[name*=email]')
-                  || document.querySelector('input[autocomplete*=email]')
-                  || document.querySelector('input[placeholder*=mail]')
-                  || document.querySelector('input[placeholder*=Email]');
+                    || document.querySelector('input[name*=email i]')
+                    || document.querySelector('input[autocomplete*=email i]')
+                    || document.querySelector('input[placeholder*=email i]')
+                    || document.querySelector('input[placeholder*=mail i]');
               }
               function findPass() {
                 return document.querySelector('input[type=password]')
-                  || document.querySelector('input[name*=pass]')
-                  || document.querySelector('input[autocomplete*=password]')
-                  || document.querySelector('input[autocomplete=current-password]')
-                  || document.querySelector('input[autocomplete=new-password]');
+                    || document.querySelector('input[autocomplete=new-password]')
+                    || document.querySelector('input[autocomplete=current-password]')
+                    || document.querySelector('input[name*=pass i]');
               }
               function findUser() {
-                return document.querySelector('input[name*=user]')
-                  || document.querySelector('input[autocomplete*=username]')
-                  || document.querySelector('input[placeholder*=sername]');
+                return document.querySelector('input[autocomplete=username]')
+                    || document.querySelector('input[name*=user i]')
+                    || document.querySelector('input[placeholder*=username i]');
               }
-
               function clickContinue() {
                 try {
-                  var els = document.querySelectorAll('button, input[type=submit]');
-                  var KEYWORDS = ['continue','next','sign up','submit','create account','get started'];
-                  for (var i = 0; i < els.length; i++) {
-                    var el = els[i];
-                    if (el.disabled) continue;
-                    var txt = (el.innerText || el.value || '').trim().toLowerCase();
-                    if (!txt) continue;
-                    for (var k = 0; k < KEYWORDS.length; k++) {
-                      if (txt.indexOf(KEYWORDS[k]) !== -1) { el.click(); return true; }
-                    }
+                  var kws = ['continue','next','sign up','create account','get started','submit'];
+                  var els = document.querySelectorAll('button:not([disabled]),input[type=submit]:not([disabled])');
+                  for (var i=0;i<els.length;i++){
+                    var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();
+                    for (var k=0;k<kws.length;k++) if(txt.indexOf(kws[k])!==-1){els[i].click();return;}
                   }
-                } catch (err) {}
-                return false;
+                }catch(err){}
               }
 
               function tick() {
+                if (window.__rem2FillSid !== sid) return;  // session bị replace — dừng
+                var now = Date.now();
+                if (now - lastFill < 250) return;          // debounce 250ms
+                lastFill = now;
                 try {
-                  var emailEl = findEmail();
-                  var passEl  = findPass();
-                  var userEl  = findUser();
-
-                  if (emailEl) fillReact(emailEl, EMAIL);
-                  if (passEl)  fillReact(passEl, PASS);
-                  if (userEl && USER) fillReact(userEl, USER);
-
-                  // Form nhiều bước: nếu chỉ thấy email (chưa có pass) → tự bấm Continue
-                  // để sang bước kế tiếp, observer sẽ tiếp tục fill khi field mới xuất hiện.
-                  if (emailEl && !passEl) {
-                    setTimeout(clickContinue, 500);
-                  }
-                } catch (err) {}
+                  var eEl = findEmail(), pEl = findPass(), uEl = findUser();
+                  if (eEl) fillReact(eEl, EMAIL);
+                  if (pEl) fillReact(pEl, PASS);
+                  if (uEl) fillReact(uEl, USER);
+                  // SPA nhiều bước: chỉ thấy email → bấm Continue để sang bước tiếp
+                  if (eEl && !pEl) setTimeout(clickContinue, 400);
+                }catch(err){}
               }
 
-              var count = 0;
-              var iv = setInterval(function () {
-                count++;
-                tick();
-                if (count > 75) { clearInterval(iv); window.__rem2FillObserverActive = false; }
-              }, 800);
+              // MutationObserver: phản ứng ngay khi DOM thay đổi hoặc field ẩn/hiện
+              var mo = new MutationObserver(function(mutations) {
+                for (var i=0;i<mutations.length;i++) {
+                  var m=mutations[i];
+                  if (m.type==='childList'||m.attributeName==='style'||
+                      m.attributeName==='class'||m.attributeName==='hidden'||
+                      m.attributeName==='disabled') { tick(); break; }
+                }
+              });
+              mo.observe(document.documentElement, {
+                childList:true, subtree:true,
+                attributes:true,
+                attributeFilter:['style','class','hidden','disabled','type']
+              });
+              window.__rem2FillMo = mo;
 
-              var mo = new MutationObserver(function () { tick(); });
-              mo.observe(document.body, {childList: true, subtree: true});
-              tick();
+              // Interval 500ms: bắt value bị React reset sau re-render — chạy vĩnh viễn
+              window.__rem2FillIv = setInterval(function(){
+                if (window.__rem2FillSid !== sid) { clearInterval(window.__rem2FillIv); return; }
+                tick();
+              }, 500);
+
+              tick(); // Fill ngay lập tức
             })();
         """.trimIndent()
 
