@@ -13,6 +13,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.MotionEvent
 import android.view.View
 import android.app.Activity
@@ -256,6 +257,25 @@ class MainActivity : AppCompatActivity() {
 
     // ─── Batch creation ───────────────────────────────────────────────────────
 
+    // ─── Lam mat toi da ───────────────────────────────────────────────────────
+    // Kiem tra nhiet do may (Android Thermal API, API 29+) va tu nghi neu may dang nong,
+    // giup giam nguy co qua nhiet khi chay batch nhieu tai khoan lien tuc.
+    private suspend fun coolDownIfHot() {
+        val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        var waited = 0
+        while (waited < 5 * 60_000) {
+            val status = try { pm.currentThermalStatus } catch (e: Exception) { return }
+            // THERMAL_STATUS_MODERATE = 2 tro len la bat dau nong, nen cho nguoi bot
+            if (status < PowerManager.THERMAL_STATUS_MODERATE) return
+            withContext(Dispatchers.Main) {
+                log("🌡️ May dang nong (muc $status) — tam nghi 20s de lam mat...")
+            }
+            delay(20_000)
+            waited += 20_000
+        }
+    }
+
     private fun startBatchFlow(total: Int) {
         batchTotal   = total
         batchCurrent = 0
@@ -265,6 +285,7 @@ class MainActivity : AppCompatActivity() {
                     batchCurrent = i
                     flowRunning  = true
                     autoEmail    = ""; autoUsername = ""
+                    coolDownIfHot()
                     withContext(Dispatchers.Main) {
                         val label = if (total == 1) "⏳ Dang tao tai khoan..." else "⏳ Dang tao $i/$total..."
                         binding.btnCreateAccount.isEnabled = false
@@ -282,8 +303,11 @@ class MainActivity : AppCompatActivity() {
                         flowRunning = false
                     }
                     if (i < total) {
-                        log("--- Xong $i/$total — cho 15s roi tao tiep ---")
-                        delay(15_000)
+                        // Cu moi 5 tai khoan thi nghi dai hon de may nguoi han
+                        val restMs = if (i % 5 == 0) 45_000L else 15_000L
+                        log("--- Xong $i/$total — cho ${restMs/1000}s roi tao tiep ---")
+                        delay(restMs)
+                        coolDownIfHot()
                     }
                 }
                 withContext(Dispatchers.Main) {
