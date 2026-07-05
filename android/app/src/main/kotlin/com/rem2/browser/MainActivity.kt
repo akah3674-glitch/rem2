@@ -403,21 +403,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Xoa toan bo cookie/cache/localStorage cua WebView chinh — dam bao "dang xuat" that su
-    // truoc khi bat dau tao tai khoan moi, tranh dinh session Replit cu.
+    // Xoa toan bo cookie/cache/localStorage cua CA 2 WebView — dam bao "dang xuat" that su
+    // truoc khi bat dau tao tai khoan moi, tranh dinh session Replit cu (kem ca Tab 2 neu
+    // nguoi dung dung song song 2 tab). Dong thoi tam dung Tab 2 (khong active) de do nong
+    // may / do hao pin trong luc tao tai khoan — no khong can chay JS/animation nen trong
+    // suot qua trinh cho server.
     private fun clearWebSession() {
-        val wv = binding.webView
+        val wv  = binding.webView
+        val wv2 = binding.webView2
         CookieManager.getInstance().removeAllCookies(null)
         CookieManager.getInstance().flush()
-        // Xóa cả cookies đã lưu cho tab 1
+        // Xóa cookies đã lưu cho cả Tab 1 lẫn Tab 2
         tab1Cookies.clear()
+        tab2Cookies.clear()
+
         wv.clearCache(true)
         wv.clearHistory()
         wv.clearFormData()
-        WebStorage.getInstance().deleteAllData()
         wv.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
         wv.loadUrl("about:blank")
-        log("Da dang xuat / xoa session cu, chuan bi tao tai khoan moi...")
+
+        if (tab2Initialized) {
+            wv2.stopLoading()
+            wv2.clearCache(true)
+            wv2.clearHistory()
+            wv2.clearFormData()
+            wv2.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
+            wv2.loadUrl("about:blank")
+            // Neu Tab 2 dang khong active (nguoi dung o Tab 1) → pause han de tiet kiem
+            // CPU/pin, chi resume lai khi nguoi dung thuc su chuyen sang Tab 2.
+            if (currentTab != 2) wv2.onPause()
+            tab2Initialized = false
+        }
+
+        WebStorage.getInstance().deleteAllData()
+        log("Da dang xuat / xoa session cu (ca Tab 1 & Tab 2), chuan bi tao tai khoan moi...")
     }
 
     // switchPanelTab: chuyển giữa 2 tab trong PANEL LOG (Log ↔ Xác thực Mail.tm)
