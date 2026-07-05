@@ -72,8 +72,6 @@ class MainActivity : AppCompatActivity() {
     private var autoEmail   = ""
     private var autoUsername = ""
     private var flowRunning = false
-    private var lastTab1TouchMs = 0L
-    private var lastTab2TouchMs = 0L
 
     // ── Tab management ────────────────────────────────────────────────────────
     private var currentTab      = 1
