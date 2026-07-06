@@ -177,7 +177,7 @@ class MainActivity : AppCompatActivity() {
         restoreSessionState()
     }
 
-    override fun onPause()  { super.onPause();  saveSessionState(); binding.webView.onPause(); binding.webView.pauseTimers() }
+    override fun onPause()  { super.onPause();  saveSessionState(); binding.webView.evaluateJavascript("(function(){try{if(window.__rem2FillIv){clearInterval(window.__rem2FillIv);window.__rem2FillIv=null;}if(window.__rem2FillMo){window.__rem2FillMo.disconnect();window.__rem2FillMo=null;}}catch(e){}})();", null); binding.webView.onPause(); binding.webView.pauseTimers() }
     override fun onResume() { super.onResume(); binding.webView.resumeTimers(); binding.webView.onResume() }
     override fun onStop()   { super.onStop();   binding.webView.onPause() }
 
@@ -978,9 +978,9 @@ class MainActivity : AppCompatActivity() {
               var mo=new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var m=ms[i];if(m.type==='childList'||['style','class','hidden','disabled'].indexOf(m.attributeName)!==-1){scheduleTick();break;}}});
               mo.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class','hidden','disabled','type']});
               window.__rem2FillMo=mo;
-              window.__rem2FillIv=setInterval(function(){if(window.__rem2FillSid!==sid){clearInterval(window.__rem2FillIv);return;}tick();},900);
+              window.__rem2FillIv=setInterval(function(){if(window.__rem2FillSid!==sid){clearInterval(window.__rem2FillIv);return;}tick();},2500);
               tick();
-              (function(){var lastUrl=location.href;function checkUrl(){var u=location.href;if(u!==lastUrl){lastUrl=u;window.__rem2FillSid=null;if(window.__rem2FillIv){clearInterval(window.__rem2FillIv);window.__rem2FillIv=null;}if(window.__rem2FillMo){try{window.__rem2FillMo.disconnect();}catch(e){}}}}setInterval(checkUrl,800);window.addEventListener('popstate',function(){setTimeout(checkUrl,300)});})();
+              (function(){var lastUrl=location.href;function checkUrl(){var u=location.href;if(u!==lastUrl){lastUrl=u;window.__rem2FillSid=null;if(window.__rem2FillIv){clearInterval(window.__rem2FillIv);window.__rem2FillIv=null;}if(window.__rem2FillMo){try{window.__rem2FillMo.disconnect();}catch(e){}}}}setInterval(checkUrl,1800);window.addEventListener('popstate',function(){setTimeout(checkUrl,300)});})();
             })();
         """.trimIndent(), null)
     }
