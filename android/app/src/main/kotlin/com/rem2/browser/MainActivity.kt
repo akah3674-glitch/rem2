@@ -56,7 +56,7 @@ class MainActivity : AppCompatActivity() {
         private const val MAIL_PASS    = "Mailtm2025Tool"
         private const val COCCOC_UA    =
             "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
-            "(KHTML, like Gecko) Chrome/126.0.6478.122 Mobile Safari/537.36"
+            "(KHTML, like Gecko) Chrome/126.0.6478.122 coc_coc_browser/128.0.150 Mobile Safari/537.36"
         private const val NOTIF_CHANNEL = "rem2_done"
         private const val NOTIF_PERM_RC = 1001
 
@@ -718,11 +718,55 @@ class MainActivity : AppCompatActivity() {
                     if (!binding.etUrl.isFocused && url != "about:blank") binding.etUrl.setText(url)
                 }
 
-                // Browser fingerprint patch — giong trinh duyet that hon
+                // Browser fingerprint patch — gia lap trinh duyet Coc Coc that 100%
                 v.evaluateJavascript("""
                     (function(){
                       try{Object.defineProperty(navigator,'webdriver',{get:()=>false});}catch(e){}
-                      if(!window.chrome){window.chrome={runtime:{},loadTimes:function(){},csi:function(){},app:{}};}
+                      try{
+                        if(!window.chrome){window.chrome={};}
+                        window.chrome.runtime = window.chrome.runtime || {};
+                        window.chrome.loadTimes = window.chrome.loadTimes || function(){return {};};
+                        window.chrome.csi = window.chrome.csi || function(){return {};};
+                        window.chrome.app = window.chrome.app || {isInstalled:false,InstallState:{DISABLED:'disabled',INSTALLED:'installed',NOT_INSTALLED:'not_installed'},RunningState:{CANNOT_RUN:'cannot_run',READY_TO_RUN:'ready_to_run',RUNNING:'running'}};
+                      }catch(e){}
+                      try{Object.defineProperty(navigator,'vendor',{get:()=>'Google Inc.'});}catch(e){}
+                      try{Object.defineProperty(navigator,'platform',{get:()=>'Linux armv8l'});}catch(e){}
+                      try{Object.defineProperty(navigator,'languages',{get:()=>['vi-VN','vi','en-US','en']});}catch(e){}
+                      try{Object.defineProperty(navigator,'hardwareConcurrency',{get:()=>8});}catch(e){}
+                      try{Object.defineProperty(navigator,'deviceMemory',{get:()=>4});}catch(e){}
+                      try{Object.defineProperty(navigator,'maxTouchPoints',{get:()=>5});}catch(e){}
+                      try{
+                        Object.defineProperty(navigator,'connection',{get:()=>({effectiveType:'4g',rtt:50,downlink:10,saveData:false,addEventListener:function(){},removeEventListener:function(){}})});
+                      }catch(e){}
+                      try{
+                        var fakePlugin = {name:'Chrome PDF Plugin',filename:'internal-pdf-viewer',description:'Portable Document Format',length:1};
+                        var plugins = [fakePlugin];
+                        plugins.item = function(i){return plugins[i];};
+                        plugins.namedItem = function(n){return plugins.find(function(p){return p.name===n;});};
+                        plugins.refresh = function(){};
+                        Object.defineProperty(navigator,'plugins',{get:()=>plugins});
+                        var mimeTypes = [{type:'application/pdf',suffixes:'pdf',description:'',enabledPlugin:fakePlugin}];
+                        mimeTypes.item = function(i){return mimeTypes[i];};
+                        mimeTypes.namedItem = function(n){return mimeTypes.find(function(m){return m.type===n;});};
+                        Object.defineProperty(navigator,'mimeTypes',{get:()=>mimeTypes});
+                      }catch(e){}
+                      try{
+                        Object.defineProperty(navigator,'userAgentData',{get:()=>({
+                          brands:[{brand:'Not.A/Brand',version:'8'},{brand:'Chromium',version:'126'},{brand:'coc_coc_browser',version:'128'}],
+                          mobile:true,
+                          platform:'Android',
+                          getHighEntropyValues:function(){return Promise.resolve({architecture:'',bitness:'64',model:'',platform:'Android',platformVersion:'13',uaFullVersion:'126.0.6478.122'});}
+                        })});
+                      }catch(e){}
+                      try{
+                        var getParam = WebGLRenderingContext.prototype.getParameter;
+                        WebGLRenderingContext.prototype.getParameter = function(p){
+                          if(p===37445)return 'Qualcomm';
+                          if(p===37446)return 'Adreno (TM) 640';
+                          return getParam.apply(this,arguments);
+                        };
+                      }catch(e){}
+                      try{if(!window.outerWidth||window.outerWidth===0){Object.defineProperty(window,'outerWidth',{get:()=>window.innerWidth});Object.defineProperty(window,'outerHeight',{get:()=>window.innerHeight+56});}}catch(e){}
                     })();
                 """.trimIndent(), null)
 
