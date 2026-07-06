@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Browser</string>
+    <string name="app_name">Rem2</string>
+    <string name="login">Đăng nhập</string>
+    <string name="username">Tên đăng nhập GoLike</string>
+    <string name="password">Mật khẩu</string>
+    <string name="mail_email">Email Mail.tm</string>
+    <string name="mail_pass">Mật khẩu Mail.tm</string>
+    <string name="withdraw">Rút thẻ cào</string>
+    <string name="logout">Đăng xuất</string>
+    <string name="amount">Mệnh giá</string>
+    <string name="telco">Nhà mạng</string>
+    <string name="start_withdraw">Bắt đầu rút thẻ</string>
+    <string name="captcha_hint">Giải CAPTCHA rồi nhấn "Xác nhận"</string>
+    <string name="confirm_captcha">✓ Xác nhận CAPTCHA</string>
+    <string name="cancel">Hủy</string>
 </resources>
