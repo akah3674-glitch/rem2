@@ -409,13 +409,8 @@ class MainActivity : AppCompatActivity() {
             binding.webView.loadUrl(DEFAULT_URL); binding.etUrl.setText(DEFAULT_URL)
             return
         }
-        if (savedTab == 2 && tab2Init) {
-            binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
-            currentTab=2; binding.btnTabCount.text="2"
-            binding.etUrl.visibility = android.view.View.VISIBLE
-            val u = tab2Url.takeIf { it.isNotEmpty() } ?: DEFAULT_TAB2_URL
-            binding.webView2.loadUrl(u); binding.etUrl.setText(u)
-        } else if (tab1Url.isNotEmpty()) {
+        // Tab 2 = GoLike (native Activity) — luôn restore về Tab 1 WebView
+        if (tab1Url.isNotEmpty()) {
             binding.webView.loadUrl(tab1Url); binding.etUrl.setText(tab1Url)
         }
     }
@@ -564,7 +559,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 setTabActive(binding.webView, false); setTabActive(binding.webView2, true)
-                currentTab=2; binding.btnTabCount.text="2"
+                currentTab=2; binding.btnTabCount.text="GL"
                     binding.etUrl.visibility = android.view.View.VISIBLE
                 if (autoEmail.isNotEmpty() && (binding.webView2.url ?: "").isSignupPage()) {
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
@@ -575,7 +570,7 @@ class MainActivity : AppCompatActivity() {
                 snapshotLocalStorage(binding.webView2) { js -> if (seq == switchSeq) tab2LocalStorageJson = js }
                 binding.swipeRefresh2.visibility=View.INVISIBLE; binding.swipeRefresh.visibility=View.VISIBLE
                 setTabActive(binding.webView2, false); setTabActive(binding.webView, true)
-                currentTab=1; binding.btnTabCount.text="1"
+                currentTab=1; binding.btnTabCount.text="GL"
                     binding.etUrl.visibility = android.view.View.VISIBLE
                 restoreCookies(tab1Cookies, seq) {
                     restoreLocalStorage(binding.webView, tab1LocalStorageJson) {
