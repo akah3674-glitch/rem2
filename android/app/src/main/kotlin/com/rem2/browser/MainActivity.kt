@@ -61,6 +61,10 @@ class MainActivity : AppCompatActivity() {
         private const val NOTIF_CHANNEL = "rem2_done"
         private const val NOTIF_PERM_RC = 1001
 
+        // Click recording keys
+        private const val KEY_CLICK_SESSIONS  = "click_sessions_v1"
+        private const val KEY_APPLY_RECORDING = "apply_recording"
+
         private val COOKIE_URLS = listOf(
             "https://replit.com",
             "https://replit.com/",
@@ -107,6 +111,16 @@ class MainActivity : AppCompatActivity() {
     private var tab2LocalStorageJson = "{}"
     private var switchSeq       = 0
 
+    // ── FIX "bấm loạn": cờ báo onboarding đã xong, ngăn auto-script tiếp tục chạy ──
+    // Được set = true khi JS gọi ClickBridge.onboardingComplete() (isDone() trả true)
+    // Được reset = false mỗi khi bắt đầu tạo tài khoản mới (startBatchFlow / clearWebSession)
+    private var autoFlowDone = false
+
+    // Click recording
+    private var isRecording      = false
+    private val recordedClicks   = mutableListOf<JSONObject>()
+    private var applyRecording   = false
+
     // File chooser
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
     private val fileChooserLauncher =
@@ -148,6 +162,38 @@ class MainActivity : AppCompatActivity() {
                 wv.postDelayed({ wv.reload() }, 1500)
             }
         }
+
+        // ── FIX "bấm loạn": JS báo đã vào dashboard → dừng toàn bộ auto-script ──
+        @JavascriptInterface
+        fun onboardingComplete() {
+            runOnUiThread {
+                if (autoFlowDone) return@runOnUiThread   // chỉ xử lý 1 lần
+                autoFlowDone = true
+                log("✅ Onboarding xong — dừng auto-script, giải phóng session")
+                autoEmail = ""
+                autoUsername = ""
+                killAutoScripts(binding.webView)
+                killAutoScripts(binding.webView2)
+            }
+        }
+
+        // ── Ghi lại một click của người dùng (chế độ recording) ──────────────
+        @JavascriptInterface
+        fun recordClick(url: String, tag: String, text: String, selector: String) {
+            if (!isRecording) return
+            runOnUiThread {
+                val obj = JSONObject().apply {
+                    put("url", url)
+                    put("tag", tag)
+                    put("text", text)
+                    put("selector", selector)
+                    put("ts", System.currentTimeMillis())
+                }
+                recordedClicks.add(obj)
+                val short = text.take(40).ifEmpty { selector.take(30) }
+                log("📍 Ghi: [$tag] \"$short\" @ ${url.substringAfterLast('/')}")
+            }
+        }
     }
 
     private fun activeWebView() = if (currentTab == 1) binding.webView else binding.webView2
@@ -175,7 +221,8 @@ class MainActivity : AppCompatActivity() {
         binding.webView2.onPause()
         createNotificationChannel()
         loadAccounts()
-        dataSaving = prefs.getBoolean(KEY_DATA_SAVING, false)
+        dataSaving     = prefs.getBoolean(KEY_DATA_SAVING, false)
+        applyRecording = prefs.getBoolean(KEY_APPLY_RECORDING, false)
         setupHeader()
         setupWebView(binding.webView,  isTab1 = true)
         setupWebView(binding.webView2, isTab1 = false)
@@ -276,15 +323,12 @@ class MainActivity : AppCompatActivity() {
     // ─── Batch creation ───────────────────────────────────────────────────────
 
     // ─── Lam mat toi da ───────────────────────────────────────────────────────
-    // Kiem tra nhiet do may (Android Thermal API, API 29+) va tu nghi neu may dang nong,
-    // giup giam nguy co qua nhiet khi chay batch nhieu tai khoan lien tuc.
     private suspend fun coolDownIfHot() {
         val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
         var waited = 0
         while (waited < 5 * 60_000) {
             val status = try { pm.currentThermalStatus } catch (e: Exception) { return }
-            // THERMAL_STATUS_MODERATE = 2 tro len la bat dau nong, nen cho nguoi bot
             if (status < PowerManager.THERMAL_STATUS_MODERATE) return
             withContext(Dispatchers.Main) {
                 log("🌡️ May dang nong (muc $status) — tam nghi 20s de lam mat...")
@@ -299,18 +343,18 @@ class MainActivity : AppCompatActivity() {
           batchCurrent = 0
           val targetTab = currentTab
           val targetWv  = if (targetTab == 1) binding.webView else binding.webView2
-          // Giữ CPU awake suốt batch — tránh bị Android ngắt khi màn hình tắt
           wakeLock?.release()
           wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
               .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "rem2:batch")
           @Suppress("WakelockTimeout")
-          wakeLock?.acquire(batchTotal * 18 * 60 * 1000L)  // 18 phút / acc tối đa
+          wakeLock?.acquire(batchTotal * 18 * 60 * 1000L)
           batchJob = lifecycleScope.launch {
               try {
                   for (i in 1..total) {
                       batchCurrent = i
                       flowRunning  = true
                       autoEmail    = ""; autoUsername = ""
+                      autoFlowDone = false   // reset cờ cho mỗi tài khoản mới
                       coolDownIfHot()
                       withContext(Dispatchers.Main) {
                           val label = if (total == 1) "⏳ Dang tao tai khoan..." else "⏳ Dang tao $i/$total..."
@@ -324,14 +368,13 @@ class MainActivity : AppCompatActivity() {
                       try {
                           ensureAccount(targetTab)
                       } catch (e: kotlinx.coroutines.CancellationException) {
-                          throw e  // cho phep coroutine cancel that su
+                          throw e
                       } catch (e: Exception) {
                           log("❌ Loi tai khoan $i/$total: ${e.message} — bo qua, tao tiep")
                       } finally {
                           flowRunning = false
                       }
                       if (i < total) {
-                          // Cu moi 5 tai khoan thi nghi dai hon de may nguoi han
                           val restMs = if (i % 5 == 0) 45_000L else 15_000L
                           log("--- Xong $i/$total — cho ${restMs/1000}s roi tao tiep ---")
                           delay(restMs)
@@ -345,7 +388,6 @@ class MainActivity : AppCompatActivity() {
                       }
                   }
               } finally {
-                  // Đảm bảo button luôn được re-enable dù có exception hay CancellationException
                   flowRunning = false
                   wakeLock?.release(); wakeLock = null
                   withContext(Dispatchers.Main) {
@@ -360,7 +402,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopBatchFlow() {
         log("⏹ Dang dung...")
-        batchJob?.cancel()   // coroutine finally block se tu don dep UI + wakeLock
+        batchJob?.cancel()
         batchJob = null
     }
 
@@ -405,11 +447,9 @@ class MainActivity : AppCompatActivity() {
         tab2LocalStorageJson = prefs.getString(KEY_TAB2_LS_JSON, "{}") ?: "{}"
         tab2Initialized = tab2Init
         if (tab1Url.isEmpty() && tab2Url.isEmpty()) {
-            // Lần đầu mở app — trang đăng ký mặc định
             binding.webView.loadUrl(DEFAULT_URL); binding.etUrl.setText(DEFAULT_URL)
             return
         }
-        // Tab 2 = GoLike (native Activity) — luôn restore về Tab 1 WebView
         if (tab1Url.isNotEmpty()) {
             binding.webView.loadUrl(tab1Url); binding.etUrl.setText(tab1Url)
         }
@@ -418,6 +458,30 @@ class MainActivity : AppCompatActivity() {
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
+        // ── ⚡ Rem2 title icon — popup menu: ghi / áp dụng / xoá bản click ──────
+        binding.tvTitle.setOnClickListener { v ->
+            val popup = PopupMenu(this, v)
+            val recLabel = if (isRecording) "⏹ Dừng ghi bản click" else "🔴 Ghi bản click"
+            val sessions = loadAllSessions()
+            val applyLabel = when {
+                sessions.length() == 0 -> "▶ Áp dụng bản click cho tự động"
+                applyRecording         -> "✅ Đang áp dụng (${sessions.length()} bản) — bấm để tắt"
+                else                   -> "▶ Áp dụng bản click (${sessions.length()} bản)"
+            }
+            popup.menu.add(0, 1, 0, recLabel)
+            popup.menu.add(0, 2, 1, applyLabel)
+            popup.menu.add(0, 3, 2, "🗑 Xoá all bản click ghi lại")
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    1 -> toggleRecording()
+                    2 -> toggleApplyRecording()
+                    3 -> confirmClearAllRecordings()
+                }
+                true
+            }
+            popup.show()
+        }
+
         // Clipboard icon — click: toggle log panel; long press: danh sách tài khoản
         binding.btnToggleLog.setOnClickListener {
             panelOpen = !panelOpen
@@ -439,7 +503,7 @@ class MainActivity : AppCompatActivity() {
         binding.tabLog.setOnClickListener    { switchPanelTab(false) }
         binding.tabVerify.setOnClickListener { switchPanelTab(true)  }
 
-        // Nhấn thường → tạo ngay 1 tài khoản (không hỏi); Nhấn giữ → xem danh sách đã tạo
+        // Nhấn thường → tạo ngay 1 tài khoản; Nhấn giữ → xem danh sách đã tạo
         binding.btnCreateAccount.setOnClickListener {
             if (flowRunning) {
                 AlertDialog.Builder(this)
@@ -464,7 +528,6 @@ class MainActivity : AppCompatActivity() {
         }
         binding.etUrl.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) binding.etUrl.selectAll() }
 
-        // Data saving toggle — bật/tắt tải ảnh để tiết kiệm data
         updateDataSavingBtn()
         binding.btnDataSaving.setOnClickListener {
             dataSaving = !dataSaving
@@ -477,6 +540,125 @@ class MainActivity : AppCompatActivity() {
         binding.btnTabCount.setOnClickListener {
             startActivity(android.content.Intent(this, com.golike.ops.AccountsActivity::class.java))
         }
+    }
+
+    // ─── Click Recording ─────────────────────────────────────────────────────
+
+    /** Bật/tắt chế độ ghi bản click */
+    private fun toggleRecording() {
+        if (isRecording) {
+            // Dừng ghi
+            isRecording = false
+            killRecordScript(activeWebView())
+            if (recordedClicks.isNotEmpty()) {
+                saveRecordingSession()
+                Toast.makeText(this, "💾 Đã lưu bản click (${recordedClicks.size} thao tác)", Toast.LENGTH_SHORT).show()
+                log("💾 Đã lưu bản click — ${recordedClicks.size} thao tác. Dùng menu ⚡Rem2 → 'Áp dụng' để bật tự động.")
+            } else {
+                Toast.makeText(this, "⚠️ Không có thao tác nào được ghi", Toast.LENGTH_SHORT).show()
+                log("⚠️ Dừng ghi — không có thao tác nào")
+            }
+            recordedClicks.clear()
+            // Cập nhật tiêu đề trở lại bình thường
+            binding.tvTitle.text = "⚡ Rem2"
+        } else {
+            // Bắt đầu ghi
+            isRecording = true
+            recordedClicks.clear()
+            binding.tvTitle.text = "🔴 Đang ghi"
+            Toast.makeText(this, "🔴 Bắt đầu ghi — thực hiện các bước trên trang", Toast.LENGTH_SHORT).show()
+            log("🔴 Đang ghi bản click... Thực hiện các thao tác trên trang rồi bấm ⚡Rem2 → 'Dừng ghi' để lưu lại.")
+            injectRecordScript(activeWebView())
+        }
+    }
+
+    /** Inject JS lắng nghe click của người dùng và gửi về native */
+    private fun injectRecordScript(wv: WebView) {
+        wv.evaluateJavascript("""
+            (function(){
+              if(window.__rem2RecordActive)return;
+              window.__rem2RecordActive=true;
+              function getSelector(el){
+                try{
+                  if(el.id)return'#'+el.id;
+                  if(el.name)return el.tagName.toLowerCase()+'[name="'+el.name+'"]';
+                  var cls=Array.from(el.classList||[]).filter(function(c){return c.length<40&&!/[0-9]{4,}/.test(c);}).slice(0,2).join('.');
+                  return el.tagName.toLowerCase()+(cls?'.'+cls:'');
+                }catch(e){return el.tagName||'unknown';}
+              }
+              document.addEventListener('click',function(e){
+                var t=e.target;if(!t)return;
+                var tag=(t.tagName||'').toLowerCase();
+                var txt=((t.innerText||t.value||t.getAttribute('aria-label')||'')+'').trim().substring(0,80);
+                var sel=getSelector(t);
+                if(window.ClickBridge)window.ClickBridge.recordClick(location.href,tag,txt,sel);
+              },true);
+            })();
+        """.trimIndent(), null)
+    }
+
+    /** Xoá JS listener recording */
+    private fun killRecordScript(wv: WebView) {
+        wv.evaluateJavascript("(function(){window.__rem2RecordActive=false;})();", null)
+    }
+
+    /** Lưu session ghi hiện tại vào SharedPreferences */
+    private fun saveRecordingSession() {
+        val raw = prefs.getString(KEY_CLICK_SESSIONS, "[]") ?: "[]"
+        val arr = try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
+        val session = JSONObject().apply {
+            put("ts",     System.currentTimeMillis())
+            put("count",  recordedClicks.size)
+            put("clicks", JSONArray().also { a -> recordedClicks.forEach { a.put(it) } })
+        }
+        arr.put(session)
+        prefs.edit().putString(KEY_CLICK_SESSIONS, arr.toString()).apply()
+    }
+
+    /** Đọc tất cả session đã lưu */
+    private fun loadAllSessions(): JSONArray {
+        val raw = prefs.getString(KEY_CLICK_SESSIONS, "[]") ?: "[]"
+        return try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
+    }
+
+    /** Bật/tắt áp dụng bản click cho auto-continue */
+    private fun toggleApplyRecording() {
+        val sessions = loadAllSessions()
+        if (sessions.length() == 0) {
+            Toast.makeText(this, "⚠️ Chưa có bản click nào — hãy ghi trước", Toast.LENGTH_SHORT).show()
+            return
+        }
+        applyRecording = !applyRecording
+        prefs.edit().putBoolean(KEY_APPLY_RECORDING, applyRecording).apply()
+        val msg = if (applyRecording)
+            "✅ Đã bật áp dụng bản click (${sessions.length()} bản ghi)"
+        else
+            "⏹ Đã tắt áp dụng bản click"
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        log(msg)
+    }
+
+    /** Xác nhận xoá toàn bộ bản click */
+    private fun confirmClearAllRecordings() {
+        val sessions = loadAllSessions()
+        if (sessions.length() == 0) {
+            Toast.makeText(this, "Chưa có bản click nào để xoá", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("🗑 Xoá bản click")
+            .setMessage("Xoá toàn bộ ${sessions.length()} bản click đã ghi?")
+            .setPositiveButton("Xoá hết") { _, _ ->
+                prefs.edit()
+                    .remove(KEY_CLICK_SESSIONS)
+                    .putBoolean(KEY_APPLY_RECORDING, false)
+                    .apply()
+                applyRecording = false
+                Toast.makeText(this, "🗑 Đã xoá tất cả bản click", Toast.LENGTH_SHORT).show()
+                log("🗑 Đã xoá toàn bộ bản click ghi lại")
+            }
+            .setNegativeButton("Hủy", null)
+            .show()
     }
 
     // ─── Data saving helpers ──────────────────────────────────────────────────
@@ -512,23 +694,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ─── Storage isolation helpers (Android WebView dùng CookieManager/localStorage
-    // chung cho toàn app — phải tự cách li từng tab bằng snapshot/restore) ─────────
+    // ─── Storage isolation helpers ───────────────────────────────────────────
 
     private fun jsStringUnquote(raw: String?): String {
         if (raw == null || raw == "null") return "{}"
         return try { JSONObject("{\"v\":$raw}").getString("v") } catch (_: Exception) { "{}" }
     }
 
-    /** Dừng hẳn các JS interval/observer tự-điền và tự-bấm đang chạy trên webview này,
-     *  để nó không tiếp tục thao túng cookie/localStorage khi tab bị chuyển sang nền. */
+    /** Dừng hẳn các JS interval/observer tự-điền và tự-bấm đang chạy,
+     *  bao gồm cả record script nếu đang chạy. */
     private fun killAutoScripts(wv: WebView) {
         wv.evaluateJavascript(
             "(function(){try{window.__rem2FillSid=null;if(window.__rem2FillIv)clearInterval(window.__rem2FillIv);" +
             "if(window.__rem2FillMo)window.__rem2FillMo.disconnect();}catch(e){}" +
             "try{window.__rem2AutoContinueActive=false;" +
             "if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);" +
-            "if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}})();",
+            "if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}" +
+            "try{window.__rem2RecordActive=false;}catch(e){}" +
+            "})();",
             null
         )
     }
@@ -558,8 +741,6 @@ class MainActivity : AppCompatActivity() {
                 binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
                 if (!tab2Initialized) {
                     tab2Initialized = true
-                    // tab1Cookies vua duoc chup o tren (saveCookies) — xoa kho chung xong phai
-                    // khoi phuc lai ngay cho Tab 1, khong thi Tab 1 se bi mat dang nhap oan.
                     CookieManager.getInstance().removeAllCookies { _ ->
                         if (seq != switchSeq) return@removeAllCookies
                         CookieManager.getInstance().flush()
@@ -574,9 +755,6 @@ class MainActivity : AppCompatActivity() {
                     restoreCookies(tab2Cookies, seq) {
                         restoreLocalStorage(binding.webView2, tab2LocalStorageJson) {
                             if (seq != switchSeq) return@restoreLocalStorage
-                            // KHONG ep reload — webview2 dang tam dung (onPause) van giu nguyen
-                            // DOM/scroll trong bo nho, chi can cookie dung la du de cac request
-                            // moi (neu co) dung dung session, khong can tai lai tu dau.
                             binding.webView2.url?.takeIf { it.isNotBlank() && it!="about:blank" }
                                 ?.let { binding.etUrl.setText(it) }
                         }
@@ -599,8 +777,6 @@ class MainActivity : AppCompatActivity() {
                 restoreCookies(tab1Cookies, seq) {
                     restoreLocalStorage(binding.webView, tab1LocalStorageJson) {
                         if (seq != switchSeq) return@restoreLocalStorage
-                        // KHONG ep reload — giu nguyen DOM/scroll dang co, chi can cookie dung
-                        // la du cho cac request moi, tranh cam giac "tai lai tu dau" moi lan chuyen tab.
                         binding.webView.url?.takeIf { it.isNotBlank() && it!="about:blank" }
                             ?.let { binding.etUrl.setText(it) }
                             ?: binding.etUrl.setText("")
@@ -726,9 +902,7 @@ class MainActivity : AppCompatActivity() {
                     swipe.isRefreshing = false
                     if (!binding.etUrl.isFocused && url != "about:blank") binding.etUrl.setText(url)
                 }
-                // Cloudflare (kể cả trang xác minh bảo mật đa ngôn ngữ) → auto-reload.
-                // Dùng watcher lặp lại (khong chi check 1 lan luc onPageFinished) vi noi dung
-                // trang Cloudflare co the render/doi ngon ngu muon hon thoi diem nay.
+                // Cloudflare watcher
                 val tabTag = if (isTab1) "1" else "2"
                 v.evaluateJavascript(
                     """
@@ -758,16 +932,19 @@ class MainActivity : AppCompatActivity() {
                     })();
                     """.trimIndent(), null
                 )
-                // Auto-fill
+                // Auto-fill (chỉ khi có email và đang trên trang signup)
                 if (url.isSignupPage() && autoEmail.isNotEmpty()) {
                     injectAutoFill(v)
                     v.postDelayed({ injectAutoFill(v) }, 1200)
                     v.postDelayed({ injectAutoFill(v) }, 3000)
                 }
-                // Dashboard detect — dùng autoEmail (còn hiệu lực suốt phiên tài khoản,
-                // không tắt sớm như flowRunning khi server báo "done" trước khi user
-                // xác thực email và các màn onboarding mới thực sự load)
-                if (autoEmail.isNotEmpty() && url.contains("replit.com") &&
+                // Auto-continue onboarding:
+                // FIX "bấm loạn" — chỉ chạy khi:
+                //   1. autoEmail còn hiệu lực (account đang được tạo)
+                //   2. autoFlowDone = false (onboarding chưa xong)
+                //   3. Đang ở trang Replit nhưng không phải signup/verify
+                if (!autoFlowDone && autoEmail.isNotEmpty() &&
+                    url.contains("replit.com") &&
                     !url.isSignupPage() && !url.contains("verify") &&
                     !url.contains("confirm") && url != "about:blank") {
                     val lbl = if (isTab1) "" else " [Tab 2]"
@@ -775,6 +952,8 @@ class MainActivity : AppCompatActivity() {
                     CookieManager.getInstance().flush()
                     injectAutoContinue(v)
                 }
+                // Re-inject record script khi trang mới load (SPA navigate)
+                if (isRecording) injectRecordScript(v)
             }
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                 val url = req.url.toString()
@@ -814,7 +993,7 @@ class MainActivity : AppCompatActivity() {
 
         val lastTouch = longArrayOf(0L)
         wv.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_UP && autoEmail.isNotEmpty()) {
+            if (event.action == MotionEvent.ACTION_UP && autoEmail.isNotEmpty() && !autoFlowDone) {
                 val url = wv.url ?: ""
                 if (url.isSignupPage()) {
                     val now = System.currentTimeMillis()
@@ -835,24 +1014,14 @@ class MainActivity : AppCompatActivity() {
 
     // ─── clearWebSession ──────────────────────────────────────────────────────
 
-
-      // Chỉ xoá session của MỘT tab (tab đang được dùng để tạo tài khoản),
-      // không đụng tới tab còn lại — tránh vạ lây khi 2 tab dùng song song.
-      //
-      // LƯU Ý QUAN TRỌNG: CookieManager và WebStorage của Android WebView là KHO DÙNG CHUNG
-      // cho toàn app (không phải riêng từng WebView) — gọi removeAllCookies()/deleteAllData()
-      // sẽ xoá LUÔN session (đăng nhập, localStorage) của tab CÒN LẠI dù không hề đụng tới nó.
-      // Đây từng là nguyên nhân bấm "Tạo tài khoản" ở Tab 2 lại làm Tab 1 bị lỗi/văng theo.
-      // Fix: chụp lại session hiện tại của tab CÒN LẠI ngay trước khi xoá, rồi khôi phục lại
-      // NGAY sau khi xoá xong — chỉ tab đang target mới thực sự mất session.
       private fun clearWebSession(tab: Int = currentTab) {
           val wv          = if (tab == 1) binding.webView  else binding.webView2
           val otherWv     = if (tab == 1) binding.webView2 else binding.webView
           val otherIsTab1 = tab != 1
           killAutoScripts(wv)
+          autoFlowDone = false   // reset khi bắt đầu session mới
           val seq = ++switchSeq
 
-          // Chụp session sống hiện tại của tab kia trước khi xoá toàn bộ kho dùng chung.
           if (otherIsTab1) saveCookies(tab1Cookies) else saveCookies(tab2Cookies)
           snapshotLocalStorage(otherWv) { js ->
               if (seq != switchSeq) return@snapshotLocalStorage
@@ -861,7 +1030,6 @@ class MainActivity : AppCompatActivity() {
               CookieManager.getInstance().removeAllCookies { _ ->
                   if (seq != switchSeq) return@removeAllCookies
                   CookieManager.getInstance().flush()
-                  // Khôi phục NGAY session của tab kia — không để nó bị mất đăng nhập oan.
                   val otherCookies = if (otherIsTab1) tab1Cookies else tab2Cookies
                   restoreCookies(otherCookies, seq) {
                       val otherJson = if (otherIsTab1) tab1LocalStorageJson else tab2LocalStorageJson
@@ -903,9 +1071,7 @@ class MainActivity : AppCompatActivity() {
         binding.verifyWebView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
     }
 
-    // Mở vào wv được truyền vào (tab đúng chủ của link), không phải luôn "tab đang xem"
-      // — tránh mở nhầm link xác thực của tab kia vào tab đang active nếu user đã chuyển tab.
-      private fun openVerifyTab(url: String, wv: WebView = activeWebView()) = runOnUiThread {
+    private fun openVerifyTab(url: String, wv: WebView = activeWebView()) = runOnUiThread {
           log("Tim thay link xac thuc — dang mo...")
           wv.loadUrl(url)
           renderVerifyPanel(); panelOpen=true; binding.logPanel.visibility=View.VISIBLE; switchPanelTab(true)
@@ -932,8 +1098,6 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val json   = JSONObject(http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()).execute().body?.string() ?: "{}")
                     if (json.has("error")) {
-                        // Server tam thoi khong tim thay job (autoscale doi instance / lanh khoi dong) —
-                        // KHONG coi day la loi vinh vien, chi cho lau hon thay vi bat nguoi dung lam lai tu dau.
                         notFoundStreak++
                         if (notFoundStreak == 1 || notFoundStreak % 6 == 0) log("Server dang khoi dong lai, tiep tuc cho$batchLabel...")
                         return@repeat
@@ -945,14 +1109,10 @@ class MainActivity : AppCompatActivity() {
                       for (i in lastLogIdx until logs.length()) log("[Cloud] ${logs.getString(i)}")
                       lastLogIdx = logs.length()
                   }
-                  // Nhận email sớm để fill form kịp — CHỈ điền vào tab đang tạo tài khoản này,
-                  // không đụng tab còn lại (tránh dính nhầm email/pass sang tab kia).
                   if (autoEmail.isEmpty()) {
                       val e = json.optString("email", ""); val u = json.optString("username", "")
                       if (e.isNotEmpty()) {
                           autoEmail=e; autoUsername=u
-                          // Đã có email → server cần 30-120s nữa để nhận verify mail
-                          // Giảm tần suất poll từ 5s → 12s để giảm nhiệt máy
                           pollMs = 12_000L
                           withContext(Dispatchers.Main) { fillIfOnSignup(targetWv) }
                       }
@@ -987,14 +1147,11 @@ class MainActivity : AppCompatActivity() {
         val url = wv.url ?: ""
         when {
             url.isSignupPage() ->
-                // Vẫn còn trên signup → điền form
                 injectAutoFill(wv)
             url.contains("replit.com") && !url.contains("verify") &&
             !url.contains("confirm") && url != "about:blank" ->
-                // Đã qua signup, đang ở onboarding/dashboard → bấm Continue
                 injectAutoContinue(wv)
             else ->
-                // Chưa xác định trang → điều hướng về signup
                 wv.loadUrl("https://replit.com/signup")
         }
     }
@@ -1041,14 +1198,12 @@ class MainActivity : AppCompatActivity() {
                   if(eEl&&!pEl)setTimeout(function(){var kws=['continue','next','sign up','create account','get started','submit'];var els=document.querySelectorAll('button:not([disabled]),input[type=submit]:not([disabled])');for(var i=0;i<els.length;i++){var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();for(var k=0;k<kws.length;k++)if(txt.indexOf(kws[k])!==-1){syntheticClick(els[i]);return;}}},400);
                 }catch(err){}
               }
-              // Gộp nhiều mutation liên tiếp thành 1 lần tick (debounce) — giảm tải CPU/nhiet do MutationObserver ban ren
               function scheduleTick(){if(pendingTick)return;pendingTick=setTimeout(function(){pendingTick=null;tick();},250);}
               var mo=new MutationObserver(function(ms){for(var i=0;i<ms.length;i++){var m=ms[i];if(m.type==='childList'||['style','class','hidden','disabled'].indexOf(m.attributeName)!==-1){scheduleTick();break;}}});
               mo.observe(document.documentElement,{childList:true,subtree:true,attributes:true,attributeFilter:['style','class','hidden','disabled','type']});
               window.__rem2FillMo=mo;
               window.__rem2FillIv=setInterval(function(){if(window.__rem2FillSid!==sid){clearInterval(window.__rem2FillIv);return;}tick();},900);
               tick();
-              // Re-trigger khi SPA thay đổi route (onboarding dùng pushState/replaceState)
               (function(){var lastUrl=location.href;function checkUrl(){var u=location.href;if(u!==lastUrl){lastUrl=u;if(!isDone()){window.__rem2AutoContinueActive=false;try{if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);}catch(e){}try{if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}setTimeout(function(){if(window.ClickBridge){}},50);}}}setInterval(checkUrl,800);window.addEventListener('popstate',function(){setTimeout(checkUrl,300)});})();
             })();
         """.trimIndent(), null)
@@ -1057,33 +1212,92 @@ class MainActivity : AppCompatActivity() {
     // ─── Auto-Continue onboarding ─────────────────────────────────────────────
 
     private fun injectAutoContinue(wv: WebView) {
+        // Chuẩn bị danh sách pattern từ bản click đã học (nếu applyRecording bật)
+        val learnedPatternsJson: String = if (applyRecording) {
+            val sessions = loadAllSessions()
+            // Gộp tất cả click từ mọi session, dedupe theo text
+            val seen = mutableSetOf<String>()
+            val patterns = JSONArray()
+            for (si in 0 until sessions.length()) {
+                val clicks = sessions.getJSONObject(si).optJSONArray("clicks") ?: continue
+                for (ci in 0 until clicks.length()) {
+                    val click = clicks.getJSONObject(ci)
+                    val txt = click.optString("text", "").trim().lowercase()
+                    if (txt.isNotEmpty() && txt !in seen && txt.length < 80) {
+                        seen.add(txt)
+                        patterns.put(JSONObject().apply {
+                            put("text",     txt)
+                            put("selector", click.optString("selector", ""))
+                            put("tag",      click.optString("tag", ""))
+                        })
+                    }
+                }
+            }
+            patterns.toString()
+        } else "[]"
+
+        val safePatternsJson = learnedPatternsJson
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+
         wv.evaluateJavascript("""
             (function(){
               // Dừng instance cũ (nếu có) trước khi khởi động instance mới
               try{if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);}catch(e){}
               try{if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}
               window.__rem2AutoContinueActive=true;
+
+              // ── Bản click đã học (từ tính năng Recording) ─────────────────
+              var LEARNED_PATTERNS=$safePatternsJson;
+
               var CONTINUE_KW=['continue','next','skip','get started',"let's go",'done','finish','i agree','agree','ok','got it','submit'];
-              // STOP_HEADS đã bị loại bỏ — không dừng theo heading text vì Replit A/B test copy bất kỳ lúc nào
               var EXCLUDE_KW=['back','log in','login','create account','upgrade','sign in','sign up','close','cancel','upload'];
-              var PAID_PLAN_KW=['core','pro','teams','enterprise','business','$'];
+              var PAID_PLAN_KW=['core','pro','teams','enterprise','business','${'$'}'];
               var PREFER_KW=['starter','free'];
+
               function syntheticClick(el){
                 if(!el)return;try{el.focus();}catch(e){}
                 ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){try{el.dispatchEvent(new(t.startsWith('pointer')?PointerEvent:MouseEvent)(t,{bubbles:true,cancelable:true,isPrimary:true,button:0}));}catch(e){}});
                 try{el.click();}catch(e){}
                 try{var r=el.getBoundingClientRect();if(r.width>0&&r.height>0&&window.ClickBridge)window.ClickBridge.tapAt(r.left+r.width/2,r.top+r.height/2,window.devicePixelRatio||1);}catch(e){}
               }
+
               function isDone(){
-                // Nếu vẫn còn nút Continue/Next visible → chưa xong onboarding dù đã ở dashboard
                 var btn=findContinue();if(btn)return false;
-                // Nếu còn lựa chọn nào visible → chưa xong
                 if(findChoices(null).length)return false;
-                // Kiểm tra đã vào dashboard thật
-                return!!document.querySelector('textarea[placeholder*="Make anything" i]')||!!document.querySelector('[placeholder*="Try an example" i]')||!!document.querySelector('textarea[placeholder*="Ask Replit" i]');
+                var done=!!document.querySelector('textarea[placeholder*="Make anything" i]')||
+                         !!document.querySelector('[placeholder*="Try an example" i]')||
+                         !!document.querySelector('textarea[placeholder*="Ask Replit" i]');
+                if(done&&window.ClickBridge){
+                  // FIX "bấm loạn": báo native biết onboarding đã xong để dừng hẳn
+                  try{window.ClickBridge.onboardingComplete();}catch(e){}
+                }
+                return done;
               }
-              // headingText/STOP_HEADS đã bỏ — dùng isDone() làm điều kiện dừng duy nhất
+
+              // ── Tìm nút theo bản click đã học (ưu tiên cao nhất) ──────────
+              function findLearnedButton(){
+                if(!LEARNED_PATTERNS||!LEARNED_PATTERNS.length)return null;
+                var allEls=document.querySelectorAll('button,[role="button"],a[role="button"],input[type=submit]');
+                for(var p=0;p<LEARNED_PATTERNS.length;p++){
+                  var pat=LEARNED_PATTERNS[p];
+                  if(!pat.text)continue;
+                  for(var i=0;i<allEls.length;i++){
+                    var el=allEls[i];
+                    if(el.disabled)continue;
+                    var txt=(el.innerText||el.value||'').trim().toLowerCase();
+                    if(txt===pat.text||txt.indexOf(pat.text)!==-1||pat.text.indexOf(txt)!==-1&&txt.length>2){
+                      return el;
+                    }
+                  }
+                }
+                return null;
+              }
+
               function findContinue(){
+                // Ưu tiên bản click đã học
+                var learned=findLearnedButton();
+                if(learned)return learned;
                 var els=document.querySelectorAll('button,a[role="button"],[role="button"],input[type=submit]');
                 var candidates=[];
                 for(var i=0;i<els.length;i++){
@@ -1093,25 +1307,25 @@ class MainActivity : AppCompatActivity() {
                   }
                 }
                 if(!candidates.length)return null;
-                // Nếu có nhiều nút "continue" (trang chọn plan) — ưu tiên Starter/Free,
-                // tuyệt đối không tự bấm nút của plan trả phí (Core/Pro/Teams...)
                 for(var p=0;p<candidates.length;p++){
                   var c=candidates[p];
                   if(PREFER_KW.some(function(k){return c.txt.indexOf(k)!==-1;})) return c.el;
                 }
                 var safe=candidates.filter(function(c){return !PAID_PLAN_KW.some(function(k){return c.txt.indexOf(k)!==-1;});});
                 if(safe.length) return safe[0].el;
-                if(candidates.length>1) return null; // nhiều nút nhưng toàn plan trả phí — không đoán, chờ vòng sau
+                if(candidates.length>1) return null;
                 return candidates[0].el;
               }
+
               function findChoices(excl){var out=[];document.querySelectorAll('button,[role="button"],[role="radio"],[role="option"],[role="checkbox"],input[type="radio"],input[type="checkbox"]').forEach(function(el){if(el===excl||el.disabled)return;var lbl=el.closest('label');var txt=((el.innerText||el.value||(lbl?lbl.innerText:'')||'')+'').trim().toLowerCase();if(!txt||txt.length>120)return;if(EXCLUDE_KW.some(function(k){return txt.indexOf(k)!==-1;}))return;out.push(lbl&&(el.type==='radio'||el.type==='checkbox')?lbl:el);});return out;}
+
               var lastTick=0;
               function tick(){
                 var now=Date.now();if(now-lastTick<500)return false;lastTick=now;
                 try{if(isDone())return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){var pick=cs[0];syntheticClick(pick);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;
               }
+
               var count=0,pendingTick2=null;
-              // Gộp nhiều mutation lien tiep thanh 1 lan tick (debounce) — giam CPU/nhiet
               function scheduleTick2(){if(pendingTick2)return;pendingTick2=setTimeout(function(){pendingTick2=null;if(tick()){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;}},250);}
               var mo=new MutationObserver(function(){scheduleTick2();});
               mo.observe(document.body,{childList:true,subtree:true});
@@ -1123,5 +1337,3 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent(), null)
     }
 }
-
-
