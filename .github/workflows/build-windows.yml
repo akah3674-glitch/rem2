@@ -1,0 +1,64 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pywebview requests pyinstaller
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --windowed --name "Rem2" --hidden-import "webview.platforms.edgechromium" windows/rem2_win.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rem2-windows-v1.${{ github.run_number }}
+          path: dist/Rem2.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: win-v1.${{ github.run_number }}
+          name: "Rem2 Windows v1.${{ github.run_number }}"
+          body: |
+            ## Rem2 Windows v1.${{ github.run_number }}
+
+            ### Thay doi
+            - Chi co 1 tab duy nhat (xoa Tab2)
+            - Xoa tinh nang tu dong bam (giu nguyen tu dong dien email/mat khau)
+            - Giao dien moi: icon thay bang chu viet tat trong khung
+            - Ghi ban click: nguoi dung bam thu cong lan 1 va ghi lai, lan tiep theo tu dong ap dung
+            - Kiem tra giong trinh duyet that hon (patch navigator.webdriver, window.chrome)
+
+            ### Cai dat
+            - Tai `Rem2.exe` ben duoi
+            - Windows 10/11 64-bit
+            - Yeu cau Microsoft Edge WebView2 Runtime (thuong co san tren Windows 10/11)
+            - Neu khong co: tai tai https://developer.microsoft.com/microsoft-edge/webview2/
+
+            ### Su dung
+            1. Mo Rem2.exe
+            2. Trinh duyet mo trang replit.com/signup
+            3. Bam nut "Tao tai khoan moi" trong panel noi (goc phai man hinh)
+            4. App tu dong dien email/mat khau khi server gui ve
+          files: dist/Rem2.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
