@@ -6,41 +6,42 @@
         android:layout_height="match_parent"
         android:background="#F3F4F6">
 
-        <!-- ══ HEADER — xanh biển nhạt ══ -->
+        <!-- ══ HEADER (top) ══ -->
         <LinearLayout
             android:id="@+id/header"
             android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:background="#1976D2"
+            android:layout_height="62dp"
+            android:background="#1D4ED8"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingStart="4dp"
+            android:paddingStart="12dp"
             android:paddingEnd="4dp"
             android:elevation="4dp"
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent">
 
-            <!-- Nút quay lại -->
-            <ImageButton
-                android:id="@+id/btnBack"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_arrow_back"
-                android:tint="#FFFFFF"
-                android:contentDescription="Back" />
+            <!-- Tên app -->
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="⚡ Rem2"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:paddingEnd="8dp" />
 
-            <!-- URL bar -->
+            <!-- URL input -->
             <EditText
                 android:id="@+id/etUrl"
                 android:layout_width="0dp"
-                android:layout_height="36dp"
+                android:layout_height="38dp"
                 android:layout_weight="1"
                 android:background="@drawable/url_bar_bg"
                 android:textColor="#FFFFFF"
-                android:textColorHint="#BBDEFB"
-                android:hint="Search or type URL"
+                android:textColorHint="#AADDFF"
+                android:hint="Nhập URL hoặc tìm kiếm..."
                 android:textSize="12sp"
                 android:paddingStart="14dp"
                 android:paddingEnd="14dp"
@@ -48,45 +49,30 @@
                 android:imeOptions="actionGo"
                 android:inputType="textUri"
                 android:textCursorDrawable="@null"
-                android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp" />
+                android:layout_marginEnd="6dp" />
 
-            <!-- Terminal title — chỉ hiện khi Tab 2 (terminal) active -->
-            <TextView
-                android:id="@+id/tvTerminalTitle"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="☁  Cloud Terminal"
-                android:textColor="#FFFFFF"
-                android:textSize="13sp"
-                android:fontFamily="monospace"
-                android:gravity="center_vertical"
-                android:paddingStart="10dp"
-                android:visibility="gone" />
-
-            <!-- Tab switcher — hiển thị "1" hoặc "GL" -->
+            <!-- Tab switcher -->
             <TextView
                 android:id="@+id/btnTabCount"
-                android:layout_width="32dp"
+                android:layout_width="30dp"
                 android:layout_height="30dp"
                 android:background="@drawable/tab_btn_bg"
                 android:text="1"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp"
+                android:textSize="13sp"
                 android:textStyle="bold"
                 android:gravity="center"
                 android:layout_marginEnd="2dp" />
 
-            <!-- Ba chấm menu -->
+            <!-- Clipboard/Log toggle -->
             <ImageButton
-                android:id="@+id/btnMenu"
+                android:id="@+id/btnToggleLog"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:background="?attr/selectableItemBackgroundBorderless"
-                android:src="@drawable/ic_more_vert"
+                android:src="@drawable/ic_paste"
                 android:tint="#FFFFFF"
-                android:contentDescription="Menu" />
+                android:contentDescription="Toggle log" />
 
             <ImageButton
                 android:id="@+id/btnRefresh"
@@ -95,31 +81,37 @@
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:src="@drawable/ic_refresh"
                 android:tint="#FFFFFF"
-                android:contentDescription="Refresh" />
+                android:contentDescription="Tai lai trang" />
 
-            <!-- Ẩn: binding compat -->
+            <!-- Ẩn: binding compat cho btnBack và btnMenu — không hiển thị -->
             <ImageButton
-                android:id="@+id/btnToggleLog"
+                android:id="@+id/btnBack"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+
+            <ImageButton
+                android:id="@+id/btnMenu"
                 android:layout_width="0dp"
                 android:layout_height="0dp"
                 android:visibility="gone" />
 
         </LinearLayout>
 
-        <!-- ══ PROGRESS BAR ══ -->
+        <!-- ══ PROGRESS BAR (below header) ══ -->
         <ProgressBar
             android:id="@+id/progressBar"
             style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="0dp"
             android:layout_height="3dp"
             android:visibility="gone"
-            android:progressTint="#90CAF9"
-            android:progressBackgroundTint="#1565C0"
+            android:progressTint="#60A5FA"
+            android:progressBackgroundTint="#1D4ED8"
             app:layout_constraintTop_toBottomOf="@id/header"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- ══ LOG + XÁC THỰC PANEL (ẩn mặc định) ══ -->
+        <!-- ══ LOG + XÁC THỰC PANEL ══ -->
         <LinearLayout
             android:id="@+id/logPanel"
             android:layout_width="0dp"
@@ -149,7 +141,7 @@
                     android:text="📋 Log"
                     android:gravity="center"
                     android:textSize="13sp"
-                    android:textColor="#1976D2"
+                    android:textColor="#1D4ED8"
                     android:textStyle="bold"
                     android:background="#FFFFFF"
                     android:clickable="true"
@@ -170,7 +162,7 @@
 
             </LinearLayout>
 
-            <!-- Nút tạo tài khoản (trong panel ẩn) -->
+            <!-- Nút tạo tài khoản -->
             <LinearLayout
                 android:id="@+id/ctaRow"
                 android:layout_width="match_parent"
@@ -182,11 +174,11 @@
                     android:id="@+id/btnCreateAccount"
                     android:layout_width="match_parent"
                     android:layout_height="40dp"
-                    android:text="🚀 Tạo tài khoản Replit tự động"
+                    android:text="🔄 Tao tai khoan moi"
                     android:textAllCaps="false"
                     android:textSize="13sp"
                     android:textColor="#FFFFFF"
-                    android:backgroundTint="#1976D2"
+                    android:backgroundTint="#1D4ED8"
                     android:insetTop="0dp"
                     android:insetBottom="0dp" />
 
@@ -208,7 +200,8 @@
                     android:fontFamily="monospace"
                     android:textSize="11sp"
                     android:textColor="#111827"
-                    android:lineSpacingExtra="2dp" />
+                    android:lineSpacingExtra="2dp"
+                    android:textIsSelectable="true" />
 
             </ScrollView>
 
@@ -240,7 +233,7 @@
 
         </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
 
-        <!-- ══ TAB 2 — GoLike Cloud Tool ══ -->
+        <!-- ══ TAB 2 — WebView phụ ══ -->
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipeRefresh2"
             android:layout_width="0dp"
