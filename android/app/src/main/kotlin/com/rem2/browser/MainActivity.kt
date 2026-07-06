@@ -468,7 +468,9 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
         binding.etUrl.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) binding.etUrl.selectAll() }
-        binding.btnTabCount.setOnClickListener { switchBrowserTab(if (currentTab==1) 2 else 1) }
+        binding.btnTabCount.setOnClickListener {
+            startActivity(android.content.Intent(this, com.golike.ops.AccountsActivity::class.java))
+        }
     }
 
     // ─── Cookie helpers ───────────────────────────────────────────────────────
