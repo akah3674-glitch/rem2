@@ -64,6 +64,19 @@
                 android:gravity="center"
                 android:layout_marginEnd="2dp" />
 
+            
+            <!-- Tiết kiệm data toggle -->
+            <TextView
+                android:id="@+id/btnDataSaving"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:background="@drawable/tab_btn_bg"
+                android:text="📶"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:gravity="center"
+                android:layout_marginEnd="2dp" />
+
             <!-- Clipboard/Log toggle -->
             <ImageButton
                 android:id="@+id/btnToggleLog"
