@@ -1,0 +1,372 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_dark">
+
+    <!-- Toolbar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="16dp"
+        android:background="@color/bg_surface">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnBack"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="← Quay lại"
+            android:textColor="@color/accent_blue" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="💳 Rút thẻ cào"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_primary" />
+
+        <View android:layout_width="80dp" android:layout_height="1dp" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <!-- ── Tài khoản ── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="👤 Tài khoản rút"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent_blue"
+                    android:layout_marginBottom="10dp" />
+
+                <Spinner
+                    android:id="@+id/spinnerAccount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/spinner_bg"
+                    android:padding="12dp"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:id="@+id/tvAccInfo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:id="@+id/tvMailStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_muted" />
+
+                <!-- Mail.tm password — shown only when mailPass unknown -->
+                <LinearLayout
+                    android:id="@+id/layoutMailPass"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🔑 Mật khẩu Mail.tm để đọc OTP tự động"
+                        android:textSize="11sp"
+                        android:textColor="@color/text_muted"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="4dp" />
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Mật khẩu Mail.tm"
+                        xmlns:app="http://schemas.android.com/apk/res-auto"
+                        app:passwordToggleEnabled="true">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etMailPassWithdraw"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textPassword"
+                            android:textColor="@color/text_primary" />
+                    </com.google.android.material.textfield.TextInputLayout>
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- ── Loại thẻ + mệnh giá ── -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="💳 Loại thẻ &amp; Mệnh giá"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent_blue"
+                    android:layout_marginBottom="10dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Loại thẻ / Nhà mạng"
+                    android:textSize="11sp"
+                    android:textColor="@color/text_muted"
+                    android:layout_marginBottom="4dp" />
+
+                <Spinner
+                    android:id="@+id/spinnerCard"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/spinner_bg"
+                    android:padding="12dp"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Mệnh giá"
+                    android:textSize="11sp"
+                    android:textColor="@color/text_muted"
+                    android:layout_marginBottom="4dp" />
+
+                <Spinner
+                    android:id="@+id/spinnerAmount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/spinner_bg"
+                    android:padding="12dp"
+                    android:layout_marginBottom="14dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnStart"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="⚡ Thử rút (tự bypass CAPTCHA)"
+                    android:textSize="15sp"
+                    android:padding="14dp"
+                    android:backgroundTint="@color/accent_blue" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="App sẽ thử rút không CAPTCHA trước.\nNếu server yêu cầu CAPTCHA mới hiện widget bên dưới."
+                    android:textSize="11sp"
+                    android:textColor="@color/text_muted"
+                    android:lineSpacingExtra="2dp" />
+            </LinearLayout>
+
+            <!-- ── Log ── -->
+            <LinearLayout
+                android:id="@+id/sectionStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="14dp"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="📋 Tiến trình"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent_blue"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:id="@+id/tvLog"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace"
+                    android:textColor="@color/text_primary"
+                    android:lineSpacingExtra="4dp" />
+            </LinearLayout>
+
+            <!-- ── CAPTCHA (chỉ hiện khi server yêu cầu) ── -->
+            <LinearLayout
+                android:id="@+id/sectionCaptcha"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🔐 Server yêu cầu CAPTCHA lần này"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent_yellow"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:id="@+id/tvCaptchaHint"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Giải ô 'I'm not a robot' bên dưới rồi nhấn Xác nhận.\nNếu không load được, dùng ô nhập token thủ công bên dưới."
+                    android:textSize="12sp"
+                    android:textColor="@color/text_muted"
+                    android:lineSpacingExtra="2dp"
+                    android:layout_marginBottom="12dp" />
+
+                <!-- WebView CAPTCHA: 460dp — đủ cho cả image challenge -->
+                <WebView
+                    android:id="@+id/webViewCaptcha"
+                    android:layout_width="match_parent"
+                    android:layout_height="460dp"
+                    android:layout_marginBottom="10dp" />
+
+                <!-- Audio answer box — hiện khi transcribe xong -->
+                <LinearLayout
+                    android:id="@+id/layoutAudioAnswer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1a2233"
+                    android:padding="12dp"
+                    android:layout_marginBottom="8dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🎧 Đáp án audio (auto transcribe):"
+                        android:textSize="11sp"
+                        android:textColor="#8b949e"
+                        android:layout_marginBottom="4dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:id="@+id/tvAudioAnswer"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text=""
+                            android:textSize="28sp"
+                            android:textStyle="bold"
+                            android:textColor="#58d68d"
+                            android:fontFamily="monospace"
+                            android:letterSpacing="0.15" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnCopyAudio"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="📋 Copy"
+                            android:textColor="#58a6ff"
+                            android:textSize="12sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvAudioStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text=""
+                        android:textSize="11sp"
+                        android:textColor="#8b949e"
+                        android:layout_marginTop="4dp" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvCaptchaStatus"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="⏳ Chờ giải CAPTCHA..."
+                    android:textSize="13sp"
+                    android:textColor="@color/accent_yellow"
+                    android:layout_marginBottom="10dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConfirmCaptcha"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="✓  Xác nhận &amp; Submit"
+                    android:textSize="15sp"
+                    android:padding="14dp"
+                    android:backgroundTint="@color/accent_green"
+                    android:enabled="false"
+                    android:layout_marginBottom="16dp" />
+
+            </LinearLayout>
+
+            <!-- ── Kết quả ── -->
+            <LinearLayout
+                android:id="@+id/sectionResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:background="@drawable/card_bg"
+                android:padding="16dp"
+                android:layout_marginBottom="24dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🎉 Kết quả"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent_green"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:id="@+id/tvResult"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:textColor="@color/text_primary"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="6dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+</LinearLayout>
