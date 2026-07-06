@@ -392,7 +392,7 @@ import com.rem2.browser.R
                   orientation = LinearLayout.VERTICAL
                   layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                   addView(TextView(this@AccountsActivity).apply {
-                      text     = "@${entry.username}"
+                      text     = "@${entry.username}  ·  ${entry.date}"
                       textSize = 10f
                       setTextColor(ContextCompat.getColor(this@AccountsActivity, R.color.text_muted))
                   })
@@ -435,3 +435,4 @@ import com.rem2.browser.R
       private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
       private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
   }
+
