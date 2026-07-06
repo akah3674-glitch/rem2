@@ -50,10 +50,9 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS        = "rem2_prefs"
         private const val KEY_ACCOUNTS = "accounts_v3"
-        private const val SERVER_URL      = "https://zkdjjc--hemv5x7n7p.replit.app"
-        private const val DEFAULT_TAB2_URL  = "https://f0b31e09-2ec2-40f2-bfd8-c81e4a04bcb2-00-3vvr3lienriez.pike.replit.dev/api/terminal"
+        private const val SERVER_URL   = "https://zkdjjc--hemv5x7n7p.replit.app"
         private const val KEY_DATA_SAVING  = "data_saving"
-        private const val DEFAULT_URL      = "https://replit.com/signup"
+        private const val DEFAULT_URL  = "https://replit.com/signup"
         private const val MAIL_PASS    = "Mailtm2025Tool"
         private const val COCCOC_UA    =
             "Mozilla/5.0 (Linux; Android 13; SM-G991B) AppleWebKit/537.36 " +
@@ -71,14 +70,9 @@ class MainActivity : AppCompatActivity() {
             "https://replit.com/~",
             "https://replit.com/repls"
         )
-        private const val KEY_TAB_CURRENT  = "tab_current"
         private const val KEY_TAB1_URL     = "tab1_url"
-        private const val KEY_TAB2_URL     = "tab2_url"
-        private const val KEY_TAB2_INIT    = "tab2_initialized"
         private const val KEY_TAB1_CK_JSON = "tab1_cookies_j"
-        private const val KEY_TAB2_CK_JSON = "tab2_cookies_j"
         private const val KEY_TAB1_LS_JSON = "tab1_localstorage_j"
-        private const val KEY_TAB2_LS_JSON = "tab2_localstorage_j"
     }
 
     private lateinit var binding: ActivityMainBinding
@@ -102,21 +96,8 @@ class MainActivity : AppCompatActivity() {
     private var batchTotal   = 1
     private var batchCurrent = 0
 
-    // Tab management
-    private var currentTab      = 1
-    private var tab2Initialized = false
     private val tab1Cookies     = mutableMapOf<String, String>()
-    private val tab2Cookies     = mutableMapOf<String, String>()
     private var tab1LocalStorageJson = "{}"
-    private var tab2LocalStorageJson = "{}"
-    private var switchSeq       = 0
-
-    // ── FIX "bấm loạn": cờ + token để scope onboarding completion đúng session ──
-    // autoFlowDone: ngăn auto-script tiếp tục sau khi onboarding xong
-    // autoFlowToken: mỗi account mới có token riêng; JS phải trả về đúng token
-    //   mới nhất thì native mới xử lý → tránh stale JS từ tab/account cũ bắn nhầm
-    private var autoFlowDone  = false
-    private var autoFlowToken = ""
 
     // Click recording
     private var isRecording      = false
@@ -144,44 +125,22 @@ class MainActivity : AppCompatActivity() {
             callback.onReceiveValue(uris)
         }
 
-    // ── ClickBridge: JS → native MotionEvent tap, không cần trợ năng ──────────
+    // ── ClickBridge: JS → native ──────────────────────────────────────────────
     inner class ClickBridge {
         @JavascriptInterface
         fun tapAt(cssX: Float, cssY: Float, dpr: Float) {
-            val wv = activeWebView()
+            val wv = binding.webView
             runOnUiThread { simulateTap(wv, cssX * wv.scale.coerceAtLeast(0.01f), cssY * wv.scale.coerceAtLeast(0.01f)) }
         }
-        @JavascriptInterface
-        fun tapAtPercent(xPct: Float, yPct: Float) {
-            val wv = activeWebView()
-            runOnUiThread { wv.post { simulateTap(wv, wv.width * xPct.coerceIn(0f,1f), wv.height * yPct.coerceIn(0f,1f)) } }
-        }
+
         @JavascriptInterface
         fun cloudflareChallengeDetected(tabTag: String) {
             runOnUiThread {
-                val wv = if (tabTag == "1") binding.webView else binding.webView2
-                log("⚡ Cloudflare (xac minh bao mat) — tu tai lai de loai bo trang nay...")
-                wv.postDelayed({ wv.reload() }, 1500)
+                log("Cloudflare phat hien — tu tai lai...")
+                binding.webView.postDelayed({ binding.webView.reload() }, 1500)
             }
         }
 
-        // ── FIX "bấm loạn": JS báo đã vào dashboard → dừng toàn bộ auto-script ──
-        // Token phải khớp với autoFlowToken hiện tại — tránh stale JS từ tab/session cũ bắn nhầm
-        @JavascriptInterface
-        fun onboardingComplete(token: String) {
-            runOnUiThread {
-                if (token != autoFlowToken) return@runOnUiThread   // stale callback — bỏ qua
-                if (autoFlowDone) return@runOnUiThread              // đã xử lý rồi
-                autoFlowDone = true
-                log("✅ Onboarding xong — dừng auto-script, giải phóng session")
-                autoEmail = ""
-                autoUsername = ""
-                killAutoScripts(binding.webView)
-                killAutoScripts(binding.webView2)
-            }
-        }
-
-        // ── Ghi lại một click của người dùng (chế độ recording) ──────────────
         @JavascriptInterface
         fun recordClick(url: String, tag: String, text: String, selector: String) {
             if (!isRecording) return
@@ -195,12 +154,10 @@ class MainActivity : AppCompatActivity() {
                 }
                 recordedClicks.add(obj)
                 val short = text.take(40).ifEmpty { selector.take(30) }
-                log("📍 Ghi: [$tag] \"$short\" @ ${url.substringAfterLast('/')}")
+                log("Ghi: [$tag] \"$short\" @ ${url.substringAfterLast('/')}")
             }
         }
     }
-
-    private fun activeWebView() = if (currentTab == 1) binding.webView else binding.webView2
 
     private fun simulateTap(wv: WebView, x: Float, y: Float) {
         val t = System.currentTimeMillis()
@@ -220,37 +177,32 @@ class MainActivity : AppCompatActivity() {
         window.statusBarColor     = android.graphics.Color.parseColor("#1565C0")
         window.navigationBarColor = android.graphics.Color.parseColor("#1565C0")
         CookieManager.getInstance().setAcceptCookie(true)
-        binding.swipeRefresh2.visibility = View.INVISIBLE
-        binding.logPanel.visibility  = View.GONE  // ẩn panel khi mở app
-        binding.webView2.onPause()
+        binding.logPanel.visibility = View.GONE
         createNotificationChannel()
         loadAccounts()
         dataSaving     = prefs.getBoolean(KEY_DATA_SAVING, false)
         applyRecording = prefs.getBoolean(KEY_APPLY_RECORDING, false)
         setupHeader()
-        setupWebView(binding.webView,  isTab1 = true)
-        setupWebView(binding.webView2, isTab1 = false)
+        setupWebView(binding.webView)
         setupSwipeAndGestures()
         setupVerifyWebView()
         log("San sang. Nhan nut tao tai khoan de bat dau.")
         restoreSessionState()
     }
 
-    override fun onPause()  { super.onPause();  saveSessionState(); binding.webView.onPause(); binding.webView2.onPause(); binding.webView.pauseTimers() }
-    override fun onResume() { super.onResume(); binding.webView.resumeTimers(); if (currentTab==1) binding.webView.onResume() else binding.webView2.onResume() }
-    override fun onStop()   { super.onStop();   binding.webView.onPause(); binding.webView2.onPause() }
+    override fun onPause()  { super.onPause();  saveSessionState(); binding.webView.onPause(); binding.webView.pauseTimers() }
+    override fun onResume() { super.onResume(); binding.webView.resumeTimers(); binding.webView.onResume() }
+    override fun onStop()   { super.onStop();   binding.webView.onPause() }
 
     override fun onRequestPermissionsResult(rc: Int, perms: Array<String>, results: IntArray) {
         super.onRequestPermissionsResult(rc, perms, results)
-        // Notification permission granted — nothing extra needed, next notify() will work
     }
 
     override fun onBackPressed() {
-        val wv = activeWebView()
         when {
             panelOpen && showingVerify && binding.verifyWebView.canGoBack() -> binding.verifyWebView.goBack()
             panelOpen -> { binding.logPanel.visibility = View.GONE; panelOpen = false }
-            wv.canGoBack() -> wv.goBack()
+            binding.webView.canGoBack() -> binding.webView.goBack()
             else -> super.onBackPressed()
         }
     }
@@ -276,7 +228,7 @@ class MainActivity : AppCompatActivity() {
         val pi = PendingIntent.getActivity(this, 0,
             Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_SINGLE_TOP },
             PendingIntent.FLAG_IMMUTABLE)
-        val title = if (batchInfo.isEmpty()) "✅ Tao xong tai khoan" else "✅ $batchInfo"
+        val title = if (batchInfo.isEmpty()) "Tao xong tai khoan" else batchInfo
         val text  = "Email: $email  |  User: $username"
         val notif = NotificationCompat.Builder(this, NOTIF_CHANNEL)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -302,13 +254,13 @@ class MainActivity : AppCompatActivity() {
         }.toTypedArray()
 
         AlertDialog.Builder(this)
-            .setTitle("📋 Danh sach tai khoan (${accounts.size})")
+            .setTitle("Danh sach tai khoan (${accounts.size})")
             .setItems(items) { _, idx ->
                 val a = accounts[idx]
                 val text = "Email: ${a.email}\nMat khau: ${a.password}\nUsername: ${a.username}"
                 val cm = getSystemService(ClipboardManager::class.java)
                 cm?.setPrimaryClip(ClipData.newPlainText("account", text))
-                Toast.makeText(this, "✅ Da copy tai khoan ${idx+1}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Da copy tai khoan ${idx+1}", Toast.LENGTH_SHORT).show()
             }
             .setNeutralButton("Xoa tat ca") { _, _ ->
                 AlertDialog.Builder(this)
@@ -324,8 +276,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    // ─── Batch creation ───────────────────────────────────────────────────────
-
     // ─── Lam mat toi da ───────────────────────────────────────────────────────
     private suspend fun coolDownIfHot() {
         val pm = getSystemService(POWER_SERVICE) as? PowerManager ?: return
@@ -335,7 +285,7 @@ class MainActivity : AppCompatActivity() {
             val status = try { pm.currentThermalStatus } catch (e: Exception) { return }
             if (status < PowerManager.THERMAL_STATUS_MODERATE) return
             withContext(Dispatchers.Main) {
-                log("🌡️ May dang nong (muc $status) — tam nghi 20s de lam mat...")
+                log("May dang nong (muc $status) — tam nghi 20s de lam mat...")
             }
             delay(20_000)
             waited += 20_000
@@ -343,71 +293,64 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startBatchFlow(total: Int) {
-          batchTotal   = total
-          batchCurrent = 0
-          val targetTab = currentTab
-          val targetWv  = if (targetTab == 1) binding.webView else binding.webView2
-          wakeLock?.release()
-          wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
-              .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "rem2:batch")
-          @Suppress("WakelockTimeout")
-          wakeLock?.acquire(batchTotal * 18 * 60 * 1000L)
-          batchJob = lifecycleScope.launch {
-              try {
-                  for (i in 1..total) {
-                      batchCurrent  = i
-                      flowRunning   = true
-                      autoEmail     = ""; autoUsername = ""
-                      autoFlowDone  = false
-                      // Token mới cho mỗi account → stale JS từ account trước bị bỏ qua
-                      autoFlowToken = System.currentTimeMillis().toString()
-                      coolDownIfHot()
-                      withContext(Dispatchers.Main) {
-                          val label = if (total == 1) "⏳ Dang tao tai khoan..." else "⏳ Dang tao $i/$total..."
-                          binding.btnCreateAccount.isEnabled = true
-                          binding.btnCreateAccount.text      = if (total == 1) "⏹ Dừng" else "⏹ Dừng ($i/$total)" 
-                          binding.tvLog.text = ""
-                          switchPanelTab(false)
-                          clearWebSession(targetTab)
-                          targetWv.postDelayed({ targetWv.loadUrl("https://replit.com/signup") }, 300)
-                      }
-                      try {
-                          ensureAccount(targetTab)
-                      } catch (e: kotlinx.coroutines.CancellationException) {
-                          throw e
-                      } catch (e: Exception) {
-                          log("❌ Loi tai khoan $i/$total: ${e.message} — bo qua, tao tiep")
-                      } finally {
-                          flowRunning = false
-                      }
-                      if (i < total) {
-                          val restMs = if (i % 5 == 0) 45_000L else 15_000L
-                          log("--- Xong $i/$total — cho ${restMs/1000}s roi tao tiep ---")
-                          delay(restMs)
-                          coolDownIfHot()
-                      }
-                  }
-                  withContext(Dispatchers.Main) {
-                      if (total > 1) {
-                          log("✅ Da tao xong $total tai khoan! Nhan giu nut de xem danh sach.")
-                          showDoneNotification("Batch $total tai khoan xong", "$total tai khoan da duoc tao")
-                      }
-                  }
-              } finally {
-                  flowRunning = false
-                  wakeLock?.release(); wakeLock = null
-                  withContext(Dispatchers.Main) {
-                      binding.btnCreateAccount.isEnabled = true
-                      binding.btnCreateAccount.text      = "🔄 Tao tai khoan moi"
-                  }
-              }
-          }
-      }
-  
-    // ─── Stop batch flow ─────────────────────────────────────────────────────────
+        batchTotal   = total
+        batchCurrent = 0
+        val wv = binding.webView
+        wakeLock?.release()
+        wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "rem2:batch")
+        @Suppress("WakelockTimeout")
+        wakeLock?.acquire(batchTotal * 18 * 60 * 1000L)
+        batchJob = lifecycleScope.launch {
+            try {
+                for (i in 1..total) {
+                    batchCurrent = i
+                    flowRunning  = true
+                    autoEmail    = ""; autoUsername = ""
+                    coolDownIfHot()
+                    withContext(Dispatchers.Main) {
+                        binding.btnCreateAccount.isEnabled = true
+                        binding.btnCreateAccount.text = if (total == 1) "[DNG] Dung" else "[DNG] Dung ($i/$total)"
+                        binding.tvLog.text = ""
+                        switchPanelTab(false)
+                        clearWebSession()
+                        wv.postDelayed({ wv.loadUrl("https://replit.com/signup") }, 300)
+                    }
+                    try {
+                        ensureAccount(wv)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        log("Loi tai khoan $i/$total: ${e.message} — bo qua, tao tiep")
+                    } finally {
+                        flowRunning = false
+                    }
+                    if (i < total) {
+                        val restMs = if (i % 5 == 0) 45_000L else 15_000L
+                        log("--- Xong $i/$total — cho ${restMs/1000}s roi tao tiep ---")
+                        delay(restMs)
+                        coolDownIfHot()
+                    }
+                }
+                withContext(Dispatchers.Main) {
+                    if (total > 1) {
+                        log("Da tao xong $total tai khoan! Nhan giu nut de xem danh sach.")
+                        showDoneNotification("Batch $total tai khoan xong", "$total tai khoan da duoc tao")
+                    }
+                }
+            } finally {
+                flowRunning = false
+                wakeLock?.release(); wakeLock = null
+                withContext(Dispatchers.Main) {
+                    binding.btnCreateAccount.isEnabled = true
+                    binding.btnCreateAccount.text = "Tao tai khoan moi"
+                }
+            }
+        }
+    }
 
     private fun stopBatchFlow() {
-        log("⏹ Dang dung...")
+        log("Dang dung...")
         batchJob?.cancel()
         batchJob = null
     }
@@ -415,68 +358,50 @@ class MainActivity : AppCompatActivity() {
     // ─── Session persistence ──────────────────────────────────────────────────
 
     private fun saveSessionState() {
-        if (currentTab == 1) saveCookies(tab1Cookies) else saveCookies(tab2Cookies)
-        killAutoScripts(binding.webView); killAutoScripts(binding.webView2)
+        killAutoScripts(binding.webView)
         CookieManager.getInstance().flush()
+        saveCookies(tab1Cookies)
         fun m2j(m: Map<String,String>) = JSONObject().also { o -> m.forEach { (k,v)->o.put(k,v) } }.toString()
-        val snapSeq = ++switchSeq
-        val activeWv = if (currentTab == 1) binding.webView else binding.webView2
-        snapshotLocalStorage(activeWv) { js ->
-            if (snapSeq != switchSeq) return@snapshotLocalStorage
-            if (currentTab == 1) tab1LocalStorageJson = js else tab2LocalStorageJson = js
-            prefs.edit().putString(KEY_TAB1_LS_JSON, tab1LocalStorageJson)
-                .putString(KEY_TAB2_LS_JSON, tab2LocalStorageJson).apply()
+        snapshotLocalStorage(binding.webView) { js ->
+            tab1LocalStorageJson = js
+            prefs.edit().putString(KEY_TAB1_LS_JSON, js).apply()
         }
         prefs.edit()
-            .putInt    (KEY_TAB_CURRENT,  currentTab)
-            .putString (KEY_TAB1_URL,     binding.webView.url?.takeIf  { it!="about:blank" } ?: "")
-            .putString (KEY_TAB2_URL,     binding.webView2.url?.takeIf { it!="about:blank" } ?: "")
-            .putBoolean(KEY_TAB2_INIT,    tab2Initialized)
-            .putString (KEY_TAB1_CK_JSON, m2j(tab1Cookies))
-            .putString (KEY_TAB2_CK_JSON, m2j(tab2Cookies))
-            .putString (KEY_TAB1_LS_JSON, tab1LocalStorageJson)
-            .putString (KEY_TAB2_LS_JSON, tab2LocalStorageJson)
+            .putString(KEY_TAB1_URL,     binding.webView.url?.takeIf { it != "about:blank" } ?: "")
+            .putString(KEY_TAB1_CK_JSON, m2j(tab1Cookies))
             .commit()
     }
 
     private fun restoreSessionState() {
-        val savedTab = prefs.getInt    (KEY_TAB_CURRENT, 1)
-        val tab1Url  = prefs.getString (KEY_TAB1_URL, "") ?: ""
-        val tab2Url  = prefs.getString (KEY_TAB2_URL, "") ?: ""
-        val tab2Init = prefs.getBoolean(KEY_TAB2_INIT, false)
         fun loadMap(json: String, target: MutableMap<String,String>) {
             try { val o=JSONObject(json); o.keys().forEach { target[it]=o.getString(it) } } catch (_: Exception) {}
         }
         loadMap(prefs.getString(KEY_TAB1_CK_JSON,"{}") ?: "{}", tab1Cookies)
-        loadMap(prefs.getString(KEY_TAB2_CK_JSON,"{}") ?: "{}", tab2Cookies)
         tab1LocalStorageJson = prefs.getString(KEY_TAB1_LS_JSON, "{}") ?: "{}"
-        tab2LocalStorageJson = prefs.getString(KEY_TAB2_LS_JSON, "{}") ?: "{}"
-        tab2Initialized = tab2Init
-        if (tab1Url.isEmpty() && tab2Url.isEmpty()) {
+        val savedUrl = prefs.getString(KEY_TAB1_URL, "") ?: ""
+        if (savedUrl.isNotEmpty()) {
+            binding.webView.loadUrl(savedUrl); binding.etUrl.setText(savedUrl)
+        } else {
             binding.webView.loadUrl(DEFAULT_URL); binding.etUrl.setText(DEFAULT_URL)
-            return
-        }
-        if (tab1Url.isNotEmpty()) {
-            binding.webView.loadUrl(tab1Url); binding.etUrl.setText(tab1Url)
         }
     }
 
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
-        // ── ⚡ Rem2 title icon — popup menu: ghi / áp dụng / xoá bản click ──────
+        // Title button — popup: ghi / ap dung / xoa ban click
         binding.tvTitle.setOnClickListener { v ->
             val popup = PopupMenu(this, v)
-            val recLabel = if (isRecording) "⏹ Dừng ghi bản click" else "🔴 Ghi bản click"
+            val recLabel = if (isRecording) "[DNG] Dung ghi ban click" else "[GHI] Ghi ban click"
             val sessions = loadAllSessions()
             val applyLabel = when {
-                sessions.length() == 0 -> "▶ Áp dụng bản click cho tự động"
-                applyRecording         -> "✅ Đang áp dụng (${sessions.length()} bản) — bấm để tắt"
-                else                   -> "▶ Áp dụng bản click (${sessions.length()} bản)"
+                sessions.length() == 0 -> "[AP] Ap dung ban click"
+                applyRecording         -> "[ON] Dang ap dung (${sessions.length()} ban) — tat"
+                else                   -> "[AP] Ap dung ban click (${sessions.length()} ban)"
             }
             popup.menu.add(0, 1, 0, recLabel)
             popup.menu.add(0, 2, 1, applyLabel)
-            popup.menu.add(0, 3, 2, "🗑 Xoá all bản click ghi lại")
+            popup.menu.add(0, 3, 2, "[XOA] Xoa all ban click ghi lai")
             popup.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     1 -> toggleRecording()
@@ -488,28 +413,22 @@ class MainActivity : AppCompatActivity() {
             popup.show()
         }
 
-        // Clipboard icon — click: toggle log panel; long press: danh sách tài khoản
         binding.btnToggleLog.setOnClickListener {
             panelOpen = !panelOpen
             binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
         }
         binding.btnToggleLog.setOnLongClickListener { showAccountList(); true }
+
         binding.btnRefresh.setOnClickListener {
-            val wv = activeWebView()
-            val sw = if (currentTab==1) binding.swipeRefresh else binding.swipeRefresh2
-            sw.isRefreshing = true
-            if (currentTab == 2) {
-                val cur2 = wv.url
-                if (cur2.isNullOrBlank() || cur2 == "about:blank") wv.loadUrl(DEFAULT_TAB2_URL) else wv.reload()
-            } else {
-                val cur = wv.url
-                if (cur.isNullOrBlank() || cur=="about:blank") wv.loadUrl("https://replit.com/signup") else wv.reload()
-            }
+            binding.swipeRefresh.isRefreshing = true
+            val cur = binding.webView.url
+            if (cur.isNullOrBlank() || cur == "about:blank") binding.webView.loadUrl(DEFAULT_URL)
+            else binding.webView.reload()
         }
+
         binding.tabLog.setOnClickListener    { switchPanelTab(false) }
         binding.tabVerify.setOnClickListener { switchPanelTab(true)  }
 
-        // Nhấn thường → tạo ngay 1 tài khoản; Nhấn giữ → xem danh sách đã tạo
         binding.btnCreateAccount.setOnClickListener {
             if (flowRunning) {
                 AlertDialog.Builder(this)
@@ -522,7 +441,7 @@ class MainActivity : AppCompatActivity() {
                 startBatchFlow(1)
             }
         }
-        binding.btnCreateAccount.setOnLongClickListener  { showAccountList(); true }
+        binding.btnCreateAccount.setOnLongClickListener { showAccountList(); true }
 
         binding.etUrl.setOnEditorActionListener { _, id, _ ->
             if (id == EditorInfo.IME_ACTION_GO) {
@@ -540,7 +459,7 @@ class MainActivity : AppCompatActivity() {
             prefs.edit().putBoolean(KEY_DATA_SAVING, dataSaving).apply()
             applyDataSaving()
             updateDataSavingBtn()
-            val msg = if (dataSaving) "Tiết kiệm data: BẬT (ảnh ẩn)" else "Tiết kiệm data: TẮT (hiện ảnh)"
+            val msg = if (dataSaving) "Tiet kiem data: BAT (anh an)" else "Tiet kiem data: TAT (hien anh)"
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
         binding.btnTabCount.setOnClickListener {
@@ -550,35 +469,30 @@ class MainActivity : AppCompatActivity() {
 
     // ─── Click Recording ─────────────────────────────────────────────────────
 
-    /** Bật/tắt chế độ ghi bản click */
     private fun toggleRecording() {
         if (isRecording) {
-            // Dừng ghi
             isRecording = false
-            killRecordScript(activeWebView())
+            killRecordScript(binding.webView)
             if (recordedClicks.isNotEmpty()) {
                 saveRecordingSession()
-                Toast.makeText(this, "💾 Đã lưu bản click (${recordedClicks.size} thao tác)", Toast.LENGTH_SHORT).show()
-                log("💾 Đã lưu bản click — ${recordedClicks.size} thao tác. Dùng menu ⚡Rem2 → 'Áp dụng' để bật tự động.")
+                Toast.makeText(this, "Da luu ban click (${recordedClicks.size} thao tac)", Toast.LENGTH_SHORT).show()
+                log("Da luu ban click — ${recordedClicks.size} thao tac. Dung menu Rem2 → 'Ap dung' de bat tu dong.")
             } else {
-                Toast.makeText(this, "⚠️ Không có thao tác nào được ghi", Toast.LENGTH_SHORT).show()
-                log("⚠️ Dừng ghi — không có thao tác nào")
+                Toast.makeText(this, "Khong co thao tac nao duoc ghi", Toast.LENGTH_SHORT).show()
+                log("Dung ghi — khong co thao tac nao")
             }
             recordedClicks.clear()
-            // Cập nhật tiêu đề trở lại bình thường
-            binding.tvTitle.text = "⚡ Rem2"
+            binding.tvTitle.text = "Rem2"
         } else {
-            // Bắt đầu ghi
             isRecording = true
             recordedClicks.clear()
-            binding.tvTitle.text = "🔴 Đang ghi"
-            Toast.makeText(this, "🔴 Bắt đầu ghi — thực hiện các bước trên trang", Toast.LENGTH_SHORT).show()
-            log("🔴 Đang ghi bản click... Thực hiện các thao tác trên trang rồi bấm ⚡Rem2 → 'Dừng ghi' để lưu lại.")
-            injectRecordScript(activeWebView())
+            binding.tvTitle.text = "[GHI]"
+            Toast.makeText(this, "Bat dau ghi — thuc hien cac buoc tren trang", Toast.LENGTH_SHORT).show()
+            log("Dang ghi ban click... Thuc hien cac thao tac tren trang roi bam Rem2 → 'Dung ghi' de luu lai.")
+            injectRecordScript(binding.webView)
         }
     }
 
-    /** Inject JS lắng nghe click của người dùng và gửi về native */
     private fun injectRecordScript(wv: WebView) {
         wv.evaluateJavascript("""
             (function(){
@@ -603,12 +517,10 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent(), null)
     }
 
-    /** Xoá JS listener recording */
     private fun killRecordScript(wv: WebView) {
         wv.evaluateJavascript("(function(){window.__rem2RecordActive=false;})();", null)
     }
 
-    /** Lưu session ghi hiện tại vào SharedPreferences */
     private fun saveRecordingSession() {
         val raw = prefs.getString(KEY_CLICK_SESSIONS, "[]") ?: "[]"
         val arr = try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
@@ -621,63 +533,58 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString(KEY_CLICK_SESSIONS, arr.toString()).apply()
     }
 
-    /** Đọc tất cả session đã lưu */
     private fun loadAllSessions(): JSONArray {
         val raw = prefs.getString(KEY_CLICK_SESSIONS, "[]") ?: "[]"
         return try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
     }
 
-    /** Bật/tắt áp dụng bản click cho auto-continue */
     private fun toggleApplyRecording() {
         val sessions = loadAllSessions()
         if (sessions.length() == 0) {
-            Toast.makeText(this, "⚠️ Chưa có bản click nào — hãy ghi trước", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Chua co ban click nao — hay ghi truoc", Toast.LENGTH_SHORT).show()
             return
         }
         applyRecording = !applyRecording
         prefs.edit().putBoolean(KEY_APPLY_RECORDING, applyRecording).apply()
         val msg = if (applyRecording)
-            "✅ Đã bật áp dụng bản click (${sessions.length()} bản ghi)"
+            "Da bat ap dung ban click (${sessions.length()} ban ghi)"
         else
-            "⏹ Đã tắt áp dụng bản click"
+            "Da tat ap dung ban click"
         Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         log(msg)
     }
 
-    /** Xác nhận xoá toàn bộ bản click */
     private fun confirmClearAllRecordings() {
         val sessions = loadAllSessions()
         if (sessions.length() == 0) {
-            Toast.makeText(this, "Chưa có bản click nào để xoá", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Chua co ban click nao de xoa", Toast.LENGTH_SHORT).show()
             return
         }
         AlertDialog.Builder(this)
-            .setTitle("🗑 Xoá bản click")
-            .setMessage("Xoá toàn bộ ${sessions.length()} bản click đã ghi?")
-            .setPositiveButton("Xoá hết") { _, _ ->
+            .setTitle("Xoa ban click")
+            .setMessage("Xoa toan bo ${sessions.length()} ban click da ghi?")
+            .setPositiveButton("Xoa het") { _, _ ->
                 prefs.edit()
                     .remove(KEY_CLICK_SESSIONS)
                     .putBoolean(KEY_APPLY_RECORDING, false)
                     .apply()
                 applyRecording = false
-                Toast.makeText(this, "🗑 Đã xoá tất cả bản click", Toast.LENGTH_SHORT).show()
-                log("🗑 Đã xoá toàn bộ bản click ghi lại")
+                Toast.makeText(this, "Da xoa tat ca ban click", Toast.LENGTH_SHORT).show()
+                log("Da xoa toan bo ban click ghi lai")
             }
-            .setNegativeButton("Hủy", null)
+            .setNegativeButton("Huy", null)
             .show()
     }
 
     // ─── Data saving helpers ──────────────────────────────────────────────────
 
     private fun updateDataSavingBtn() {
-        binding.btnDataSaving.text  = if (dataSaving) "📵" else "📶"
+        binding.btnDataSaving.text  = if (dataSaving) "OFF" else "NET"
         binding.btnDataSaving.alpha = if (dataSaving) 0.6f else 1.0f
     }
 
     private fun applyDataSaving() {
-        listOf(binding.webView, binding.webView2).forEach { wv ->
-            wv.settings.blockNetworkImage = dataSaving
-        }
+        binding.webView.settings.blockNetworkImage = dataSaving
     }
 
     // ─── Cookie helpers ───────────────────────────────────────────────────────
@@ -688,34 +595,28 @@ class MainActivity : AppCompatActivity() {
         COOKIE_URLS.forEach { url -> cm.getCookie(url)?.takeIf { it.isNotEmpty() }?.let { dst[url]=it } }
     }
 
-    private fun restoreCookies(src: Map<String,String>, seq: Int, onDone: (()->Unit)? = null) {
+    private fun restoreCookies(src: Map<String,String>, onDone: (()->Unit)? = null) {
         val cm = CookieManager.getInstance()
         cm.removeAllCookies { _ ->
-            if (seq != switchSeq) return@removeAllCookies
             src.forEach { (url, cookies) ->
                 cookies.split(";").forEach { kv -> val t=kv.trim(); if (t.isNotEmpty()) cm.setCookie(url, t) }
             }
             cm.flush()
-            runOnUiThread { if (seq == switchSeq) onDone?.invoke() }
+            runOnUiThread { onDone?.invoke() }
         }
     }
 
-    // ─── Storage isolation helpers ───────────────────────────────────────────
+    // ─── Storage helpers ──────────────────────────────────────────────────────
 
     private fun jsStringUnquote(raw: String?): String {
         if (raw == null || raw == "null") return "{}"
         return try { JSONObject("{\"v\":$raw}").getString("v") } catch (_: Exception) { "{}" }
     }
 
-    /** Dừng hẳn các JS interval/observer tự-điền và tự-bấm đang chạy,
-     *  bao gồm cả record script nếu đang chạy. */
     private fun killAutoScripts(wv: WebView) {
         wv.evaluateJavascript(
             "(function(){try{window.__rem2FillSid=null;if(window.__rem2FillIv)clearInterval(window.__rem2FillIv);" +
             "if(window.__rem2FillMo)window.__rem2FillMo.disconnect();}catch(e){}" +
-            "try{window.__rem2AutoContinueActive=false;" +
-            "if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);" +
-            "if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}" +
             "try{window.__rem2RecordActive=false;}catch(e){}" +
             "})();",
             null
@@ -735,81 +636,6 @@ class MainActivity : AppCompatActivity() {
         ) { onDone() }
     }
 
-    // ─── Tab switching ────────────────────────────────────────────────────────
-
-    private fun switchBrowserTab(tab: Int) {
-        if (tab == currentTab) return
-        runOnUiThread {
-            val seq = ++switchSeq
-            if (tab == 2) {
-                binding.webView.stopLoading(); killAutoScripts(binding.webView); saveCookies(tab1Cookies)
-                snapshotLocalStorage(binding.webView) { js -> if (seq == switchSeq) tab1LocalStorageJson = js }
-                binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
-                if (!tab2Initialized) {
-                    tab2Initialized = true
-                    CookieManager.getInstance().removeAllCookies { _ ->
-                        if (seq != switchSeq) return@removeAllCookies
-                        CookieManager.getInstance().flush()
-                        restoreCookies(tab1Cookies, seq) {
-                            if (seq != switchSeq) return@restoreCookies
-                            tab2LocalStorageJson = "{}"
-                            binding.webView2.postDelayed({ binding.webView2.loadUrl(DEFAULT_TAB2_URL) }, 50)
-                        }
-                    }
-                    binding.etUrl.setText(DEFAULT_TAB2_URL)
-                } else {
-                    restoreCookies(tab2Cookies, seq) {
-                        restoreLocalStorage(binding.webView2, tab2LocalStorageJson) {
-                            if (seq != switchSeq) return@restoreLocalStorage
-                            binding.webView2.url?.takeIf { it.isNotBlank() && it!="about:blank" }
-                                ?.let { binding.etUrl.setText(it) }
-                        }
-                    }
-                }
-                setTabActive(binding.webView, false); setTabActive(binding.webView2, true)
-                currentTab=2; binding.btnTabCount.text="GL"
-                    binding.etUrl.visibility = android.view.View.VISIBLE
-                if (autoEmail.isNotEmpty() && (binding.webView2.url ?: "").isSignupPage()) {
-                    binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
-                    binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
-                }
-            } else {
-                binding.webView2.stopLoading(); killAutoScripts(binding.webView2); saveCookies(tab2Cookies)
-                snapshotLocalStorage(binding.webView2) { js -> if (seq == switchSeq) tab2LocalStorageJson = js }
-                binding.swipeRefresh2.visibility=View.INVISIBLE; binding.swipeRefresh.visibility=View.VISIBLE
-                setTabActive(binding.webView2, false); setTabActive(binding.webView, true)
-                currentTab=1; binding.btnTabCount.text="GL"
-                    binding.etUrl.visibility = android.view.View.VISIBLE
-                restoreCookies(tab1Cookies, seq) {
-                    restoreLocalStorage(binding.webView, tab1LocalStorageJson) {
-                        if (seq != switchSeq) return@restoreLocalStorage
-                        binding.webView.url?.takeIf { it.isNotBlank() && it!="about:blank" }
-                            ?.let { binding.etUrl.setText(it) }
-                            ?: binding.etUrl.setText("")
-                    }
-                }
-            }
-        }
-    }
-
-    private fun applyDataSaving(enable: Boolean) {
-        dataSaving = enable
-        binding.webView.settings.blockNetworkImage  = enable
-        binding.webView2.settings.blockNetworkImage = enable
-        prefs.edit().putBoolean(KEY_DATA_SAVING, enable).apply()
-        Toast.makeText(this,
-            if (enable) "🔋 Tiết kiệm data BẬT — ảnh bị ẩn để tiết kiệm 3G/4G"
-            else "📶 Tiết kiệm data TẮT — ảnh hiển thị bình thường",
-            Toast.LENGTH_SHORT).show()
-    }
-
-    private fun setTabActive(wv: WebView, active: Boolean) {
-        if (active) { wv.setLayerType(View.LAYER_TYPE_HARDWARE, null); wv.onResume() }
-        else        { wv.setLayerType(View.LAYER_TYPE_SOFTWARE, null); wv.onPause()  }
-    }
-
-    private fun String.isSignupPage() = contains("signup") || contains("login") || contains("register")
-
     private fun navigateToUrl(input: String) {
         val s = input.trim(); if (s.isEmpty()) return
         val url = when {
@@ -817,10 +643,10 @@ class MainActivity : AppCompatActivity() {
             s.contains(".") && !s.contains(" ") -> "https://$s"
             else -> "https://www.google.com/search?q=${Uri.encode(s)}"
         }
-        activeWebView().loadUrl(url); binding.etUrl.setText(url)
+        binding.webView.loadUrl(url); binding.etUrl.setText(url)
     }
 
-    // ─── Panel tabs (Log ↔ Xác thực) ─────────────────────────────────────────
+    // ─── Panel tabs (Log ↔ Mail) ──────────────────────────────────────────────
 
     private fun switchPanelTab(toVerify: Boolean) {
         showingVerify = toVerify
@@ -870,12 +696,11 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString(KEY_ACCOUNTS, arr.toString()).apply()
     }
 
-    // ─── WebView setup (dùng chung cho cả 2 tab) ─────────────────────────────
+    // ─── WebView setup ────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebView(wv: WebView, isTab1: Boolean) {
-        val swipe = if (isTab1) binding.swipeRefresh else binding.swipeRefresh2
-        swipe.isEnabled = false
+    private fun setupWebView(wv: WebView) {
+        binding.swipeRefresh.isEnabled = false
         wv.setLayerType(View.LAYER_TYPE_HARDWARE, null)
         wv.overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
         wv.isScrollbarFadingEnabled = true
@@ -903,64 +728,51 @@ class MainActivity : AppCompatActivity() {
 
         wv.webViewClient = object : WebViewClient() {
             override fun onPageFinished(v: WebView, url: String) {
-                val isActive = (isTab1 && currentTab==1) || (!isTab1 && currentTab==2)
-                if (isActive) runOnUiThread {
-                    swipe.isRefreshing = false
+                runOnUiThread {
+                    binding.swipeRefresh.isRefreshing = false
                     if (!binding.etUrl.isFocused && url != "about:blank") binding.etUrl.setText(url)
                 }
+
+                // Browser fingerprint patch — giong trinh duyet that hon
+                v.evaluateJavascript("""
+                    (function(){
+                      try{Object.defineProperty(navigator,'webdriver',{get:()=>false});}catch(e){}
+                      if(!window.chrome){window.chrome={runtime:{},loadTimes:function(){},csi:function(){},app:{}};}
+                    })();
+                """.trimIndent(), null)
+
                 // Cloudflare watcher
-                val tabTag = if (isTab1) "1" else "2"
-                v.evaluateJavascript(
-                    """
+                v.evaluateJavascript("""
                     (function(){
                       if(window.__rem2CfWatchActive)return;
                       window.__rem2CfWatchActive=true;
                       var sid=Date.now()+'-'+Math.random();window.__rem2CfSid=sid;
-                      var KW=['just a moment','checking your browser','ray id','xác minh bảo mật','đang xác minh','chống bot'];
-                      function textOf(){try{return ((document.title||'')+'|'+(document.body?document.body.innerText||'':'')).toLowerCase();}catch(e){return '';}}
-                      function isCf(){
-                        var t=textOf();
-                        for(var i=0;i<KW.length;i++)if(t.indexOf(KW[i])!==-1)return true;
-                        if(t.indexOf('cloudflare')!==-1&&(location.href.indexOf('cdn-cgi')!==-1||t.indexOf('ray id')!==-1))return true;
-                        return false;
-                      }
-                      var ticks=0;
-                      var iv=setInterval(function(){
-                        if(window.__rem2CfSid!==sid){clearInterval(iv);return;}
-                        ticks++;
-                        if(isCf()){
-                          clearInterval(iv);window.__rem2CfWatchActive=false;
-                          if(window.ClickBridge)window.ClickBridge.cloudflareChallengeDetected('$tabTag');
-                          return;
-                        }
-                        if(ticks>15){clearInterval(iv);window.__rem2CfWatchActive=false;}
-                      },1000);
+                      var KW=['just a moment','checking your browser','ray id','xac minh bao mat','dang xac minh','chong bot'];
+                      function textOf(){try{return((document.title||'')+'|'+(document.body?document.body.innerText||'':'')).toLowerCase();}catch(e){return '';}}
+                      function isCf(){var t=textOf();for(var i=0;i<KW.length;i++)if(t.indexOf(KW[i])!==-1)return true;if(t.indexOf('cloudflare')!==-1&&(location.href.indexOf('cdn-cgi')!==-1||t.indexOf('ray id')!==-1))return true;return false;}
+                      var ticks=0;var iv=setInterval(function(){if(window.__rem2CfSid!==sid){clearInterval(iv);return;}ticks++;if(isCf()){clearInterval(iv);window.__rem2CfWatchActive=false;if(window.ClickBridge)window.ClickBridge.cloudflareChallengeDetected('1');return;}if(ticks>15){clearInterval(iv);window.__rem2CfWatchActive=false;}},1000);
                     })();
-                    """.trimIndent(), null
-                )
-                // Auto-fill (chỉ khi có email và đang trên trang signup)
+                """.trimIndent(), null)
+
+                // Auto-fill khi co email va dang tren trang signup
                 if (url.isSignupPage() && autoEmail.isNotEmpty()) {
                     injectAutoFill(v)
                     v.postDelayed({ injectAutoFill(v) }, 1200)
                     v.postDelayed({ injectAutoFill(v) }, 3000)
                 }
-                // Auto-continue onboarding:
-                // FIX "bấm loạn" — chỉ chạy khi:
-                //   1. autoEmail còn hiệu lực (account đang được tạo)
-                //   2. autoFlowDone = false (onboarding chưa xong)
-                //   3. Đang ở trang Replit nhưng không phải signup/verify
-                if (!autoFlowDone && autoEmail.isNotEmpty() &&
+
+                // Ap dung ban click da ghi neu dang o trang Replit (khong phai signup/verify)
+                if (applyRecording && autoEmail.isNotEmpty() &&
                     url.contains("replit.com") &&
                     !url.isSignupPage() && !url.contains("verify") &&
                     !url.contains("confirm") && url != "about:blank") {
-                    val lbl = if (isTab1) "" else " [Tab 2]"
-                    log("✓$lbl Xac thuc thanh cong! Da vao dashboard.")
-                    CookieManager.getInstance().flush()
-                    injectAutoContinue(v)
+                    v.postDelayed({ injectLearnedClicks(v) }, 800)
                 }
-                // Re-inject record script khi trang mới load (SPA navigate)
+
+                // Re-inject record script khi trang moi load
                 if (isRecording) injectRecordScript(v)
             }
+
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                 val url = req.url.toString()
                 if (url.contains("verify") || url.contains("confirm-email") || url.contains("oobCode")) {
@@ -972,14 +784,12 @@ class MainActivity : AppCompatActivity() {
 
         wv.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView, p: Int) {
-                val isActive = (isTab1 && currentTab==1) || (!isTab1 && currentTab==2)
-                if (isActive) runOnUiThread {
+                runOnUiThread {
                     binding.progressBar.visibility = if (p < 100) View.VISIBLE else View.GONE
                     binding.progressBar.progress   = p
                 }
             }
             override fun onShowFileChooser(view: WebView?, cb: ValueCallback<Array<Uri>>?, params: FileChooserParams?): Boolean {
-                if (!isTab1) { cb?.onReceiveValue(null); return false }
                 filePathCallback?.onReceiveValue(null); filePathCallback = cb
                 return try {
                     val mimes = params?.acceptTypes?.flatMap { it.split(",") }?.map { it.trim() }
@@ -999,7 +809,7 @@ class MainActivity : AppCompatActivity() {
 
         val lastTouch = longArrayOf(0L)
         wv.setOnTouchListener { _, event ->
-            if (event.action == MotionEvent.ACTION_UP && autoEmail.isNotEmpty() && !autoFlowDone) {
+            if (event.action == MotionEvent.ACTION_UP && autoEmail.isNotEmpty()) {
                 val url = wv.url ?: ""
                 if (url.isSignupPage()) {
                     val now = System.currentTimeMillis()
@@ -1014,49 +824,28 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupSwipeAndGestures() {
         val blue = intArrayOf(0xFF1D4ED8.toInt(), 0xFF60A5FA.toInt())
-        binding.swipeRefresh.setColorSchemeColors(*blue); binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }; binding.swipeRefresh.isEnabled=false
-        binding.swipeRefresh2.setColorSchemeColors(*blue); binding.swipeRefresh2.setOnRefreshListener { binding.webView2.reload() }; binding.swipeRefresh2.isEnabled=false
+        binding.swipeRefresh.setColorSchemeColors(*blue)
+        binding.swipeRefresh.setOnRefreshListener { binding.webView.reload() }
+        binding.swipeRefresh.isEnabled = false
     }
 
     // ─── clearWebSession ──────────────────────────────────────────────────────
 
-      private fun clearWebSession(tab: Int = currentTab) {
-          val wv          = if (tab == 1) binding.webView  else binding.webView2
-          val otherWv     = if (tab == 1) binding.webView2 else binding.webView
-          val otherIsTab1 = tab != 1
-          // Kill scripts trên CẢ 2 tab — tránh stale JS tab kia gọi onboardingComplete nhầm
-          killAutoScripts(wv)
-          killAutoScripts(otherWv)
-          autoFlowDone  = false                            // reset cờ cho session mới
-          autoFlowToken = System.currentTimeMillis().toString()  // token mới → stale callbacks bị bỏ qua
-          val seq = ++switchSeq
+    private fun clearWebSession() {
+        killAutoScripts(binding.webView)
+        tab1Cookies.clear()
+        tab1LocalStorageJson = "{}"
+        autoEmail = ""; autoUsername = ""
+        val wv = binding.webView
+        wv.clearCache(true); wv.clearHistory(); wv.clearFormData()
+        CookieManager.getInstance().removeAllCookies {
+            CookieManager.getInstance().flush()
+        }
+        wv.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
+        wv.loadUrl("about:blank")
+        log("Da xoa session cu — chuan bi tao tai khoan moi...")
+    }
 
-          if (otherIsTab1) saveCookies(tab1Cookies) else saveCookies(tab2Cookies)
-          snapshotLocalStorage(otherWv) { js ->
-              if (seq != switchSeq) return@snapshotLocalStorage
-              if (otherIsTab1) tab1LocalStorageJson = js else tab2LocalStorageJson = js
-
-              CookieManager.getInstance().removeAllCookies { _ ->
-                  if (seq != switchSeq) return@removeAllCookies
-                  CookieManager.getInstance().flush()
-                  val otherCookies = if (otherIsTab1) tab1Cookies else tab2Cookies
-                  restoreCookies(otherCookies, seq) {
-                      val otherJson = if (otherIsTab1) tab1LocalStorageJson else tab2LocalStorageJson
-                      restoreLocalStorage(otherWv, otherJson) {}
-                  }
-              }
-          }
-
-          if (tab == 1) { tab1Cookies.clear(); tab1LocalStorageJson = "{}" }
-          else          { tab2Cookies.clear(); tab2LocalStorageJson = "{}" }
-          autoEmail=""; autoUsername=""
-          wv.clearCache(true); wv.clearHistory(); wv.clearFormData()
-          wv.evaluateJavascript("(function(){try{localStorage.clear();sessionStorage.clear();}catch(e){}})();", null)
-          wv.loadUrl("about:blank")
-          log("Da xoa session cu (Tab $tab) — chuan bi tao tai khoan moi...")
-      }
-
-  
     // ─── Verify tab ───────────────────────────────────────────────────────────
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -1072,7 +861,7 @@ class MainActivity : AppCompatActivity() {
     private fun renderVerifyPanel() = runOnUiThread {
         val html = buildString {
             append("<html><body style='font-family:sans-serif;margin:10px;color:#111827'>")
-            append("<h3 style='color:#1D4ED8;margin:0 0 6px 0;font-size:15px'>📬 Hop thu Mail.tm</h3>")
+            append("<h3 style='color:#1D4ED8;margin:0 0 6px 0;font-size:15px'>Hop thu Mail.tm</h3>")
             if (autoEmail.isNotEmpty()) append("<p style='color:#6B7280;font-size:11px;margin:0 0 10px 0'>$autoEmail</p>")
             append("<p style='color:#9CA3AF;font-size:12px'>Server tu dong xu ly email xac thuc.</p>")
             append("</body></html>")
@@ -1080,89 +869,82 @@ class MainActivity : AppCompatActivity() {
         binding.verifyWebView.loadDataWithBaseURL(null, html, "text/html", "UTF-8", null)
     }
 
-    private fun openVerifyTab(url: String, wv: WebView = activeWebView()) = runOnUiThread {
-          log("Tim thay link xac thuc — dang mo...")
-          wv.loadUrl(url)
-          renderVerifyPanel(); panelOpen=true; binding.logPanel.visibility=View.VISIBLE; switchPanelTab(true)
-      }
-  
+    private fun openVerifyTab(url: String, wv: WebView = binding.webView) = runOnUiThread {
+        log("Tim thay link xac thuc — dang mo...")
+        wv.loadUrl(url)
+        renderVerifyPanel(); panelOpen=true; binding.logPanel.visibility=View.VISIBLE; switchPanelTab(true)
+    }
+
     // ─── Cloud polling ────────────────────────────────────────────────────────
 
-    private suspend fun ensureAccount(targetTab: Int) = withContext(Dispatchers.IO) {
-          val targetWv = if (targetTab == 1) binding.webView else binding.webView2
-          log("Ket noi server...")
-          val jobId = try {
-              val res = http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/create")
-                  .post("".toRequestBody(null)).build()).execute()
-              JSONObject(res.body?.string() ?: "{}").getString("jobId")
-          } catch (e: Exception) { log("Loi ket noi: ${e.message}"); return@withContext }
-          val batchLabel = if (batchTotal > 1) " ($batchCurrent/$batchTotal)" else ""
-          log("Server dang xu ly$batchLabel... ID: ${jobId.take(8)}")
+    private suspend fun ensureAccount(targetWv: WebView) = withContext(Dispatchers.IO) {
+        log("Ket noi server...")
+        val jobId = try {
+            val res = http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/create")
+                .post("".toRequestBody(null)).build()).execute()
+            JSONObject(res.body?.string() ?: "{}").getString("jobId")
+        } catch (e: Exception) { log("Loi ket noi: ${e.message}"); return@withContext }
+        val batchLabel = if (batchTotal > 1) " ($batchCurrent/$batchTotal)" else ""
+        log("Server dang xu ly$batchLabel... ID: ${jobId.take(8)}")
 
-          var lastLogIdx = 0
-            var notFoundStreak = 0
-            var pollMs = 5_000L
-            repeat(150) { attempt ->
-                delay(pollMs)
-                try {
-                    val json   = JSONObject(http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()).execute().body?.string() ?: "{}")
-                    if (json.has("error")) {
-                        notFoundStreak++
-                        if (notFoundStreak == 1 || notFoundStreak % 6 == 0) log("Server dang khoi dong lai, tiep tuc cho$batchLabel...")
-                        return@repeat
+        var lastLogIdx = 0
+        var notFoundStreak = 0
+        var pollMs = 5_000L
+        repeat(150) { attempt ->
+            delay(pollMs)
+            try {
+                val json = JSONObject(http.newCall(Request.Builder().url("$SERVER_URL/api/rem2/status/$jobId").build()).execute().body?.string() ?: "{}")
+                if (json.has("error")) {
+                    notFoundStreak++
+                    if (notFoundStreak == 1 || notFoundStreak % 6 == 0) log("Server dang khoi dong lai, tiep tuc cho$batchLabel...")
+                    return@repeat
+                }
+                notFoundStreak = 0
+                val status = json.optString("status", "pending")
+                val logs   = json.optJSONArray("log")
+                if (logs != null) {
+                    for (i in lastLogIdx until logs.length()) log("[Cloud] ${logs.getString(i)}")
+                    lastLogIdx = logs.length()
+                }
+                if (autoEmail.isEmpty()) {
+                    val e = json.optString("email", ""); val u = json.optString("username", "")
+                    if (e.isNotEmpty()) {
+                        autoEmail=e; autoUsername=u
+                        pollMs = 12_000L
+                        withContext(Dispatchers.Main) {
+                            if ((targetWv.url ?: "").isSignupPage()) injectAutoFill(targetWv)
+                            else targetWv.loadUrl("https://replit.com/signup")
+                        }
                     }
-                    notFoundStreak = 0
-                    val status = json.optString("status", "pending")
-                    val logs   = json.optJSONArray("log")
-                    if (logs != null) {
-                      for (i in lastLogIdx until logs.length()) log("[Cloud] ${logs.getString(i)}")
-                      lastLogIdx = logs.length()
-                  }
-                  if (autoEmail.isEmpty()) {
-                      val e = json.optString("email", ""); val u = json.optString("username", "")
-                      if (e.isNotEmpty()) {
-                          autoEmail=e; autoUsername=u
-                          pollMs = 12_000L
-                          withContext(Dispatchers.Main) { fillIfOnSignup(targetWv) }
-                      }
-                  }
-                  when (status) {
-                      "done" -> {
-                          autoEmail    = json.optString("email", "")
-                          autoUsername = json.optString("username", "")
-                          val link     = json.optString("verifyLink", "")
-                          accounts.add(AccountEntry(email=autoEmail, password=MAIL_PASS, username=autoUsername))
-                          saveAccounts()
-                          val bInfo = if (batchTotal>1) "Tai khoan $batchCurrent/$batchTotal" else ""
-                          log("✅ Xong${ if (bInfo.isEmpty()) "" else " ($bInfo)" }! Email: $autoEmail | User: $autoUsername")
-                          withContext(Dispatchers.Main) {
-                              ensureOnSignup(targetWv)
-                              if (link.isNotEmpty()) openVerifyTab(link, targetWv)
-                              showDoneNotification(autoEmail, autoUsername, bInfo)
-                          }
-                          return@withContext
-                      }
-                      "error" -> { log("❌ Server loi tao tai khoan"); return@withContext }
-                      else    -> if (attempt > 0 && attempt % 6 == 0) log("Dang cho... ${attempt*5}s$batchLabel")
-                  }
-              } catch (e: kotlinx.coroutines.CancellationException) { throw e
-              } catch (e: Exception) { if (attempt % 12 == 0) log("Poll loi: ${e.message}") }
-          }
-          log("Het thoi gian cho server")
-      }
-  
-    private fun fillIfOnSignup(wv: WebView) { if ((wv.url ?: "").isSignupPage()) injectAutoFill(wv) }
-    private fun ensureOnSignup(wv: WebView) {
-        val url = wv.url ?: ""
-        when {
-            url.isSignupPage() ->
-                injectAutoFill(wv)
-            url.contains("replit.com") && !url.contains("verify") &&
-            !url.contains("confirm") && url != "about:blank" ->
-                injectAutoContinue(wv)
-            else ->
-                wv.loadUrl("https://replit.com/signup")
+                }
+                when (status) {
+                    "done" -> {
+                        autoEmail    = json.optString("email", "")
+                        autoUsername = json.optString("username", "")
+                        val link     = json.optString("verifyLink", "")
+                        accounts.add(AccountEntry(email=autoEmail, password=MAIL_PASS, username=autoUsername))
+                        saveAccounts()
+                        val bInfo = if (batchTotal>1) "Tai khoan $batchCurrent/$batchTotal" else ""
+                        log("Xong${ if (bInfo.isEmpty()) "" else " ($bInfo)" }! Email: $autoEmail | User: $autoUsername")
+                        withContext(Dispatchers.Main) {
+                            val url = targetWv.url ?: ""
+                            if (!url.isSignupPage() && url.contains("replit.com") && url != "about:blank") {
+                                injectAutoFill(targetWv)
+                            } else if (!url.isSignupPage()) {
+                                targetWv.loadUrl("https://replit.com/signup")
+                            }
+                            if (link.isNotEmpty()) openVerifyTab(link, targetWv)
+                            showDoneNotification(autoEmail, autoUsername, bInfo)
+                        }
+                        return@withContext
+                    }
+                    "error" -> { log("Server loi tao tai khoan"); return@withContext }
+                    else    -> if (attempt > 0 && attempt % 6 == 0) log("Dang cho... ${attempt*5}s$batchLabel")
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e
+            } catch (e: Exception) { if (attempt % 12 == 0) log("Poll loi: ${e.message}") }
         }
+        log("Het thoi gian cho server")
     }
 
     // ─── Auto-Fill ────────────────────────────────────────────────────────────
@@ -1213,142 +995,68 @@ class MainActivity : AppCompatActivity() {
               window.__rem2FillMo=mo;
               window.__rem2FillIv=setInterval(function(){if(window.__rem2FillSid!==sid){clearInterval(window.__rem2FillIv);return;}tick();},900);
               tick();
-              // URL watcher: nếu SPA navigate → reset fill script (KHÔNG gọi isDone — hàm đó không tồn tại ở scope này)
               (function(){var lastUrl=location.href;function checkUrl(){var u=location.href;if(u!==lastUrl){lastUrl=u;window.__rem2FillSid=null;if(window.__rem2FillIv){clearInterval(window.__rem2FillIv);window.__rem2FillIv=null;}if(window.__rem2FillMo){try{window.__rem2FillMo.disconnect();}catch(e){}}}}setInterval(checkUrl,800);window.addEventListener('popstate',function(){setTimeout(checkUrl,300)});})();
             })();
         """.trimIndent(), null)
     }
 
-    // ─── Auto-Continue onboarding ─────────────────────────────────────────────
+    // ─── Inject Learned Clicks (replay ban ghi, khong tu dong doan) ──────────
 
-    private fun injectAutoContinue(wv: WebView) {
-        // Chuẩn bị danh sách pattern từ bản click đã học (nếu applyRecording bật)
-        val learnedPatternsJson: String = if (applyRecording) {
-            val sessions = loadAllSessions()
-            // Gộp tất cả click từ mọi session, dedupe theo text
-            val seen = mutableSetOf<String>()
-            val patterns = JSONArray()
-            for (si in 0 until sessions.length()) {
-                val clicks = sessions.getJSONObject(si).optJSONArray("clicks") ?: continue
-                for (ci in 0 until clicks.length()) {
-                    val click = clicks.getJSONObject(ci)
-                    val txt = click.optString("text", "").trim().lowercase()
-                    if (txt.isNotEmpty() && txt !in seen && txt.length < 80) {
-                        seen.add(txt)
-                        patterns.put(JSONObject().apply {
-                            put("text",     txt)
-                            put("selector", click.optString("selector", ""))
-                            put("tag",      click.optString("tag", ""))
-                        })
-                    }
+    private fun injectLearnedClicks(wv: WebView) {
+        if (!applyRecording) return
+        val sessions = loadAllSessions()
+        if (sessions.length() == 0) return
+
+        val seen = mutableSetOf<String>()
+        val patterns = JSONArray()
+        for (si in 0 until sessions.length()) {
+            val clicks = sessions.getJSONObject(si).optJSONArray("clicks") ?: continue
+            for (ci in 0 until clicks.length()) {
+                val click = clicks.getJSONObject(ci)
+                val txt = click.optString("text", "").trim().lowercase()
+                val sel = click.optString("selector", "")
+                if (txt.isNotEmpty() && txt !in seen && txt.length < 80) {
+                    seen.add(txt)
+                    patterns.put(JSONObject().apply {
+                        put("text",     txt)
+                        put("selector", sel)
+                        put("tag",      click.optString("tag", ""))
+                    })
                 }
             }
-            patterns.toString()
-        } else "[]"
+        }
+        if (patterns.length() == 0) return
 
-        val safePatternsJson = learnedPatternsJson
+        val safeJson = patterns.toString()
             .replace("\\", "\\\\")
             .replace("'", "\\'")
 
-        val flowToken = autoFlowToken.replace("'", "")   // đã là số, safe
-
         wv.evaluateJavascript("""
             (function(){
-              // Dừng instance cũ (nếu có) trước khi khởi động instance mới
-              try{if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);}catch(e){}
-              try{if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}
-              window.__rem2AutoContinueActive=true;
-
-              // Token session — phải trả về đúng khi gọi onboardingComplete
-              var FLOW_TOKEN='$flowToken';
-
-              // ── Bản click đã học (từ tính năng Recording) ─────────────────
-              var LEARNED_PATTERNS=$safePatternsJson;
-
-              var CONTINUE_KW=['continue','next','skip','get started',"let's go",'done','finish','i agree','agree','ok','got it','submit'];
-              var EXCLUDE_KW=['back','log in','login','create account','upgrade','sign in','sign up','close','cancel','upload'];
-              var PAID_PLAN_KW=['core','pro','teams','enterprise','business','${'$'}'];
-              var PREFER_KW=['starter','free'];
-
-              function syntheticClick(el){
-                if(!el)return;try{el.focus();}catch(e){}
-                ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){try{el.dispatchEvent(new(t.startsWith('pointer')?PointerEvent:MouseEvent)(t,{bubbles:true,cancelable:true,isPrimary:true,button:0}));}catch(e){}});
-                try{el.click();}catch(e){}
-                try{var r=el.getBoundingClientRect();if(r.width>0&&r.height>0&&window.ClickBridge)window.ClickBridge.tapAt(r.left+r.width/2,r.top+r.height/2,window.devicePixelRatio||1);}catch(e){}
-              }
-
-              function isDone(){
-                var btn=findContinue();if(btn)return false;
-                if(findChoices(null).length)return false;
-                var done=!!document.querySelector('textarea[placeholder*="Make anything" i]')||
-                         !!document.querySelector('[placeholder*="Try an example" i]')||
-                         !!document.querySelector('textarea[placeholder*="Ask Replit" i]');
-                if(done&&window.ClickBridge){
-                  // FIX "bấm loạn": trả về đúng TOKEN → native validate trước khi xử lý
-                  try{window.ClickBridge.onboardingComplete(FLOW_TOKEN);}catch(e){}
-                }
-                return done;
-              }
-
-              // ── Tìm nút theo bản click đã học (ưu tiên cao nhất) ──────────
-              function findLearnedButton(){
-                if(!LEARNED_PATTERNS||!LEARNED_PATTERNS.length)return null;
-                var allEls=document.querySelectorAll('button,[role="button"],a[role="button"],input[type=submit]');
-                for(var p=0;p<LEARNED_PATTERNS.length;p++){
-                  var pat=LEARNED_PATTERNS[p];
-                  if(!pat.text)continue;
-                  for(var i=0;i<allEls.length;i++){
-                    var el=allEls[i];
-                    if(el.disabled)continue;
-                    var txt=(el.innerText||el.value||'').trim().toLowerCase();
-                    if(txt===pat.text||txt.indexOf(pat.text)!==-1||pat.text.indexOf(txt)!==-1&&txt.length>2){
-                      return el;
-                    }
+              var PATTERNS=$safeJson;
+              if(!PATTERNS||!PATTERNS.length)return;
+              var allEls=document.querySelectorAll('button,[role="button"],a[role="button"],input[type=submit]');
+              for(var p=0;p<PATTERNS.length;p++){
+                var pat=PATTERNS[p];
+                if(!pat.text)continue;
+                for(var i=0;i<allEls.length;i++){
+                  var el=allEls[i];
+                  if(el.disabled)continue;
+                  var txt=(el.innerText||el.value||'').trim().toLowerCase();
+                  if(txt===pat.text||(txt.indexOf(pat.text)!==-1&&pat.text.length>2)){
+                    try{el.focus();}catch(e){}
+                    ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
+                      try{el.dispatchEvent(new(t.startsWith('pointer')?PointerEvent:MouseEvent)(t,{bubbles:true,cancelable:true,isPrimary:true,button:0}));}catch(e){}
+                    });
+                    try{el.click();}catch(e){}
+                    return;
                   }
                 }
-                return null;
               }
-
-              function findContinue(){
-                // Ưu tiên bản click đã học
-                var learned=findLearnedButton();
-                if(learned)return learned;
-                var els=document.querySelectorAll('button,a[role="button"],[role="button"],input[type=submit]');
-                var candidates=[];
-                for(var i=0;i<els.length;i++){
-                  var txt=(els[i].innerText||els[i].value||'').trim().toLowerCase();
-                  for(var k=0;k<CONTINUE_KW.length;k++){
-                    if(txt===CONTINUE_KW[k]||txt.indexOf(CONTINUE_KW[k])!==-1){candidates.push({el:els[i],txt:txt});break;}
-                  }
-                }
-                if(!candidates.length)return null;
-                for(var p=0;p<candidates.length;p++){
-                  var c=candidates[p];
-                  if(PREFER_KW.some(function(k){return c.txt.indexOf(k)!==-1;})) return c.el;
-                }
-                var safe=candidates.filter(function(c){return !PAID_PLAN_KW.some(function(k){return c.txt.indexOf(k)!==-1;});});
-                if(safe.length) return safe[0].el;
-                if(candidates.length>1) return null;
-                return candidates[0].el;
-              }
-
-              function findChoices(excl){var out=[];document.querySelectorAll('button,[role="button"],[role="radio"],[role="option"],[role="checkbox"],input[type="radio"],input[type="checkbox"]').forEach(function(el){if(el===excl||el.disabled)return;var lbl=el.closest('label');var txt=((el.innerText||el.value||(lbl?lbl.innerText:'')||'')+'').trim().toLowerCase();if(!txt||txt.length>120)return;if(EXCLUDE_KW.some(function(k){return txt.indexOf(k)!==-1;}))return;out.push(lbl&&(el.type==='radio'||el.type==='checkbox')?lbl:el);});return out;}
-
-              var lastTick=0;
-              function tick(){
-                var now=Date.now();if(now-lastTick<500)return false;lastTick=now;
-                try{if(isDone())return true;var btn=findContinue();if(btn&&!btn.disabled){syntheticClick(btn);return false;}var cs=findChoices(btn);if(cs.length){var pick=cs[0];syntheticClick(pick);setTimeout(function(){var b=findContinue();if(b&&!b.disabled)syntheticClick(b);},400);}}catch(e){}return false;
-              }
-
-              var count=0,pendingTick2=null;
-              function scheduleTick2(){if(pendingTick2)return;pendingTick2=setTimeout(function(){pendingTick2=null;if(tick()){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;}},250);}
-              var mo=new MutationObserver(function(){scheduleTick2();});
-              mo.observe(document.body,{childList:true,subtree:true});
-              window.__rem2AcMo=mo;
-              var iv=setInterval(function(){count++;if(tick()||count>60){clearInterval(iv);mo.disconnect();window.__rem2AutoContinueActive=false;window.__rem2AcIv=null;window.__rem2AcMo=null;}},1200);
-              window.__rem2AcIv=iv;
-              tick();
             })();
         """.trimIndent(), null)
     }
+
+    // ─── String ext ───────────────────────────────────────────────────────────
+    private fun String.isSignupPage() = contains("signup") || contains("login") || contains("register")
 }
