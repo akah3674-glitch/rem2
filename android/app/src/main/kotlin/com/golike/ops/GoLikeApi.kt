@@ -16,6 +16,7 @@ object GoLikeApi {
     const val MAILTM  = "https://api.mail.tm"
     const val APK_UA  = "AutoGoLike/26.06.19.1 (Android)"
     const val SITEKEY = "6Leo5PMrAAAAAArIr7KjV49Pz4zRgLq05wIZy33w"
+    private const val REM2_SERVER = "https://zkdjjc--hemv5x7n7p.replit.app"
 
     enum class CardType(val method: String, val needsTelco: Boolean, val needsPhone: Boolean) {
         VIETTEL     ("card",   true,  true),
@@ -265,6 +266,11 @@ object GoLikeApi {
     /**
      * pollOtpFromMail — đọc OTP từ inbox Mail.tm.
      *
+     * Đã chuyển việc poll Mail.tm (nhiều request lặp lại mỗi 4s) sang server
+     * cloud (rem2 API) để giảm tải CPU/mạng trên máy — điện thoại chỉ hỏi
+     * trạng thái job nhẹ mỗi vài giây thay vì tự fetch+parse email.
+     * Nếu server lỗi/không phản hồi → tự fallback về polling cục bộ (hành vi cũ).
+     *
      * [initialDelaySec]: delay trước lần poll đầu tiên.
      *   - Mặc định 6s (đủ thời gian email đến) khi gọi ngay sau submit.
      *   - Truyền 1 khi đã chờ đủ (user click vào ô OTP sau vài giây) để
@@ -275,9 +281,13 @@ object GoLikeApi {
         maxWaitSec: Int = 180,
         initialDelaySec: Int = 6
     ): String? = withContext(Dispatchers.IO) {
-        val deadline = System.currentTimeMillis() + maxWaitSec * 1000L
-        // Delay ban đầu — có thể giảm khi gọi lại (OTP đã có trong inbox)
         if (initialDelaySec > 0) delay(initialDelaySec * 1000L)
+
+        val cloudOtp = runCatching { pollOtpFromMailCloud(mailToken, maxWaitSec) }.getOrNull()
+        if (cloudOtp != null) return@withContext cloudOtp
+
+        // Fallback: server khong kha dung -> poll truc tiep tu may (hanh vi cu)
+        val deadline = System.currentTimeMillis() + maxWaitSec * 1000L
         while (System.currentTimeMillis() < deadline) {
             try {
                 val (code, r) = httpRequest(
@@ -305,6 +315,33 @@ object GoLikeApi {
             delay(4_000)
         }
         null
+    }
+
+    /**
+     * pollOtpFromMailCloud — nhờ server rem2 poll Mail.tm hộ (server chạy trên
+     * Replit, không tốn pin/CPU của điện thoại). Máy chỉ hỏi trạng thái job
+     * mỗi 3s bằng 1 request nhẹ, thay vì tự fetch+parse email mỗi 4s.
+     * Trả về null nếu server lỗi/timeout để caller fallback polling cục bộ.
+     */
+    private suspend fun pollOtpFromMailCloud(mailToken: String, maxWaitSec: Int): String? {
+        val createBody = JSONObject().put("mailToken", mailToken).put("maxWaitSec", maxWaitSec)
+        val (createCode, createResp) = httpRequest(
+            "POST", "$REM2_SERVER/api/rem2/otp/create", createBody, ua = "Mozilla/5.0"
+        )
+        if (createCode != 200) return null
+        val jobId = createResp.optString("jobId").takeIf { it.isNotEmpty() } ?: return null
+
+        val deadline = System.currentTimeMillis() + (maxWaitSec + 15) * 1000L
+        while (System.currentTimeMillis() < deadline) {
+            delay(3_000)
+            val (code, r) = httpRequest("GET", "$REM2_SERVER/api/rem2/otp/status/$jobId", ua = "Mozilla/5.0")
+            if (code != 200) continue
+            when (r.optString("status")) {
+                "done"  -> return r.optString("otp").takeIf { it.isNotEmpty() }
+                "error" -> return null
+            }
+        }
+        return null
     }
 
     // ── CAPTCHA HTML (WebView) ────────────────────────────────────────────────

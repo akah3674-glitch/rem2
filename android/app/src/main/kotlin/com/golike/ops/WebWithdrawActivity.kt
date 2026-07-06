@@ -477,17 +477,17 @@ class WebWithdrawActivity : AppCompatActivity() {
     // ── Queue: tất cả accounts chạy song song ────────────────────────────────
 
     private suspend fun processQueue() {
-        addLog("🚀 Bắt đầu xử lý ${queue.size} tài khoản song song...")
-        queue.map { acc ->
-            lifecycleScope.async {
-                if (acc.password.isEmpty()) {
-                    addLog("⚠️ @${acc.username}: chưa có mật khẩu — bỏ qua")
-                    return@async
-                }
-                runCatching { processAccount(acc) }
-                    .onFailure { addLog("💥 @${acc.username}: ${it.message}") }
+        // Xu ly TUAN TU (khong song song) — moi tai khoan dung 1 WebView duy nhat,
+        // tranh nhieu WebView cung render/JS-poll dong thoi lam nong may.
+        addLog("🚀 Bắt đầu xử lý ${queue.size} tài khoản (tuần tự)...")
+        for (acc in queue) {
+            if (acc.password.isEmpty()) {
+                addLog("⚠️ @${acc.username}: chưa có mật khẩu — bỏ qua")
+                continue
             }
-        }.awaitAll()
+            runCatching { processAccount(acc) }
+                .onFailure { addLog("💥 @${acc.username}: ${it.message}") }
+        }
         addLog("🏁 Hoàn tất tất cả tài khoản.")
     }
 
@@ -677,7 +677,7 @@ class WebWithdrawActivity : AppCompatActivity() {
                 // Modal đã đóng → thoát
                 break
             }
-            delay(500)
+            delay(800)
         }
 
         // Chờ response submit
@@ -707,7 +707,7 @@ class WebWithdrawActivity : AppCompatActivity() {
             val json = parseJson(r)
             if (json?.optBoolean("hasToken", false) == true ||
                 json?.optBoolean("isLoginPage", true) == false) return true
-            delay(800)
+            delay(1200)
         }
         return false
     }
@@ -756,7 +756,7 @@ class WebWithdrawActivity : AppCompatActivity() {
                 })();
             """.trimIndent())
             if (parseJson(r)?.optBoolean("present", false) == true) return true
-            delay(500)
+            delay(800)
         }
         return false
     }

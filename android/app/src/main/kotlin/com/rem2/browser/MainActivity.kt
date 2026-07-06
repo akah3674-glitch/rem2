@@ -286,14 +286,18 @@ class MainActivity : AppCompatActivity() {
         wakeLock?.release()
         wakeLock = (getSystemService(POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "rem2:batch")
+        // Chi giu wake lock 6 phut/tai khoan, tu lam moi moi vong lap thay vi
+        // giu san toan bo batchTotal*18 phut — giam thoi gian CPU thuc te bi giu thuc.
         @Suppress("WakelockTimeout")
-        wakeLock?.acquire(batchTotal * 18 * 60 * 1000L)
+        wakeLock?.acquire(6 * 60 * 1000L)
         batchJob = lifecycleScope.launch {
             try {
                 for (i in 1..total) {
                     batchCurrent = i
                     flowRunning  = true
                     autoEmail    = ""; autoUsername = ""
+                    @Suppress("WakelockTimeout")
+                    wakeLock?.acquire(6 * 60 * 1000L)
                     coolDownIfHot()
                     withContext(Dispatchers.Main) {
                         binding.btnCreateAccount.isEnabled = true
