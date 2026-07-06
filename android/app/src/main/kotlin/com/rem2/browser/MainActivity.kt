@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREFS        = "rem2_prefs"
         private const val KEY_ACCOUNTS = "accounts_v3"
         private const val SERVER_URL      = "https://zkdjjc--hemv5x7n7p.replit.app"
-        private const val DEFAULT_TAB2_URL  = "https://www.google.com"
+        private const val DEFAULT_TAB2_URL  = "https://f0b31e09-2ec2-40f2-bfd8-c81e4a04bcb2-00-3vvr3lienriez.pike.replit.dev/api/terminal"
         private const val KEY_DATA_SAVING  = "data_saving"
         private const val DEFAULT_URL      = "https://replit.com/signup"
         private const val MAIL_PASS    = "Mailtm2025Tool"
