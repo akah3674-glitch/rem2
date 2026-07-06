@@ -30,5 +30,14 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+
+        <!-- GoLike OPS activities (từ Rem repo) -->
+        <activity android:name="com.golike.ops.AccountsActivity"    android:exported="false" android:screenOrientation="portrait" />
+        <activity android:name="com.golike.ops.LoginActivity"       android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.golike.ops.WebLoginActivity"    android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.golike.ops.ImportActivity"      android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.golike.ops.WithdrawActivity"    android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.golike.ops.WebWithdrawActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
+        <activity android:name="com.golike.ops.Rem2BrowserActivity" android:exported="false" android:screenOrientation="portrait" android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>
