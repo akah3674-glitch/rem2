@@ -423,12 +423,7 @@ class MainActivity : AppCompatActivity() {
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
-            else { val wv = activeWebView(); if (wv.canGoBack()) wv.goBack() }
-        }
-
-
-
-        // btnToggleLog = clipboard icon — click: toggle log panel; long press: danh sách tài khoản
+        // Clipboard icon — click: toggle log panel; long press: danh sách tài khoản
         binding.btnToggleLog.setOnClickListener {
             panelOpen = !panelOpen
             binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
@@ -568,7 +563,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 setTabActive(binding.webView, false); setTabActive(binding.webView2, true)
                 currentTab=2; binding.btnTabCount.text="2"
-                binding.etUrl.visibility = android.view.View.VISIBLE
+                    binding.etUrl.visibility = android.view.View.VISIBLE
                 if (autoEmail.isNotEmpty() && (binding.webView2.url ?: "").isSignupPage()) {
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
@@ -579,7 +574,7 @@ class MainActivity : AppCompatActivity() {
                 binding.swipeRefresh2.visibility=View.INVISIBLE; binding.swipeRefresh.visibility=View.VISIBLE
                 setTabActive(binding.webView2, false); setTabActive(binding.webView, true)
                 currentTab=1; binding.btnTabCount.text="1"
-                binding.etUrl.visibility = android.view.View.VISIBLE
+                    binding.etUrl.visibility = android.view.View.VISIBLE
                 restoreCookies(tab1Cookies, seq) {
                     restoreLocalStorage(binding.webView, tab1LocalStorageJson) {
                         if (seq != switchSeq) return@restoreLocalStorage
