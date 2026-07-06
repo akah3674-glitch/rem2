@@ -111,10 +111,12 @@ class MainActivity : AppCompatActivity() {
     private var tab2LocalStorageJson = "{}"
     private var switchSeq       = 0
 
-    // ── FIX "bấm loạn": cờ báo onboarding đã xong, ngăn auto-script tiếp tục chạy ──
-    // Được set = true khi JS gọi ClickBridge.onboardingComplete() (isDone() trả true)
-    // Được reset = false mỗi khi bắt đầu tạo tài khoản mới (startBatchFlow / clearWebSession)
-    private var autoFlowDone = false
+    // ── FIX "bấm loạn": cờ + token để scope onboarding completion đúng session ──
+    // autoFlowDone: ngăn auto-script tiếp tục sau khi onboarding xong
+    // autoFlowToken: mỗi account mới có token riêng; JS phải trả về đúng token
+    //   mới nhất thì native mới xử lý → tránh stale JS từ tab/account cũ bắn nhầm
+    private var autoFlowDone  = false
+    private var autoFlowToken = ""
 
     // Click recording
     private var isRecording      = false
@@ -164,10 +166,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ── FIX "bấm loạn": JS báo đã vào dashboard → dừng toàn bộ auto-script ──
+        // Token phải khớp với autoFlowToken hiện tại — tránh stale JS từ tab/session cũ bắn nhầm
         @JavascriptInterface
-        fun onboardingComplete() {
+        fun onboardingComplete(token: String) {
             runOnUiThread {
-                if (autoFlowDone) return@runOnUiThread   // chỉ xử lý 1 lần
+                if (token != autoFlowToken) return@runOnUiThread   // stale callback — bỏ qua
+                if (autoFlowDone) return@runOnUiThread              // đã xử lý rồi
                 autoFlowDone = true
                 log("✅ Onboarding xong — dừng auto-script, giải phóng session")
                 autoEmail = ""
@@ -351,10 +355,12 @@ class MainActivity : AppCompatActivity() {
           batchJob = lifecycleScope.launch {
               try {
                   for (i in 1..total) {
-                      batchCurrent = i
-                      flowRunning  = true
-                      autoEmail    = ""; autoUsername = ""
-                      autoFlowDone = false   // reset cờ cho mỗi tài khoản mới
+                      batchCurrent  = i
+                      flowRunning   = true
+                      autoEmail     = ""; autoUsername = ""
+                      autoFlowDone  = false
+                      // Token mới cho mỗi account → stale JS từ account trước bị bỏ qua
+                      autoFlowToken = System.currentTimeMillis().toString()
                       coolDownIfHot()
                       withContext(Dispatchers.Main) {
                           val label = if (total == 1) "⏳ Dang tao tai khoan..." else "⏳ Dang tao $i/$total..."
@@ -1018,8 +1024,11 @@ class MainActivity : AppCompatActivity() {
           val wv          = if (tab == 1) binding.webView  else binding.webView2
           val otherWv     = if (tab == 1) binding.webView2 else binding.webView
           val otherIsTab1 = tab != 1
+          // Kill scripts trên CẢ 2 tab — tránh stale JS tab kia gọi onboardingComplete nhầm
           killAutoScripts(wv)
-          autoFlowDone = false   // reset khi bắt đầu session mới
+          killAutoScripts(otherWv)
+          autoFlowDone  = false                            // reset cờ cho session mới
+          autoFlowToken = System.currentTimeMillis().toString()  // token mới → stale callbacks bị bỏ qua
           val seq = ++switchSeq
 
           if (otherIsTab1) saveCookies(tab1Cookies) else saveCookies(tab2Cookies)
@@ -1204,7 +1213,8 @@ class MainActivity : AppCompatActivity() {
               window.__rem2FillMo=mo;
               window.__rem2FillIv=setInterval(function(){if(window.__rem2FillSid!==sid){clearInterval(window.__rem2FillIv);return;}tick();},900);
               tick();
-              (function(){var lastUrl=location.href;function checkUrl(){var u=location.href;if(u!==lastUrl){lastUrl=u;if(!isDone()){window.__rem2AutoContinueActive=false;try{if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);}catch(e){}try{if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}setTimeout(function(){if(window.ClickBridge){}},50);}}}setInterval(checkUrl,800);window.addEventListener('popstate',function(){setTimeout(checkUrl,300)});})();
+              // URL watcher: nếu SPA navigate → reset fill script (KHÔNG gọi isDone — hàm đó không tồn tại ở scope này)
+              (function(){var lastUrl=location.href;function checkUrl(){var u=location.href;if(u!==lastUrl){lastUrl=u;window.__rem2FillSid=null;if(window.__rem2FillIv){clearInterval(window.__rem2FillIv);window.__rem2FillIv=null;}if(window.__rem2FillMo){try{window.__rem2FillMo.disconnect();}catch(e){}}}}setInterval(checkUrl,800);window.addEventListener('popstate',function(){setTimeout(checkUrl,300)});})();
             })();
         """.trimIndent(), null)
     }
@@ -1240,12 +1250,17 @@ class MainActivity : AppCompatActivity() {
             .replace("\\", "\\\\")
             .replace("'", "\\'")
 
+        val flowToken = autoFlowToken.replace("'", "")   // đã là số, safe
+
         wv.evaluateJavascript("""
             (function(){
               // Dừng instance cũ (nếu có) trước khi khởi động instance mới
               try{if(window.__rem2AcIv)clearInterval(window.__rem2AcIv);}catch(e){}
               try{if(window.__rem2AcMo)window.__rem2AcMo.disconnect();}catch(e){}
               window.__rem2AutoContinueActive=true;
+
+              // Token session — phải trả về đúng khi gọi onboardingComplete
+              var FLOW_TOKEN='$flowToken';
 
               // ── Bản click đã học (từ tính năng Recording) ─────────────────
               var LEARNED_PATTERNS=$safePatternsJson;
@@ -1269,8 +1284,8 @@ class MainActivity : AppCompatActivity() {
                          !!document.querySelector('[placeholder*="Try an example" i]')||
                          !!document.querySelector('textarea[placeholder*="Ask Replit" i]');
                 if(done&&window.ClickBridge){
-                  // FIX "bấm loạn": báo native biết onboarding đã xong để dừng hẳn
-                  try{window.ClickBridge.onboardingComplete();}catch(e){}
+                  // FIX "bấm loạn": trả về đúng TOKEN → native validate trước khi xử lý
+                  try{window.ClickBridge.onboardingComplete(FLOW_TOKEN);}catch(e){}
                 }
                 return done;
               }
