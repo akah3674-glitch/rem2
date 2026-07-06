@@ -145,7 +145,6 @@ import com.rem2.browser.R
                   tab2Content.visibility = View.GONE
                   tabAccount.setTextColor(0xFFFFFFFF.toInt())
                   tabCardHistory.setTextColor(0xFFAACCFF.toInt())
-                  tabBrowser.setTextColor(0xFFAACCFF.toInt())
                   renderAccounts()
               }
               2 -> {
@@ -153,7 +152,6 @@ import com.rem2.browser.R
                   tab2Content.visibility = View.VISIBLE
                   tabAccount.setTextColor(0xFFAACCFF.toInt())
                   tabCardHistory.setTextColor(0xFFFFFFFF.toInt())
-                  tabBrowser.setTextColor(0xFFAACCFF.toInt())
               }
           }
       }
