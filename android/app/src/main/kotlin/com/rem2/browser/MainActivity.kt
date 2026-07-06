@@ -412,9 +412,7 @@ class MainActivity : AppCompatActivity() {
         if (savedTab == 2 && tab2Init) {
             binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
             currentTab=2; binding.btnTabCount.text="2"
-            // Header: browser mode
             binding.etUrl.visibility = android.view.View.VISIBLE
-            binding.tvTerminalTitle.visibility = android.view.View.GONE
             val u = tab2Url.takeIf { it.isNotEmpty() } ?: DEFAULT_TAB2_URL
             binding.webView2.loadUrl(u); binding.etUrl.setText(u)
         } else if (tab1Url.isNotEmpty()) {
@@ -425,45 +423,17 @@ class MainActivity : AppCompatActivity() {
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
-        // Nút quay lại — Tab 1: điều hướng trang; Tab 2: về Tab 1
-        binding.btnBack.setOnClickListener {
-            if (currentTab == 2) { switchBrowserTab(1) }
             else { val wv = activeWebView(); if (wv.canGoBack()) wv.goBack() }
         }
 
-        // Ba chấm ⋮ — menu thích nghi: Tab 1 = automation; Tab 2 = terminal controls
-        binding.btnMenu.setOnClickListener { anchor ->
-            val popup = PopupMenu(this, anchor)
-            val m = popup.menu
-            if (currentTab == 1) {
-                m.add(0, 1, 0, if (flowRunning) "1. ⏹ Dừng tạo tài khoản" else "1. Tạo tài khoản mới")
-                m.add(0, 2, 1, "2. Danh sách tài khoản (${accounts.size})")
-                m.add(0, 3, 2, "3. Nhật ký")
-                m.add(0, 4, 3, "4. Trang đăng ký")
-                m.add(0, 5, 4, if (dataSaving) "5. Tắt tiết kiệm data" else "5. Bật tiết kiệm data")
-            } else {
-                m.add(0, 10, 0, "1. Trang chủ Google")
-                m.add(0, 11, 1, "2. Sao chép địa chỉ")
-                m.add(0, 12, 2, if (dataSaving) "3. Tắt tiết kiệm data" else "3. Bật tiết kiệm data")
-            }
-            popup.setOnMenuItemClickListener { item ->
-                when (item.itemId) {
-                    1  -> { if (!flowRunning) startBatchFlow(1) else { AlertDialog.Builder(this).setTitle("Dung qua trinh?").setMessage("Huy bo tao tai khoan dang chay?").setPositiveButton("Dung lai") { _, _ -> stopBatchFlow() }.setNegativeButton("Tiep tuc", null).show() }; true }
-                    2  -> { showAccountList(); true }
-                    3  -> { panelOpen = !panelOpen; binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE; true }
-                    4  -> { activeWebView().loadUrl(DEFAULT_URL); true }
-                    5  -> { applyDataSaving(!dataSaving); true }
-                    10 -> { binding.webView2.loadUrl(DEFAULT_TAB2_URL); binding.etUrl.setText(DEFAULT_TAB2_URL); true }
-                    11 -> { val u = binding.webView2.url ?: ""; if (u.isNotEmpty()) { android.content.ClipboardManager::class.java.let { cm -> (getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("url", u)) }; Toast.makeText(this, "Đã sao chép: $u", Toast.LENGTH_SHORT).show() }; true }
-                    12 -> { applyDataSaving(!dataSaving); true }
-                    else -> false
-                }
-            }
-            popup.show()
-        }
 
-        // btnToggleLog giờ không còn trong header (ẩn trong XML) — giữ click rỗng tránh crash cũ
-        binding.btnToggleLog.setOnClickListener { /* no-op — replaced by btnMenu */ }
+
+        // btnToggleLog = clipboard icon — click: toggle log panel; long press: danh sách tài khoản
+        binding.btnToggleLog.setOnClickListener {
+            panelOpen = !panelOpen
+            binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE
+        }
+        binding.btnToggleLog.setOnLongClickListener { showAccountList(); true }
         binding.btnRefresh.setOnClickListener {
             val wv = activeWebView()
             val sw = if (currentTab==1) binding.swipeRefresh else binding.swipeRefresh2
@@ -598,9 +568,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 setTabActive(binding.webView, false); setTabActive(binding.webView2, true)
                 currentTab=2; binding.btnTabCount.text="2"
-                // Header: browser mode
                 binding.etUrl.visibility = android.view.View.VISIBLE
-                binding.tvTerminalTitle.visibility = android.view.View.GONE
                 if (autoEmail.isNotEmpty() && (binding.webView2.url ?: "").isSignupPage()) {
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
@@ -611,9 +579,7 @@ class MainActivity : AppCompatActivity() {
                 binding.swipeRefresh2.visibility=View.INVISIBLE; binding.swipeRefresh.visibility=View.VISIBLE
                 setTabActive(binding.webView2, false); setTabActive(binding.webView, true)
                 currentTab=1; binding.btnTabCount.text="1"
-                // Header: browser mode
                 binding.etUrl.visibility = android.view.View.VISIBLE
-                binding.tvTerminalTitle.visibility = android.view.View.GONE
                 restoreCookies(tab1Cookies, seq) {
                     restoreLocalStorage(binding.webView, tab1LocalStorageJson) {
                         if (seq != switchSeq) return@restoreLocalStorage
