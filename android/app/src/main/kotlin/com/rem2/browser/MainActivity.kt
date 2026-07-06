@@ -51,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREFS        = "rem2_prefs"
         private const val KEY_ACCOUNTS = "accounts_v3"
         private const val SERVER_URL      = "https://zkdjjc--hemv5x7n7p.replit.app"
-        private const val TERMINAL_URL     = "https://f0b31e09-2ec2-40f2-bfd8-c81e4a04bcb2-00-3vvr3lienriez.pike.replit.dev/api/terminal"
+        private const val DEFAULT_TAB2_URL  = "https://www.google.com"
         private const val KEY_DATA_SAVING  = "data_saving"
         private const val DEFAULT_URL      = "https://replit.com/signup"
         private const val MAIL_PASS    = "Mailtm2025Tool"
@@ -401,11 +401,11 @@ class MainActivity : AppCompatActivity() {
         if (savedTab == 2 && tab2Init) {
             binding.swipeRefresh.visibility=View.INVISIBLE; binding.swipeRefresh2.visibility=View.VISIBLE
             currentTab=2; binding.btnTabCount.text="2"
-            // Header: terminal mode on restore
-            binding.etUrl.visibility = android.view.View.GONE
-            binding.tvTerminalTitle.visibility = android.view.View.VISIBLE
-            val u = tab2Url.takeIf { it.isNotEmpty() } ?: TERMINAL_URL
-            binding.webView2.loadUrl(u)
+            // Header: browser mode
+            binding.etUrl.visibility = android.view.View.VISIBLE
+            binding.tvTerminalTitle.visibility = android.view.View.GONE
+            val u = tab2Url.takeIf { it.isNotEmpty() } ?: DEFAULT_TAB2_URL
+            binding.webView2.loadUrl(u); binding.etUrl.setText(u)
         } else if (tab1Url.isNotEmpty()) {
             binding.webView.loadUrl(tab1Url); binding.etUrl.setText(tab1Url)
         }
@@ -431,8 +431,8 @@ class MainActivity : AppCompatActivity() {
                 m.add(0, 4, 3, "4. Trang đăng ký")
                 m.add(0, 5, 4, if (dataSaving) "5. Tắt tiết kiệm data" else "5. Bật tiết kiệm data")
             } else {
-                m.add(0, 10, 0, "1. Shell mới")
-                m.add(0, 11, 1, "2. Tải lại terminal")
+                m.add(0, 10, 0, "1. Trang chủ Google")
+                m.add(0, 11, 1, "2. Sao chép địa chỉ")
                 m.add(0, 12, 2, if (dataSaving) "3. Tắt tiết kiệm data" else "3. Bật tiết kiệm data")
             }
             popup.setOnMenuItemClickListener { item ->
@@ -442,8 +442,8 @@ class MainActivity : AppCompatActivity() {
                     3  -> { panelOpen = !panelOpen; binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE; true }
                     4  -> { activeWebView().loadUrl(DEFAULT_URL); true }
                     5  -> { applyDataSaving(!dataSaving); true }
-                    10 -> { binding.webView2.evaluateJavascript("if(typeof newSession==='function')newSession();", null); true }
-                    11 -> { binding.webView2.loadUrl(TERMINAL_URL); true }
+                    10 -> { binding.webView2.loadUrl(DEFAULT_TAB2_URL); binding.etUrl.setText(DEFAULT_TAB2_URL); true }
+                    11 -> { val u = binding.webView2.url ?: ""; if (u.isNotEmpty()) { android.content.ClipboardManager::class.java.let { cm -> (getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager).setPrimaryClip(android.content.ClipData.newPlainText("url", u)) }; Toast.makeText(this, "Đã sao chép: $u", Toast.LENGTH_SHORT).show() }; true }
                     12 -> { applyDataSaving(!dataSaving); true }
                     else -> false
                 }
@@ -458,7 +458,8 @@ class MainActivity : AppCompatActivity() {
             val sw = if (currentTab==1) binding.swipeRefresh else binding.swipeRefresh2
             sw.isRefreshing = true
             if (currentTab == 2) {
-                wv.loadUrl(TERMINAL_URL)   // Tab 2: reload/reconnect terminal
+                val cur2 = wv.url
+                if (cur2.isNullOrBlank() || cur2 == "about:blank") wv.loadUrl(DEFAULT_TAB2_URL) else wv.reload()
             } else {
                 val cur = wv.url
                 if (cur.isNullOrBlank() || cur=="about:blank") wv.loadUrl("https://replit.com/signup") else wv.reload()
@@ -560,10 +561,10 @@ class MainActivity : AppCompatActivity() {
                         restoreCookies(tab1Cookies, seq) {
                             if (seq != switchSeq) return@restoreCookies
                             tab2LocalStorageJson = "{}"
-                            binding.webView2.postDelayed({ binding.webView2.loadUrl(TERMINAL_URL) }, 50)
+                            binding.webView2.postDelayed({ binding.webView2.loadUrl(DEFAULT_TAB2_URL) }, 50)
                         }
                     }
-                    binding.etUrl.setText(TERMINAL_URL)
+                    binding.etUrl.setText(DEFAULT_TAB2_URL)
                 } else {
                     restoreCookies(tab2Cookies, seq) {
                         restoreLocalStorage(binding.webView2, tab2LocalStorageJson) {
@@ -578,9 +579,9 @@ class MainActivity : AppCompatActivity() {
                 }
                 setTabActive(binding.webView, false); setTabActive(binding.webView2, true)
                 currentTab=2; binding.btnTabCount.text="2"
-                // Header: terminal mode
-                binding.etUrl.visibility = android.view.View.GONE
-                binding.tvTerminalTitle.visibility = android.view.View.VISIBLE
+                // Header: browser mode
+                binding.etUrl.visibility = android.view.View.VISIBLE
+                binding.tvTerminalTitle.visibility = android.view.View.GONE
                 if (autoEmail.isNotEmpty() && (binding.webView2.url ?: "").isSignupPage()) {
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 500)
                     binding.webView2.postDelayed({ injectAutoFill(binding.webView2) }, 1500)
