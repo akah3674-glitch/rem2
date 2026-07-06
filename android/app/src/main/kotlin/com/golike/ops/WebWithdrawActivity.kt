@@ -21,6 +21,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicBoolean
@@ -209,19 +210,21 @@ class WebWithdrawActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun loadUrlAndWait(url: String) = suspendCancellableCoroutine<Unit> { cont ->
-        var resumed = false
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
-            override fun onPageStarted(v: WebView, u: String, b: android.graphics.Bitmap?) {
-                super.onPageStarted(v, u, b); v.evaluateJavascript(ANTI_BOT_JS, null)
+    private suspend fun loadUrlAndWait(url: String) = withTimeout(45_000L) {
+        suspendCancellableCoroutine<Unit> { cont ->
+            var resumed = false
+            webView.webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) = false
+                override fun onPageStarted(v: WebView, u: String, b: android.graphics.Bitmap?) {
+                    super.onPageStarted(v, u, b); v.evaluateJavascript(ANTI_BOT_JS, null)
+                }
+                override fun onPageFinished(v: WebView, u: String) {
+                    super.onPageFinished(v, u)
+                    if (!resumed) { resumed = true; if (cont.isActive) cont.resumeWith(Result.success(Unit)) }
+                }
             }
-            override fun onPageFinished(v: WebView, u: String) {
-                super.onPageFinished(v, u)
-                if (!resumed) { resumed = true; if (cont.isActive) cont.resumeWith(Result.success(Unit)) }
-            }
+            webView.loadUrl(url)
         }
-        webView.loadUrl(url)
     }
 
     private fun jsStr(s: String): String = JSONObject.quote(s)
@@ -855,3 +858,4 @@ class WebWithdrawActivity : AppCompatActivity() {
         super.onDestroy()
     }
 }
+
