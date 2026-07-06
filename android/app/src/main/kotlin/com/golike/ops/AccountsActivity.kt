@@ -61,8 +61,6 @@ import com.rem2.browser.R
       private lateinit var tabAccount     : TextView
       private lateinit var tabCardHistory : TextView
 
-      private lateinit var tabBrowser: TextView
-
       private var activeTab = 1
 
       // ── Card data ─────────────────────────────────────────────────────────────
@@ -91,15 +89,10 @@ import com.rem2.browser.R
 
           tabAccount     = findViewById(R.id.tabAccount)
           tabCardHistory = findViewById(R.id.tabCardHistory)
-          tabBrowser     = findViewById(R.id.tabBrowser)
 
           // Tab switching
           tabAccount.setOnClickListener     { switchTab(1) }
           tabCardHistory.setOnClickListener { switchTab(2) }
-          // Tab 3: launch Rem2 Browser (independent WebView)
-          tabBrowser.setOnClickListener     {
-              startActivity(Intent(this, Rem2BrowserActivity::class.java))
-          }
 
           // Tab 1 actions
           btnAdd.setOnClickListener {
