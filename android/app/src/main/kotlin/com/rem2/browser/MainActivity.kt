@@ -463,8 +463,32 @@ class MainActivity : AppCompatActivity() {
             } else false
         }
         binding.etUrl.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) binding.etUrl.selectAll() }
+
+        // Data saving toggle — bật/tắt tải ảnh để tiết kiệm data
+        updateDataSavingBtn()
+        binding.btnDataSaving.setOnClickListener {
+            dataSaving = !dataSaving
+            prefs.edit().putBoolean(KEY_DATA_SAVING, dataSaving).apply()
+            applyDataSaving()
+            updateDataSavingBtn()
+            val msg = if (dataSaving) "Tiết kiệm data: BẬT (ảnh ẩn)" else "Tiết kiệm data: TẮT (hiện ảnh)"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
         binding.btnTabCount.setOnClickListener {
             startActivity(android.content.Intent(this, com.golike.ops.AccountsActivity::class.java))
+        }
+    }
+
+    // ─── Data saving helpers ──────────────────────────────────────────────────
+
+    private fun updateDataSavingBtn() {
+        binding.btnDataSaving.text  = if (dataSaving) "📵" else "📶"
+        binding.btnDataSaving.alpha = if (dataSaving) 0.6f else 1.0f
+    }
+
+    private fun applyDataSaving() {
+        listOf(binding.webView, binding.webView2).forEach { wv ->
+            wv.settings.blockNetworkImage = dataSaving
         }
     }
 
