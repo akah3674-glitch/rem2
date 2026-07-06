@@ -90,6 +90,7 @@ class MainActivity : AppCompatActivity() {
     private var autoEmail    = ""
     private var autoUsername = ""
     private var flowRunning  = false
+    private var batchJob: kotlinx.coroutines.Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var dataSaving   = false
 
@@ -304,7 +305,7 @@ class MainActivity : AppCompatActivity() {
               .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "rem2:batch")
           @Suppress("WakelockTimeout")
           wakeLock?.acquire(batchTotal * 18 * 60 * 1000L)  // 18 phút / acc tối đa
-          lifecycleScope.launch {
+          batchJob = lifecycleScope.launch {
               try {
                   for (i in 1..total) {
                       batchCurrent = i
@@ -313,8 +314,8 @@ class MainActivity : AppCompatActivity() {
                       coolDownIfHot()
                       withContext(Dispatchers.Main) {
                           val label = if (total == 1) "⏳ Dang tao tai khoan..." else "⏳ Dang tao $i/$total..."
-                          binding.btnCreateAccount.isEnabled = false
-                          binding.btnCreateAccount.text      = label
+                          binding.btnCreateAccount.isEnabled = true
+                          binding.btnCreateAccount.text      = if (total == 1) "⏹ Dừng" else "⏹ Dừng ($i/$total)" 
                           binding.tvLog.text = ""
                           switchPanelTab(false)
                           clearWebSession(targetTab)
@@ -353,6 +354,18 @@ class MainActivity : AppCompatActivity() {
           }
       }
   
+    // ─── Stop batch flow ─────────────────────────────────────────────────────────
+
+    private fun stopBatchFlow() {
+        batchJob?.cancel()
+        batchJob = null
+        flowRunning = false
+        wakeLock?.release(); wakeLock = null
+        binding.btnCreateAccount.isEnabled = true
+        binding.btnCreateAccount.text = "🔄 Tao tai khoan moi"
+        log("⏹ Da dung tao tai khoan.")
+    }
+
     // ─── Session persistence ──────────────────────────────────────────────────
 
     private fun saveSessionState() {
@@ -425,7 +438,7 @@ class MainActivity : AppCompatActivity() {
             val popup = PopupMenu(this, anchor)
             val m = popup.menu
             if (currentTab == 1) {
-                m.add(0, 1, 0, if (flowRunning) "⏳ Đang xử lý..." else "1. Tạo tài khoản mới")
+                m.add(0, 1, 0, if (flowRunning) "1. ⏹ Dừng tạo tài khoản" else "1. Tạo tài khoản mới")
                 m.add(0, 2, 1, "2. Danh sách tài khoản (${accounts.size})")
                 m.add(0, 3, 2, "3. Nhật ký")
                 m.add(0, 4, 3, "4. Trang đăng ký")
@@ -437,7 +450,7 @@ class MainActivity : AppCompatActivity() {
             }
             popup.setOnMenuItemClickListener { item ->
                 when (item.itemId) {
-                    1  -> { if (!flowRunning) startBatchFlow(1) else Toast.makeText(this, "Đang xử lý, vui lòng đợi...", Toast.LENGTH_SHORT).show(); true }
+                    1  -> { if (!flowRunning) startBatchFlow(1) else { AlertDialog.Builder(this).setTitle("Dung qua trinh?").setMessage("Huy bo tao tai khoan dang chay?").setPositiveButton("Dung lai") { _, _ -> stopBatchFlow() }.setNegativeButton("Tiep tuc", null).show() }; true }
                     2  -> { showAccountList(); true }
                     3  -> { panelOpen = !panelOpen; binding.logPanel.visibility = if (panelOpen) View.VISIBLE else View.GONE; true }
                     4  -> { activeWebView().loadUrl(DEFAULT_URL); true }
@@ -470,8 +483,16 @@ class MainActivity : AppCompatActivity() {
 
         // Nhấn thường → tạo ngay 1 tài khoản (không hỏi); Nhấn giữ → xem danh sách đã tạo
         binding.btnCreateAccount.setOnClickListener {
-            if (flowRunning) { Toast.makeText(this, "Dang xu ly, vui long doi...", Toast.LENGTH_SHORT).show() }
-            else startBatchFlow(1)
+            if (flowRunning) {
+                AlertDialog.Builder(this)
+                    .setTitle("Dung qua trinh?")
+                    .setMessage("Huy bo viec tao tai khoan dang chay?")
+                    .setPositiveButton("Dung lai") { _, _ -> stopBatchFlow() }
+                    .setNegativeButton("Tiep tuc", null)
+                    .show()
+            } else {
+                startBatchFlow(1)
+            }
         }
         binding.btnCreateAccount.setOnLongClickListener  { showAccountList(); true }
 
@@ -1072,7 +1093,14 @@ class MainActivity : AppCompatActivity() {
                 try{el.click();}catch(e){}
                 try{var r=el.getBoundingClientRect();if(r.width>0&&r.height>0&&window.ClickBridge)window.ClickBridge.tapAt(r.left+r.width/2,r.top+r.height/2,window.devicePixelRatio||1);}catch(e){}
               }
-              function isDone(){return!!document.querySelector('textarea[placeholder*="Make anything" i]')||!!document.querySelector('[placeholder*="Try an example" i]')||!!document.querySelector('textarea[placeholder*="Ask Replit" i]');}
+              function isDone(){
+                // Nếu vẫn còn nút Continue/Next visible → chưa xong onboarding dù đã ở dashboard
+                var btn=findContinue();if(btn)return false;
+                // Nếu còn lựa chọn nào visible → chưa xong
+                if(findChoices(null).length)return false;
+                // Kiểm tra đã vào dashboard thật
+                return!!document.querySelector('textarea[placeholder*="Make anything" i]')||!!document.querySelector('[placeholder*="Try an example" i]')||!!document.querySelector('textarea[placeholder*="Ask Replit" i]');
+              }
               // headingText/STOP_HEADS đã bỏ — dùng isDone() làm điều kiện dừng duy nhất
               function findContinue(){
                 var els=document.querySelectorAll('button,a[role="button"],[role="button"],input[type=submit]');
