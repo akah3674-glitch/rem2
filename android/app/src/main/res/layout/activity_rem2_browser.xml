@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_primary">
+
+    <!-- Header: ⚡ Rem2 | 📋 | [URL input] | ← | 🔄 | 📑 | 🗑 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@color/accent_blue"
+        android:paddingStart="8dp"
+        android:paddingEnd="4dp"
+        android:paddingTop="7dp"
+        android:paddingBottom="7dp"
+        android:gravity="center_vertical">
+
+        <!-- App title -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⚡ Rem2"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:layout_marginEnd="4dp"/>
+
+        <!-- 📋 Paste from clipboard -->
+        <TextView
+            android:id="@+id/btnPasteRem2"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="📋"
+            android:textSize="15sp"
+            android:clickable="true"
+            android:focusable="true"/>
+
+        <!-- URL input bar (flex) -->
+        <EditText
+            android:id="@+id/etUrlRem2"
+            android:layout_width="0dp"
+            android:layout_height="30dp"
+            android:layout_weight="1"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:background="@drawable/url_input_bg"
+            android:paddingStart="8dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:textSize="11sp"
+            android:textColor="#FFFFFF"
+            android:hint="URL..."
+            android:textColorHint="#80FFFFFF"
+            android:singleLine="true"
+            android:imeOptions="actionGo"
+            android:inputType="textUri"
+            android:selectAllOnFocus="true"/>
+
+        <!-- ← Navigate ngược trong WebView (không đóng Activity) -->
+        <TextView
+            android:id="@+id/btnBackRem2"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="◀"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:alpha="0.4"
+            android:clickable="true"
+            android:focusable="true"/>
+
+        <!-- 🔄 Refresh -->
+        <TextView
+            android:id="@+id/btnRefreshRem2"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="🔄"
+            android:textSize="15sp"
+            android:clickable="true"
+            android:focusable="true"/>
+
+        <!-- 📑 New Tab (độc lập) -->
+        <TextView
+            android:id="@+id/btnNewTabRem2"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="📑"
+            android:textSize="15sp"
+            android:clickable="true"
+            android:focusable="true"/>
+
+        <!-- 🗑 Clear -->
+        <TextView
+            android:id="@+id/btnClearRem2"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="🗑"
+            android:textSize="15sp"
+            android:clickable="true"
+            android:focusable="true"/>
+
+    </LinearLayout>
+
+    <!-- Progress bar (visible while loading) -->
+    <ProgressBar
+        android:id="@+id/progressRem2"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:max="100"
+        android:progressTint="@color/accent_blue"
+        android:visibility="gone"/>
+
+    <!-- WebView fills all remaining space -->
+    <WebView
+        android:id="@+id/webViewRem2"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+</LinearLayout>
