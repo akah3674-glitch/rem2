@@ -57,23 +57,7 @@
                   android:paddingTop="8dp"
                   android:paddingBottom="8dp"
                   android:background="@color/accent_blue" />
-
-              <!-- Tab 3: Mở Rem2 Browser (trình duyệt WebView độc lập) -->
-              <TextView
-                  android:id="@+id/tabBrowser"
-                  android:layout_width="0dp"
-                  android:layout_height="wrap_content"
-                  android:layout_weight="1"
-                  android:gravity="center"
-                  android:text="🌐 Browser"
-                  android:textSize="12sp"
-                  android:textStyle="bold"
-                  android:textColor="#AACCFF"
-                  android:paddingTop="8dp"
-                  android:paddingBottom="8dp"
-                  android:background="@color/accent_blue" />
-
-          </LinearLayout>
+              </LinearLayout>
       </LinearLayout>
 
       <!-- TAB 1: Tài khoản -->
