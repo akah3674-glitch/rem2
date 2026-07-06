@@ -60,6 +60,9 @@ class MainActivity : AppCompatActivity() {
         private const val NOTIF_CHANNEL = "rem2_done"
         private const val NOTIF_PERM_RC = 1001
 
+        // Click recording keys
+        private const val KEY_CLICK_SESSIONS  = "click_sessions_v1"
+        private const val KEY_APPLY_RECORDING = "apply_recording"
 
         private val COOKIE_URLS = listOf(
             "https://replit.com",
@@ -96,6 +99,10 @@ class MainActivity : AppCompatActivity() {
     private val tab1Cookies     = mutableMapOf<String, String>()
     private var tab1LocalStorageJson = "{}"
 
+    // Click recording
+    private var isRecording      = false
+    private val recordedClicks   = mutableListOf<JSONObject>()
+    private var applyRecording   = false
 
     // File chooser
     private var filePathCallback: ValueCallback<Array<Uri>>? = null
@@ -127,7 +134,25 @@ class MainActivity : AppCompatActivity() {
                 binding.webView.postDelayed({ binding.webView.reload() }, 1500)
             }
         }
+
+        @JavascriptInterface
+        fun recordClick(url: String, tag: String, text: String, selector: String) {
+            if (!isRecording) return
+            runOnUiThread {
+                val obj = JSONObject().apply {
+                    put("url", url)
+                    put("tag", tag)
+                    put("text", text)
+                    put("selector", selector)
+                    put("ts", System.currentTimeMillis())
+                }
+                recordedClicks.add(obj)
+                val short = text.take(40).ifEmpty { selector.take(30) }
+                log("Ghi: [$tag] \"$short\" @ ${url.substringAfterLast('/')}")
+            }
+        }
     }
+
 
     // ─── Lifecycle ────────────────────────────────────────────────────────────
 
@@ -143,6 +168,7 @@ class MainActivity : AppCompatActivity() {
         createNotificationChannel()
         loadAccounts()
         dataSaving     = prefs.getBoolean(KEY_DATA_SAVING, false)
+        applyRecording = prefs.getBoolean(KEY_APPLY_RECORDING, false)
         setupHeader()
         setupWebView(binding.webView)
         setupSwipeAndGestures()
@@ -350,7 +376,29 @@ class MainActivity : AppCompatActivity() {
     // ─── Header ───────────────────────────────────────────────────────────────
 
     private fun setupHeader() {
-        binding.tvTitle.setOnClickListener { showAccountList() }
+        // Title button — popup: ghi / ap dung / xoa ban click
+        binding.tvTitle.setOnClickListener { v ->
+            val popup = PopupMenu(this, v)
+            val recLabel = if (isRecording) "[DNG] Dung ghi ban click" else "[GHI] Ghi ban click"
+            val sessions = loadAllSessions()
+            val applyLabel = when {
+                sessions.length() == 0 -> "[AP] Ap dung ban click"
+                applyRecording         -> "[ON] Dang ap dung (${sessions.length()} ban) — tat"
+                else                   -> "[AP] Ap dung ban click (${sessions.length()} ban)"
+            }
+            popup.menu.add(0, 1, 0, recLabel)
+            popup.menu.add(0, 2, 1, applyLabel)
+            popup.menu.add(0, 3, 2, "[XOA] Xoa all ban click ghi lai")
+            popup.setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    1 -> toggleRecording()
+                    2 -> toggleApplyRecording()
+                    3 -> confirmClearAllRecordings()
+                }
+                true
+            }
+            popup.show()
+        }
 
         binding.btnToggleLog.setOnClickListener {
             panelOpen = !panelOpen
@@ -402,6 +450,115 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
         }
 
+    }
+
+    // ─── Click Recording ─────────────────────────────────────────────────────
+
+    private fun toggleRecording() {
+        if (isRecording) {
+            isRecording = false
+            killRecordScript(binding.webView)
+            if (recordedClicks.isNotEmpty()) {
+                saveRecordingSession()
+                Toast.makeText(this, "Da luu ban click (${recordedClicks.size} thao tac)", Toast.LENGTH_SHORT).show()
+                log("Da luu ban click — ${recordedClicks.size} thao tac. Dung menu Rem2 → 'Ap dung' de bat tu dong.")
+            } else {
+                Toast.makeText(this, "Khong co thao tac nao duoc ghi", Toast.LENGTH_SHORT).show()
+                log("Dung ghi — khong co thao tac nao")
+            }
+            recordedClicks.clear()
+            binding.tvTitle.text = "Rem2"
+        } else {
+            isRecording = true
+            recordedClicks.clear()
+            binding.tvTitle.text = "[GHI]"
+            Toast.makeText(this, "Bat dau ghi — thuc hien cac buoc tren trang", Toast.LENGTH_SHORT).show()
+            log("Dang ghi ban click... Thuc hien cac thao tac tren trang roi bam Rem2 → 'Dung ghi' de luu lai.")
+            injectRecordScript(binding.webView)
+        }
+    }
+
+    private fun injectRecordScript(wv: WebView) {
+        wv.evaluateJavascript("""
+            (function(){
+              if(window.__rem2RecordActive)return;
+              window.__rem2RecordActive=true;
+              function getSelector(el){
+                try{
+                  if(el.id)return'#'+el.id;
+                  if(el.name)return el.tagName.toLowerCase()+'[name="'+el.name+'"]';
+                  var cls=Array.from(el.classList||[]).filter(function(c){return c.length<40&&!/[0-9]{4,}/.test(c);}).slice(0,2).join('.');
+                  return el.tagName.toLowerCase()+(cls?'.'+cls:'');
+                }catch(e){return el.tagName||'unknown';}
+              }
+              document.addEventListener('click',function(e){
+                var t=e.target;if(!t)return;
+                var tag=(t.tagName||'').toLowerCase();
+                var txt=((t.innerText||t.value||t.getAttribute('aria-label')||'')+'').trim().substring(0,80);
+                var sel=getSelector(t);
+                if(window.ClickBridge)window.ClickBridge.recordClick(location.href,tag,txt,sel);
+              },true);
+            })();
+        """.trimIndent(), null)
+    }
+
+    private fun killRecordScript(wv: WebView) {
+        wv.evaluateJavascript("(function(){window.__rem2RecordActive=false;})();", null)
+    }
+
+    private fun saveRecordingSession() {
+        val raw = prefs.getString(KEY_CLICK_SESSIONS, "[]") ?: "[]"
+        val arr = try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
+        val session = JSONObject().apply {
+            put("ts",     System.currentTimeMillis())
+            put("count",  recordedClicks.size)
+            put("clicks", JSONArray().also { a -> recordedClicks.forEach { a.put(it) } })
+        }
+        arr.put(session)
+        prefs.edit().putString(KEY_CLICK_SESSIONS, arr.toString()).apply()
+    }
+
+    private fun loadAllSessions(): JSONArray {
+        val raw = prefs.getString(KEY_CLICK_SESSIONS, "[]") ?: "[]"
+        return try { JSONArray(raw) } catch (_: Exception) { JSONArray() }
+    }
+
+    private fun toggleApplyRecording() {
+        val sessions = loadAllSessions()
+        if (sessions.length() == 0) {
+            Toast.makeText(this, "Chua co ban click nao — hay ghi truoc", Toast.LENGTH_SHORT).show()
+            return
+        }
+        applyRecording = !applyRecording
+        prefs.edit().putBoolean(KEY_APPLY_RECORDING, applyRecording).apply()
+        val msg = if (applyRecording)
+            "Da bat ap dung ban click (${sessions.length()} ban ghi)"
+        else
+            "Da tat ap dung ban click"
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        log(msg)
+    }
+
+    private fun confirmClearAllRecordings() {
+        val sessions = loadAllSessions()
+        if (sessions.length() == 0) {
+            Toast.makeText(this, "Chua co ban click nao de xoa", Toast.LENGTH_SHORT).show()
+            return
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Xoa ban click")
+            .setMessage("Xoa toan bo ${sessions.length()} ban click da ghi?")
+            .setPositiveButton("Xoa het") { _, _ ->
+                prefs.edit()
+                    .remove(KEY_CLICK_SESSIONS)
+                    .putBoolean(KEY_APPLY_RECORDING, false)
+                    .apply()
+                applyRecording = false
+                Toast.makeText(this, "Da xoa tat ca ban click", Toast.LENGTH_SHORT).show()
+                log("Da xoa toan bo ban click ghi lai")
+            }
+            .setNegativeButton("Huy", null)
+            .show()
     }
 
     // ─── Data saving helpers ──────────────────────────────────────────────────
@@ -589,6 +746,16 @@ class MainActivity : AppCompatActivity() {
                     v.postDelayed({ injectAutoFill(v) }, 3000)
                 }
 
+                // Ap dung ban click da ghi neu dang o trang Replit (khong phai signup/verify)
+                if (applyRecording && autoEmail.isNotEmpty() &&
+                    url.contains("replit.com") &&
+                    !url.isSignupPage() && !url.contains("verify") &&
+                    !url.contains("confirm") && url != "about:blank") {
+                    v.postDelayed({ injectLearnedClicks(v) }, 800)
+                }
+
+                // Re-inject record script khi trang moi load
+                if (isRecording) injectRecordScript(v)
             }
 
             override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
@@ -818,7 +985,63 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent(), null)
     }
 
+    // ─── Inject Learned Clicks (replay ban ghi, khong tu dong doan) ──────────
+
+    private fun injectLearnedClicks(wv: WebView) {
+        if (!applyRecording) return
+        val sessions = loadAllSessions()
+        if (sessions.length() == 0) return
+
+        val seen = mutableSetOf<String>()
+        val patterns = JSONArray()
+        for (si in 0 until sessions.length()) {
+            val clicks = sessions.getJSONObject(si).optJSONArray("clicks") ?: continue
+            for (ci in 0 until clicks.length()) {
+                val click = clicks.getJSONObject(ci)
+                val txt = click.optString("text", "").trim().lowercase()
+                val sel = click.optString("selector", "")
+                if (txt.isNotEmpty() && txt !in seen && txt.length < 80) {
+                    seen.add(txt)
+                    patterns.put(JSONObject().apply {
+                        put("text",     txt)
+                        put("selector", sel)
+                        put("tag",      click.optString("tag", ""))
+                    })
+                }
+            }
+        }
+        if (patterns.length() == 0) return
+
+        val safeJson = patterns.toString()
+            .replace("\\", "\\\\")
+            .replace("'", "\\'")
+
+        wv.evaluateJavascript("""
+            (function(){
+              var PATTERNS=$safeJson;
+              if(!PATTERNS||!PATTERNS.length)return;
+              var allEls=document.querySelectorAll('button,[role="button"],a[role="button"],input[type=submit]');
+              for(var p=0;p<PATTERNS.length;p++){
+                var pat=PATTERNS[p];
+                if(!pat.text)continue;
+                for(var i=0;i<allEls.length;i++){
+                  var el=allEls[i];
+                  if(el.disabled)continue;
+                  var txt=(el.innerText||el.value||'').trim().toLowerCase();
+                  if(txt===pat.text||(txt.indexOf(pat.text)!==-1&&pat.text.length>2)){
+                    try{el.focus();}catch(e){}
+                    ['pointerdown','pointerup','mousedown','mouseup','click'].forEach(function(t){
+                      try{el.dispatchEvent(new(t.startsWith('pointer')?PointerEvent:MouseEvent)(t,{bubbles:true,cancelable:true,isPrimary:true,button:0}));}catch(e){}
+                    });
+                    try{el.click();}catch(e){}
+                    return;
+                  }
+                }
+              }
+            })();
+        """.trimIndent(), null)
+    }
+
     // ─── String ext ───────────────────────────────────────────────────────────
     private fun String.isSignupPage() = contains("signup") || contains("login") || contains("register")
 }
-
