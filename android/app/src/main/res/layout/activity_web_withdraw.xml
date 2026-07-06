@@ -1,0 +1,149 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/bg_primary">
+
+    <!-- Header compact -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="@color/accent_blue"
+        android:paddingStart="12dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
+        android:gravity="center_vertical">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🌐 Rút thẻ cào"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold"/>
+
+            <TextView
+                android:id="@+id/tvWWStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Đang khởi động..."
+                android:textColor="#DDEEFF"
+                android:textSize="11sp"
+                android:maxLines="2"
+                android:ellipsize="end"/>
+        </LinearLayout>
+
+        <!-- Toggle log button -->
+        <TextView
+            android:id="@+id/btnToggleLog"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📋"
+            android:textSize="20sp"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp"
+            android:clickable="true"
+            android:focusable="true"/>
+    </LinearLayout>
+
+    <!--
+        OTP Banner — pill shape xanh liệu nước biển.
+        Tự động copy clipboard, nhấn để copy lại.
+    -->
+    <LinearLayout
+        android:id="@+id/layoutOtpBanner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp"
+        android:background="@color/bg_primary"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="@drawable/otp_banner_bg"
+            android:gravity="center_vertical"
+            android:paddingStart="20dp"
+            android:paddingEnd="16dp"
+            android:paddingTop="12dp"
+            android:paddingBottom="12dp">
+
+            <TextView
+                android:id="@+id/tvOtpBanner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.05"/>
+
+            <TextView
+                android:id="@+id/tvOtpCopyHint"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="nhấn để copy"
+                android:textColor="#B3E5FC"
+                android:textSize="11sp"
+                android:paddingStart="8dp"/>
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/progressWW"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:max="100"
+        android:progressTint="@color/accent_blue"
+        android:visibility="gone"/>
+
+    <!-- Log area — collapsed by default, toggle to show -->
+    <ScrollView
+        android:id="@+id/scrollLogWW"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:background="@color/bg_input"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="4dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvLogWW"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="10sp"
+            android:fontFamily="monospace"
+            android:textColor="@color/text_secondary"
+            android:text=""/>
+    </ScrollView>
+
+    <!-- WebView takes ALL remaining space -->
+    <WebView
+        android:id="@+id/webViewWW"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"/>
+
+</LinearLayout>
