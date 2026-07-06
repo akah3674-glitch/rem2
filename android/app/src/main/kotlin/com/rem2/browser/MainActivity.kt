@@ -323,6 +323,8 @@ class MainActivity : AppCompatActivity() {
                       }
                       try {
                           ensureAccount(targetTab)
+                      } catch (e: kotlinx.coroutines.CancellationException) {
+                          throw e  // cho phep coroutine cancel that su
                       } catch (e: Exception) {
                           log("❌ Loi tai khoan $i/$total: ${e.message} — bo qua, tao tiep")
                       } finally {
@@ -357,13 +359,9 @@ class MainActivity : AppCompatActivity() {
     // ─── Stop batch flow ─────────────────────────────────────────────────────────
 
     private fun stopBatchFlow() {
-        batchJob?.cancel()
+        log("⏹ Dang dung...")
+        batchJob?.cancel()   // coroutine finally block se tu don dep UI + wakeLock
         batchJob = null
-        flowRunning = false
-        wakeLock?.release(); wakeLock = null
-        binding.btnCreateAccount.isEnabled = true
-        binding.btnCreateAccount.text = "🔄 Tao tai khoan moi"
-        log("⏹ Da dung tao tai khoan.")
     }
 
     // ─── Session persistence ──────────────────────────────────────────────────
@@ -996,6 +994,7 @@ class MainActivity : AppCompatActivity() {
                       "error" -> { log("❌ Server loi tao tai khoan"); return@withContext }
                       else    -> if (attempt > 0 && attempt % 6 == 0) log("Dang cho... ${attempt*5}s$batchLabel")
                   }
+              } catch (e: kotlinx.coroutines.CancellationException) { throw e
               } catch (e: Exception) { if (attempt % 12 == 0) log("Poll loi: ${e.message}") }
           }
           log("Het thoi gian cho server")
